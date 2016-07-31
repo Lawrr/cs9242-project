@@ -41,8 +41,26 @@ static size_t sos_debug_print(const void *vData, size_t count) {
 }
 
 size_t sos_write(void *vData, size_t count) {
-    //implement this to use your syscall
-    return sos_debug_print(vData, count);
+    // Calculate message length
+    // syscall num + data length + # registers for data to write (min 1)
+    int length = 3 + ((sizeof(char) * count - 1) / sizeof(seL4_Word));
+
+    // Set up message
+    seL4_MessageInfo_t tag = seL4_MessageInfo_new(0, 0, 0, length);
+    seL4_SetTag(tag);
+
+    // Set syscall number
+    seL4_SetMR(0, 0);
+    // Set data length
+    seL4_SetMR(1, count);
+    // Copy the data to write to message registers
+    strcpy(&seL4_GetIPCBuffer()->msg[2], vData);
+
+    // Send message
+    seL4_Call(SYSCALL_ENDPOINT_SLOT, tag);
+
+    int bytes_written = seL4_GetMR(0);
+    return bytes_written;
 }
 
 size_t sos_read(void *vData, size_t count) {

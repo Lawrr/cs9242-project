@@ -73,9 +73,9 @@ struct {
 
 
 /*
- * A dummy starting syscall
+ * Syscall numbers
  */
-#define SOS_SYSCALL0 0
+#define SOS_WRITE_DATA 0
 
 seL4_CPtr _sos_ipc_ep_cap;
 seL4_CPtr _sos_interrupt_ep_cap;
@@ -99,13 +99,23 @@ void handle_syscall(seL4_Word badge, int num_args) {
 
     /* Process system call */
     switch (syscall_number) {
-    case SOS_SYSCALL0:
-        dprintf(0, "syscall: thread made syscall 0!\n");
+    case SOS_WRITE_DATA:
+        dprintf(0, "Message received from user program\n");
 
+        // Get data length
+        size_t count = seL4_GetMR(1);
+        // Get data to write start ptr
+        void *message = &seL4_GetIPCBuffer()->msg[2];
+
+        // Init serial driver
+        struct serial *serial_handle = serial_init();
+        // Send data to write
+        int bytes_sent = serial_send(serial_handle, message, count);
+
+        // Reply with num bytes written
         seL4_MessageInfo_t reply = seL4_MessageInfo_new(0, 0, 0, 1);
-        seL4_SetMR(0, 0);
+        seL4_SetMR(0, bytes_sent);
         seL4_Send(reply_cap, reply);
-
         break;
 
     default:
