@@ -1,0 +1,11 @@
+build/*
+stage/*
+include/config/*
+include/generated/*
+.config
+.config.old
+.tags*
+cscope*
+null.i
+null.s
+images/*
