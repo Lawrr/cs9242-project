@@ -9,3 +9,4 @@ cscope*
 null.i
 null.s
 images/*
+*.diff
