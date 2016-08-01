@@ -55,7 +55,7 @@ size_t sos_write(void *vData, size_t count) {
     seL4_SetMR(1, count);
 
     // Copy the data to write to message registers
-    memcpy(&seL4_GetIPCBuffer->msg[2], vData, count);
+    memcpy(&seL4_GetIPCBuffer()->msg[2], vData, count);
 
     // Send message
     seL4_Call(SYSCALL_ENDPOINT_SLOT, tag);
