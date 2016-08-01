@@ -56,7 +56,7 @@ size_t sos_write(void *vData, size_t count) {
         if (length > seL4_MsgMaxLength) {
             length = seL4_MsgMaxLength;
             // Calculate message length minus syscall num and data length registers
-            data_length = (length - 2) * sizeof(seL4_Word);
+            data_length = (length - num_args) * sizeof(seL4_Word);
         }
 
         // Set up message
