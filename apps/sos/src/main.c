@@ -80,6 +80,8 @@ struct {
 seL4_CPtr _sos_ipc_ep_cap;
 seL4_CPtr _sos_interrupt_ep_cap;
 
+struct serial *serial_handle;
+
 /**
  * NFS mount point
  */
@@ -107,8 +109,6 @@ void handle_syscall(seL4_Word badge, int num_args) {
         // Get data to write start ptr
         void *message = &seL4_GetIPCBuffer()->msg[2];
 
-        // Init serial driver
-        struct serial *serial_handle = serial_init();
         // Send data to write
         int bytes_sent = serial_send(serial_handle, message, count);
 
@@ -416,6 +416,9 @@ int main(void) {
 
     /* Initialise the network hardware */
     network_init(badge_irq_ep(_sos_interrupt_ep_cap, IRQ_BADGE_NETWORK));
+
+    /* Initialise serial driver */
+    serial_handle = serial_init();
 
     /* Start the user application */
     start_first_process(TTY_NAME, _sos_ipc_ep_cap);
