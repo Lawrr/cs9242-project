@@ -25,3 +25,10 @@ timestamp_t time_stamp(void) {
 int stop_timer(void) {
     return 0;
 }
+
+/*
+ * TODO: get #include working
+ *
+ * 1. Map device
+ * 2. Put settings into virtual address (from mapping)
+ */

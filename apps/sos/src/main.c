@@ -19,6 +19,7 @@
 #include <nfs/nfs.h>
 #include <elf/elf.h>
 #include <serial/serial.h>
+#include <clock/clock.h>
 
 #include "network.h"
 #include "elf.h"
@@ -44,6 +45,7 @@
 /* All badged IRQs set high bet, then we use uniq bits to
  * distinguish interrupt sources */
 #define IRQ_BADGE_NETWORK (1 << 0)
+#define IRQ_BADGE_TIMER ((88 << 16) | 88)
 
 #define TTY_NAME             CONFIG_SOS_STARTUP_APP
 #define TTY_PRIORITY         (0)
@@ -405,6 +407,11 @@ static inline seL4_CPtr badge_irq_ep(seL4_CPtr ep, seL4_Word badge) {
     return badged_cap;
 }
 
+/* Initialises the timer */
+void timer_init(seL4_CPtr interrupt_ep) {
+    start_timer(interrupt_ep);
+}
+
 /*
  * Main entry point - called by crt.
  */
@@ -416,6 +423,9 @@ int main(void) {
 
     /* Initialise the network hardware */
     network_init(badge_irq_ep(_sos_interrupt_ep_cap, IRQ_BADGE_NETWORK));
+
+    /* Initialise the timer */
+    timer_init(badge_irq_ep(_sos_interrupt_ep_cap, IRQ_BADGE_TIMER));
 
     /* Initialise serial driver */
     serial_handle = serial_init();
