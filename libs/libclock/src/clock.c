@@ -30,6 +30,18 @@ static timestamp_t current_time = 0;
 
 static timestamp_t load_register_value;
 
+static uint32_t current_id = 0;
+
+struct timer_handler{
+   void (*callback)(uint32_t id,void *data);
+   timestamp_t expires;
+   struct timer_handler *next;
+   int id;
+   void *data;
+};
+
+struct timer_handler * head;
+
 static struct timer_irq {
     int irq;
     seL4_IRQHandler cap;
@@ -115,4 +127,37 @@ timestamp_t time_stamp(void) {
 
 int stop_timer(void) {
     return 0;
+}
+
+static struct timer_handler * timer_handler_new(void(*callback)(uint32_t id, void *data), void *data){
+    struct timer_handler * h = malloc(sizeof(struct timer_handler));
+    h -> callback = callback;
+    h -> data = data;
+    h -> next = NULL;
+    h -> id = current_id; 
+    return h;
+}
+
+static void insert(struct timer_handler* h){
+    struct timer_handler *curr = head;
+    if (head == NULL){
+       head = h;
+    }  else if (curr -> expires > h -> expires){ 
+        h -> next = curr;
+	head = h;
+    }  else{
+	while (curr->next !=  NULL){
+	   if (curr -> next -> expires > h -> expires){
+              h -> next = curr -> next;
+	      curr -> next = h;
+	   }
+	   curr = curr -> next;
+        }
+    }	    
+}
+
+static struct timer_handler * remove(){
+   struct timer_handler * ret = head;
+   head = head -> next;
+   return ret;
 }
