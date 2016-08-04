@@ -53,17 +53,18 @@ void timer_init(uint32_t *vaddr) {
     timer_vaddr = vaddr;
 }
 
+void set_next_timer_interrupt(uint32_t ms) {
+    *(timer_vaddr + 2) = 66000 * ms;
+}
+
 int start_timer(seL4_CPtr interrupt_ep) {
     _irq_ep = interrupt_ep;
 
-    _timer_irqs[0].irq = EPIT1_IRQ;
-    _timer_irqs[0].cap = enable_irq(EPIT1_IRQ, _irq_ep);
-
     uint32_t control = (1 << EPIT_CLKSRC |
                         3 << EPIT_OM |
-                        1 << EPIT_STOPEN |
-                        1 << EPIT_WAITEN |
-                        1 << EPIT_DBGEN |
+                        0 << EPIT_STOPEN |
+                        0 << EPIT_WAITEN |
+                        0 << EPIT_DBGEN |
                         1 << EPIT_IOVW |
                         0 << EPIT_SWR |
                         0 << EPIT_PRESCALAR |
@@ -73,9 +74,10 @@ int start_timer(seL4_CPtr interrupt_ep) {
                         1 << EPIT_EN);
     *timer_vaddr = control;
 
-    seL4_IRQHandler_Ack(_timer_irqs[0].cap);
-    *(timer_vaddr + 2) = 660000 * 7;
-    printf("[0]=%d\n[1]=%d\n[2]=%d\n[3]=%d\n[4]=%d\n", *(timer_vaddr), *(timer_vaddr + 1), *(timer_vaddr + 2), *(timer_vaddr + 3), *(timer_vaddr + 4));
+    _timer_irqs[0].irq = EPIT1_IRQ;
+    _timer_irqs[0].cap = enable_irq(EPIT1_IRQ, _irq_ep);
+
+    set_next_timer_interrupt(50);
 
     return CLOCK_R_OK;
 }

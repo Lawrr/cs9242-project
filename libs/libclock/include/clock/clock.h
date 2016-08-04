@@ -26,6 +26,8 @@ typedef void (*timer_callback_t)(uint32_t id, void *data);
 
 void timer_init(uint32_t *vaddr);
 
+void set_next_timer_interrupt(uint32_t ms);
+
 /*
  * Initialise driver. Performs implicit stop_timer() if already initialised.
  *    interrupt_ep:       A (possibly badged) async endpoint that the driver
