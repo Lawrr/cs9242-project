@@ -1,5 +1,6 @@
 #include <stdint.h>
 
+#include <utils/util.h>
 #include <clock/clock.h>
 #include <cspace/cspace.h>
 
@@ -26,6 +27,8 @@
 
 #define EPIT_FREQUENCY 66000000
 
+#define DEFAULT_INTERRUPT_TICK 0xFFFFFFFF
+
 static uint32_t *timer_vaddr;
 
 extern const seL4_BootInfo* _boot_info;
@@ -36,7 +39,7 @@ static timestamp_t current_time = 0;
 
 static timestamp_t load_register_value;
 
-static uint32_t current_id = 0;
+static uint32_t current_id = 1;
 
 struct timer_handler {
     timer_callback_t callback;
@@ -46,7 +49,7 @@ struct timer_handler {
     void *data;
 };
 
-struct timer_handler *head;
+static struct timer_handler *handler_head;
 
 static struct timer_irq {
     int irq;
@@ -69,6 +72,70 @@ static seL4_CPtr enable_irq(int irq, seL4_CPtr aep) {
         return NULL;
     }
     return cap;
+}
+
+static struct timer_handler *timer_handler_new(timer_callback_t callback, void *data, uint64_t expires){
+    struct timer_handler *h = malloc(sizeof(struct timer_handler));
+    if (h == NULL) {
+        return NULL;
+    }
+
+    h->callback = callback;
+    h->data = data;
+    h->next = NULL;
+    h->expires = current_time + expires;
+
+    if (current_id == 0) {
+        current_id = 1;
+    }
+    h->id = current_id++;
+
+    return h;
+}
+
+static void insert(struct timer_handler *to_insert) {
+    struct timer_handler *curr = handler_head;
+    if (curr == NULL) {
+        handler_head = to_insert;
+        set_next_timer_interrupt((to_insert->expires - current_time) / 1000);
+    } else if (curr->expires > to_insert->expires) {
+        to_insert->next = curr;
+        handler_head = to_insert;
+        set_next_timer_interrupt((to_insert->expires - current_time) / 1000);
+    } else {
+        bool inserted = FALSE;
+        while (curr->next != NULL) {
+            if (curr->next->expires > to_insert->expires) {
+                to_insert->next = curr->next;
+                curr->next = to_insert;
+                inserted = TRUE;
+            }
+            curr = curr->next;
+        }
+
+        /* Insert at the end if its the longest */
+        if (!inserted) {
+            to_insert->next = curr->next;
+            curr->next = to_insert;
+            inserted = TRUE;
+        }
+    }
+}
+
+static struct timer_handler *remove_head() {
+    struct timer_handler *ret = handler_head;
+    if (ret == NULL) {
+        return NULL;
+    }
+
+    handler_head = handler_head->next;
+    if (handler_head != NULL) {
+        set_next_timer_interrupt((handler_head->expires - current_time) / 1000);
+    } else {
+        set_next_timer_interrupt(DEFAULT_INTERRUPT_TICK);
+    }
+
+    return ret;
 }
 
 /* Initialises the timer */
@@ -101,21 +168,46 @@ int start_timer(seL4_CPtr interrupt_ep) {
     _timer_irqs[0].irq = EPIT1_IRQ;
     _timer_irqs[0].cap = enable_irq(EPIT1_IRQ, _irq_ep);
 
-    set_next_timer_interrupt(1000);
+    set_next_timer_interrupt(DEFAULT_INTERRUPT_TICK);
 
     return CLOCK_R_OK;
 }
 
 uint32_t register_timer(uint64_t delay, timer_callback_t callback, void *data) {
-    return 0;
+    struct timer_handler *new_handler = timer_handler_new(callback, data, delay);
+    if (new_handler == NULL) {
+        return 0;
+    }
+
+    insert(new_handler);
+
+    return new_handler->id;
 }
 
 int remove_timer(uint32_t id) {
-    return 0;
+    struct timer_handler *curr = handler_head;
+    if (curr == NULL) {
+        return CLOCK_R_FAIL;
+    }
+
+    while (curr->next != NULL) {
+        if (curr->next->id == id) {
+            struct timer_handler *del = curr->next;
+            curr->next = del->next;
+            free(del);
+            return CLOCK_R_OK;
+        }
+        curr = curr->next;
+    }
+
+    /* Check if its the very last item on the list */
+    // TODO
+
+    return CLOCK_R_FAIL;
 }
 
 int timer_interrupt(void) {
-    if(_irq_ep == seL4_CapNull){
+    if (_irq_ep == seL4_CapNull) {
         return CLOCK_R_FAIL;
     }
     timer_vaddr[EPIT_STATUS_REGISTER] = 1;
@@ -123,7 +215,14 @@ int timer_interrupt(void) {
 
     current_time += load_register_value * 1000000 / EPIT_FREQUENCY;
 
-    return CLOCK_R_FAIL;
+    /* Handle callback */
+    struct timer_handler *handler = remove_head();
+    if (handler != NULL) {
+        handler->callback(handler->id, handler->data);
+        free(handler);
+    }
+
+    return CLOCK_R_OK;
 }
 
 timestamp_t time_stamp(void) {
@@ -132,38 +231,6 @@ timestamp_t time_stamp(void) {
 }
 
 int stop_timer(void) {
-    return 0;
-}
-
-static struct timer_handler *timer_handler_new(timer_callback_t callback, void *data){
-    struct timer_handler * h = malloc(sizeof(struct timer_handler));
-    h -> callback = callback;
-    h -> data = data;
-    h -> next = NULL;
-    h -> id = current_id; 
-    return h;
-}
-
-static void insert(struct timer_handler *h) {
-    struct timer_handler *curr = head;
-    if (head == NULL){
-       head = h;
-    }  else if (curr -> expires > h -> expires){ 
-        h -> next = curr;
-	head = h;
-    }  else{
-	while (curr->next !=  NULL){
-	   if (curr -> next -> expires > h -> expires){
-              h -> next = curr -> next;
-	      curr -> next = h;
-	   }
-	   curr = curr -> next;
-        }
-    }	    
-}
-
-static struct timer_handler *remove() {
-   struct timer_handler *ret = head;
-   head = head -> next;
-   return ret;
+    timer_vaddr[EPIT_CONTROL_REGISTER] &= 0 << EPIT_EN;
+    return CLOCK_R_OK;
 }

@@ -147,7 +147,6 @@ void syscall_loop(seL4_CPtr ep) {
             if (badge & IRQ_BADGE_NETWORK) {
                 network_irq();
             } else if (badge & IRQ_BADGE_TIMER) {
-                printf("%llu\n", time_stamp());
                 timer_interrupt();
             }
 
@@ -413,6 +412,24 @@ static inline seL4_CPtr badge_irq_ep(seL4_CPtr ep, seL4_Word badge) {
     return badged_cap;
 }
 
+void print_time_stamp(uint32_t id, void *data) {
+    printf("%llu\n", id, time_stamp());
+    register_timer(100000, &print_time_stamp, NULL);
+}
+
+void different_interval(uint32_t id, void *data) {
+    printf("250ms interval\n");
+    register_timer(250000, &different_interval, NULL);
+}
+
+void fast_elapsed(uint32_t id, void *data) {
+    printf("50ms elapsed\n");
+}
+
+void one_second_elapsed(uint32_t id, void *data) {
+    printf("1s elapsed\n");
+}
+
 /*
  * Main entry point - called by crt.
  */
@@ -429,6 +446,10 @@ int main(void) {
     uint32_t *timer_vaddr = map_device(EPIT1_PADDR, EPIT1_NUM_REGISTERS * sizeof(uint32_t));
     timer_init(timer_vaddr);
     start_timer(badge_irq_ep(_sos_interrupt_ep_cap, IRQ_BADGE_TIMER));
+    register_timer(100000, &print_time_stamp, NULL);
+    register_timer(250000, &different_interval, NULL);
+    register_timer(50000, &fast_elapsed, NULL);
+    register_timer(1000000, &one_second_elapsed, NULL);
 
     /* Initialise serial driver */
     serial_handle = serial_init();
