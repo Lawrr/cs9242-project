@@ -150,7 +150,6 @@ void syscall_loop(seL4_CPtr ep) {
             } else if (badge & IRQ_BADGE_TIMER) {
                 set_next_timer_interrupt(1000);
                 printf("%llu\n", time_stamp());
-                //dprintf(0, "INTERRUPT: [0]=%d\n[1]=%d\n[2]=%d\n[3]=%d\n[4]=%d\n", *(timer_vaddr), *(timer_vaddr + 1), *(timer_vaddr + 2), *(timer_vaddr + 3), *(timer_vaddr + 4));
                 timer_interrupt();
             }
 

@@ -28,7 +28,7 @@ static seL4_CPtr _irq_ep;
 
 static timestamp_t current_time = 0;
 
-static uint32_t load_register_value;
+static timestamp_t load_register_value;
 
 static struct timer_irq {
     int irq;
@@ -104,18 +104,12 @@ int timer_interrupt(void) {
     *(timer_vaddr + 1) = 1;
     int err = seL4_IRQHandler_Ack(_timer_irqs[0].cap);
 
-    current_time += load_register_value / EPIT_FREQ * 1000000;
+    current_time += load_register_value * 1000000/EPIT_FREQ;
     return CLOCK_R_FAIL;
 }
 
 timestamp_t time_stamp(void) {
-    timestamp_t counter = timer_vaddr[4] / EPIT_FREQ * 1000000;
-
-    printf("-START-------------------\n");
-    printf("%llu\n", counter);
-    printf("%llu\n", current_time);
-    printf("%llu\n", current_time + counter);
-    printf("-END-------------------\n");
+    timestamp_t counter = timer_vaddr[4] * 1000000/EPIT_FREQ;
     return current_time + counter;
 }
 
