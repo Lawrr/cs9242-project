@@ -18,11 +18,17 @@
 #define EPIT_ENMOD 1
 #define EPIT_EN 0
 
+#define EPIT_FREQ 66000000
+
 static uint32_t *timer_vaddr;
 
 extern const seL4_BootInfo* _boot_info;
 
 static seL4_CPtr _irq_ep;
+
+static timestamp_t current_time = 0;
+
+static uint32_t load_register_value;
 
 static struct timer_irq {
     int irq;
@@ -54,7 +60,8 @@ void timer_init(uint32_t *vaddr) {
 }
 
 void set_next_timer_interrupt(uint32_t ms) {
-    *(timer_vaddr + 2) = 66000 * ms;
+    load_register_value = EPIT_FREQ / 1000 * ms;
+    *(timer_vaddr + 2) = load_register_value;
 }
 
 int start_timer(seL4_CPtr interrupt_ep) {
@@ -77,7 +84,7 @@ int start_timer(seL4_CPtr interrupt_ep) {
     _timer_irqs[0].irq = EPIT1_IRQ;
     _timer_irqs[0].cap = enable_irq(EPIT1_IRQ, _irq_ep);
 
-    set_next_timer_interrupt(50);
+    set_next_timer_interrupt(1000);
 
     return CLOCK_R_OK;
 }
@@ -96,11 +103,20 @@ int timer_interrupt(void) {
     }
     *(timer_vaddr + 1) = 1;
     int err = seL4_IRQHandler_Ack(_timer_irqs[0].cap);
+
+    current_time += load_register_value / EPIT_FREQ * 1000000;
     return CLOCK_R_FAIL;
 }
 
 timestamp_t time_stamp(void) {
-    return 0;
+    timestamp_t counter = timer_vaddr[4] / EPIT_FREQ * 1000000;
+
+    printf("-START-------------------\n");
+    printf("%llu\n", counter);
+    printf("%llu\n", current_time);
+    printf("%llu\n", current_time + counter);
+    printf("-END-------------------\n");
+    return current_time + counter;
 }
 
 int stop_timer(void) {
