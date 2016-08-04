@@ -53,7 +53,6 @@
 
 #define EPIT1_PADDR 0x020D0000
 #define EPIT1_NUM_REGISTERS 5
-uint32_t *timer_vaddr;
 
 /* The linker will link this symbol to the start address  *
  * of an archive of attached applications.                */
@@ -148,7 +147,6 @@ void syscall_loop(seL4_CPtr ep) {
             if (badge & IRQ_BADGE_NETWORK) {
                 network_irq();
             } else if (badge & IRQ_BADGE_TIMER) {
-                set_next_timer_interrupt(1000);
                 printf("%llu\n", time_stamp());
                 timer_interrupt();
             }
@@ -428,7 +426,7 @@ int main(void) {
     network_init(badge_irq_ep(_sos_interrupt_ep_cap, IRQ_BADGE_NETWORK));
 
     /* Initialise the timer */
-    timer_vaddr = map_device(EPIT1_PADDR, EPIT1_NUM_REGISTERS * sizeof(uint32_t));
+    uint32_t *timer_vaddr = map_device(EPIT1_PADDR, EPIT1_NUM_REGISTERS * sizeof(uint32_t));
     timer_init(timer_vaddr);
     start_timer(badge_irq_ep(_sos_interrupt_ep_cap, IRQ_BADGE_TIMER));
 

@@ -18,7 +18,13 @@
 #define EPIT_ENMOD 1
 #define EPIT_EN 0
 
-#define EPIT_FREQ 66000000
+#define EPIT_CONTROL_REGISTER 0
+#define EPIT_STATUS_REGISTER 1
+#define EPIT_LOAD_REGISTER 2
+#define EPIT_COMPARE_REGISTER 3
+#define EPIT_COUNTER_REGISTER 4
+
+#define EPIT_FREQUENCY 66000000
 
 static uint32_t *timer_vaddr;
 
@@ -32,23 +38,22 @@ static timestamp_t load_register_value;
 
 static uint32_t current_id = 0;
 
-struct timer_handler{
-   void (*callback)(uint32_t id,void *data);
-   timestamp_t expires;
-   struct timer_handler *next;
-   int id;
-   void *data;
+struct timer_handler {
+    timer_callback_t callback;
+    timestamp_t expires;
+    struct timer_handler *next;
+    int id;
+    void *data;
 };
 
-struct timer_handler * head;
+struct timer_handler *head;
 
 static struct timer_irq {
     int irq;
     seL4_IRQHandler cap;
 } _timer_irqs[1];
 
-static seL4_CPtr
-enable_irq(int irq, seL4_CPtr aep) {
+static seL4_CPtr enable_irq(int irq, seL4_CPtr aep) {
     seL4_CPtr cap;
     int err;
     /* Create an IRQ handler */
@@ -72,8 +77,8 @@ void timer_init(uint32_t *vaddr) {
 }
 
 void set_next_timer_interrupt(uint32_t ms) {
-    load_register_value = EPIT_FREQ / 1000 * ms;
-    *(timer_vaddr + 2) = load_register_value;
+    load_register_value = EPIT_FREQUENCY / 1000 * ms;
+    timer_vaddr[EPIT_LOAD_REGISTER] = load_register_value;
 }
 
 int start_timer(seL4_CPtr interrupt_ep) {
@@ -91,7 +96,7 @@ int start_timer(seL4_CPtr interrupt_ep) {
                         1 << EPIT_OCIEN |
                         1 << EPIT_ENMOD |
                         1 << EPIT_EN);
-    *timer_vaddr = control;
+    timer_vaddr[EPIT_CONTROL_REGISTER] = control;
 
     _timer_irqs[0].irq = EPIT1_IRQ;
     _timer_irqs[0].cap = enable_irq(EPIT1_IRQ, _irq_ep);
@@ -113,15 +118,16 @@ int timer_interrupt(void) {
     if(_irq_ep == seL4_CapNull){
         return CLOCK_R_FAIL;
     }
-    *(timer_vaddr + 1) = 1;
+    timer_vaddr[EPIT_STATUS_REGISTER] = 1;
     int err = seL4_IRQHandler_Ack(_timer_irqs[0].cap);
 
-    current_time += load_register_value * 1000000/EPIT_FREQ;
+    current_time += load_register_value * 1000000 / EPIT_FREQUENCY;
+
     return CLOCK_R_FAIL;
 }
 
 timestamp_t time_stamp(void) {
-    timestamp_t counter = timer_vaddr[4] * 1000000/EPIT_FREQ;
+    timestamp_t counter = timer_vaddr[EPIT_COUNTER_REGISTER] * 1000000 / EPIT_FREQUENCY;
     return current_time + counter;
 }
 
@@ -129,7 +135,7 @@ int stop_timer(void) {
     return 0;
 }
 
-static struct timer_handler * timer_handler_new(void(*callback)(uint32_t id, void *data), void *data){
+static struct timer_handler *timer_handler_new(timer_callback_t callback, void *data){
     struct timer_handler * h = malloc(sizeof(struct timer_handler));
     h -> callback = callback;
     h -> data = data;
@@ -138,7 +144,7 @@ static struct timer_handler * timer_handler_new(void(*callback)(uint32_t id, voi
     return h;
 }
 
-static void insert(struct timer_handler* h){
+static void insert(struct timer_handler *h) {
     struct timer_handler *curr = head;
     if (head == NULL){
        head = h;
@@ -156,8 +162,8 @@ static void insert(struct timer_handler* h){
     }	    
 }
 
-static struct timer_handler * remove(){
-   struct timer_handler * ret = head;
+static struct timer_handler *remove() {
+   struct timer_handler *ret = head;
    head = head -> next;
    return ret;
 }
