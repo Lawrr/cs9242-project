@@ -45,11 +45,15 @@
 /* All badged IRQs set high bet, then we use uniq bits to
  * distinguish interrupt sources */
 #define IRQ_BADGE_NETWORK (1 << 0)
-#define IRQ_BADGE_TIMER ((88 << 16) | 88)
+#define IRQ_BADGE_TIMER (1 << 1)
 
 #define TTY_NAME             CONFIG_SOS_STARTUP_APP
 #define TTY_PRIORITY         (0)
 #define TTY_EP_BADGE         (101)
+
+#define EPIT1_PADDR 0x020D0000
+#define EPIT1_NUM_REGISTERS 5
+uint32_t *timer_vaddr;
 
 /* The linker will link this symbol to the start address  *
  * of an archive of attached applications.                */
@@ -143,6 +147,9 @@ void syscall_loop(seL4_CPtr ep) {
             /* Interrupt */
             if (badge & IRQ_BADGE_NETWORK) {
                 network_irq();
+            } else if (badge & IRQ_BADGE_TIMER) {
+                dprintf(0, "INTERRUPT: [0]=%d\n[1]=%d\n[2]=%d\n[3]=%d\n[4]=%d\n", *(timer_vaddr), *(timer_vaddr + 1), *(timer_vaddr + 2), *(timer_vaddr + 3), *(timer_vaddr + 4));
+                timer_interrupt();
             }
 
         }else if(label == seL4_VMFault){
@@ -407,11 +414,6 @@ static inline seL4_CPtr badge_irq_ep(seL4_CPtr ep, seL4_Word badge) {
     return badged_cap;
 }
 
-/* Initialises the timer */
-void timer_init(seL4_CPtr interrupt_ep) {
-    start_timer(interrupt_ep);
-}
-
 /*
  * Main entry point - called by crt.
  */
@@ -425,7 +427,9 @@ int main(void) {
     network_init(badge_irq_ep(_sos_interrupt_ep_cap, IRQ_BADGE_NETWORK));
 
     /* Initialise the timer */
-    timer_init(badge_irq_ep(_sos_interrupt_ep_cap, IRQ_BADGE_TIMER));
+    timer_vaddr = map_device(EPIT1_PADDR, EPIT1_NUM_REGISTERS * sizeof(uint32_t));
+    timer_init(timer_vaddr);
+    start_timer(badge_irq_ep(_sos_interrupt_ep_cap, IRQ_BADGE_TIMER));
 
     /* Initialise serial driver */
     serial_handle = serial_init();
