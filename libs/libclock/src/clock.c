@@ -265,15 +265,16 @@ int timer_interrupt(void) {
     if (_irq_ep == seL4_CapNull) {
         return CLOCK_R_FAIL;
     }
-    /* Acknowledge */
-    timer_vaddr[EPIT_STATUS_REGISTER] = 1;
-    int err = seL4_IRQHandler_Ack(_timer_irqs[0].cap);
+    
 
     /* Keep track of current time */
     current_time += hardware_time_to_microseconds(load_register_value);
 
     /* Handle callback */
     struct timer_handler *handler = handler_head;
+
+    /* if the queue is empty, we are using deafult tick */
+    if (handler_head == NULL) return CLOCK_R_OK;
 
     /* Set new timer interrupt for timers with long delays */
     if (handler->delay > DEFAULT_INTERRUPT_TICK) {
@@ -286,7 +287,10 @@ int timer_interrupt(void) {
         free(handler);
         handler = handler_head;
     }
-
+    
+    /* Acknowledge */
+    timer_vaddr[EPIT_STATUS_REGISTER] = 1;
+    int err = seL4_IRQHandler_Ack(_timer_irqs[0].cap);
     return CLOCK_R_OK;
 }
 

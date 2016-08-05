@@ -417,8 +417,9 @@ void print_time_stamp(uint32_t id, void *data) {
     register_timer(1000000, &print_time_stamp, NULL);
 }
 
+static int counter;
+
 void different_interval(uint32_t id, void *data) {
-    printf("250ms interval\n");
     register_timer(2500000, &different_interval, NULL);
 }
 
@@ -427,8 +428,19 @@ void fast_elapsed(uint32_t id, void *data) {
 }
 
 void one_second_elapsed(uint32_t id, void *data) {
-    printf("1s elapsed\n");
+    printf("1s elapsed %d\n",counter++);
+    register_timer(1000000, &one_second_elapsed, NULL);
 }
+
+void two_minute_elapsed(uint32_t id, void *data) {
+    printf("120s elapsed\n");
+}
+
+void print_id(uint32_t id,void * data){
+    printf("timestamp%ld  ",((long double)time_stamp())/1000000);
+    printf("id=%d\n",id);
+}
+
 
 /*
  * Main entry point - called by crt.
@@ -446,11 +458,15 @@ int main(void) {
     uint32_t *timer_vaddr = map_device(EPIT1_PADDR, EPIT1_NUM_REGISTERS * sizeof(uint32_t));
     timer_init(timer_vaddr);
     start_timer(badge_irq_ep(_sos_interrupt_ep_cap, IRQ_BADGE_TIMER));
-    register_timer(100000, &print_time_stamp, NULL);
-    register_timer(250000, &different_interval, NULL);
-    register_timer(50000, &fast_elapsed, NULL);
-    register_timer(1000000, &one_second_elapsed, NULL);
-
+    
+    //register_timer(100000, &print_time_stamp, NULL);
+    //register_timer(250000, &different_interval, NULL);
+    //register_timer(50000, &fast_elapsed, NULL);
+    //register_timer(1000000, &one_second_elapsed, NULL);
+    //register_timer(120000000, &two_minute_elapsed,NULL);
+    for (int i = 0 ; i < 1000; i++){
+        register_timer(30000000,print_id,NULL);
+    }
     /* Initialise serial driver */
     serial_handle = serial_init();
 
