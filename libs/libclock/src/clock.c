@@ -312,7 +312,14 @@ static void handler_queue_destroy(void){
 }
 
 int stop_timer(void) {
-    timer_vaddr[EPIT_CONTROL_REGISTER] &= 0 << EPIT_EN;
+    //update the time to be accurate
+    timestamp_t counter = hardware_time_to_microseconds(timer_vaddr[EPIT_LOAD_REGISTER] - timer_vaddr[EPIT_COUNTER_REGISTER]);
+    current_time += counter;
+    
+    //destroy all handler
     handler_queue_destroy();
+    
+    //Still have to keep it in order to give timestamp
+    set_next_timer_interrupt(DEFAULT_INTERRUPT_TICK);
     return CLOCK_R_OK;
 }
