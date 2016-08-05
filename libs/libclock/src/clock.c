@@ -28,7 +28,7 @@
 #define EPIT_FREQUENCY 66000000
 
 #define INTERRUPT_THRESHOLD 1000 /* Microseconds */
-#define DEFAULT_INTERRUPT_TICK 0xFFFFFFFFFFFFFFFF
+#define DEFAULT_INTERRUPT_TICK 3960000000 /* One minute */
 
 static uint32_t *timer_vaddr;
 
@@ -47,6 +47,7 @@ struct timer_handler {
     int id;
     timer_callback_t callback;
     timestamp_t expire_time;
+    timestamp_t delay;
     void *data;
     struct timer_handler *next;
 };
@@ -78,7 +79,7 @@ static seL4_CPtr enable_irq(int irq, seL4_CPtr aep) {
 }
 
 /* Creates a new timer_handler */
-static struct timer_handler *timer_handler_new(timer_callback_t callback, void *data, uint64_t expire_time){
+static struct timer_handler *timer_handler_new(timer_callback_t callback, void *data, uint64_t delay){
     struct timer_handler *h = malloc(sizeof(struct timer_handler));
     if (h == NULL) {
         return NULL;
@@ -88,7 +89,8 @@ static struct timer_handler *timer_handler_new(timer_callback_t callback, void *
     h->callback = callback;
     h->data = data;
     h->next = NULL;
-    h->expire_time = time_stamp() + expire_time;
+    h->delay = delay;
+    h->expire_time = time_stamp() + delay;
 
     /* id 0 indicates error, so we cannot use it */
     if (current_id == 0) {
@@ -97,6 +99,14 @@ static struct timer_handler *timer_handler_new(timer_callback_t callback, void *
     h->id = current_id++;
 
     return h;
+}
+
+static uint64_t hardware_time_to_microseconds(uint64_t time) {
+    return time * 1000000 / EPIT_FREQUENCY;
+}
+
+static uint64_t microseconds_to_hardware_time(uint64_t time) {
+    return time * EPIT_FREQUENCY / 1000000;
 }
 
 /* Inserts a timer_handler into the linked list */
@@ -160,8 +170,17 @@ void timer_init(uint32_t *vaddr) {
 
 /* Sets the next timer interrupt time */
 void set_next_timer_interrupt(timestamp_t us) {
-    load_register_value = EPIT_FREQUENCY * us / 1000000;
+    load_register_value = microseconds_to_hardware_time(us);
+    /* Limit at DEFAULT_INTERRUPT_TICK */
+    if (load_register_value > DEFAULT_INTERRUPT_TICK) {
+        load_register_value = DEFAULT_INTERRUPT_TICK;
+    }
+    /* Update current time */
+    current_time += hardware_time_to_microseconds(timer_vaddr[EPIT_LOAD_REGISTER] - timer_vaddr[EPIT_COUNTER_REGISTER]);
+
+    /* Set new load value */
     timer_vaddr[EPIT_LOAD_REGISTER] = load_register_value;
+
 }
 
 int start_timer(seL4_CPtr interrupt_ep) {
@@ -251,18 +270,16 @@ int timer_interrupt(void) {
     int err = seL4_IRQHandler_Ack(_timer_irqs[0].cap);
 
     /* Keep track of current time */
-    current_time += load_register_value * 1000000 / EPIT_FREQUENCY;
+    current_time += hardware_time_to_microseconds(load_register_value);
 
     /* Handle callback */
-    //printf("LOOKING AT CURRENT LIST\n");
-    //printf("timestamp: %llu\n", time_stamp());
-    //struct timer_handler *curr = handler_head;
-    //while (curr != NULL) {
-    //    printf("id: %d, expiry: %d, next: %x\n", curr->id, curr->expire_time, curr->next);
-    //    curr = curr->next;
-    //}
-    //printf("----------\n");
     struct timer_handler *handler = handler_head;
+
+    /* Set new timer interrupt for timers with long delays */
+    if (handler->delay > DEFAULT_INTERRUPT_TICK) {
+        set_next_timer_interrupt(handler->expire_time - time_stamp());
+    }
+
     while (handler != NULL && handler->expire_time - INTERRUPT_THRESHOLD <= time_stamp()) {
         remove_head();
         handler->callback(handler->id, handler->data);
@@ -274,7 +291,7 @@ int timer_interrupt(void) {
 }
 
 timestamp_t time_stamp(void) {
-    timestamp_t counter = timer_vaddr[EPIT_COUNTER_REGISTER] * 1000000 / EPIT_FREQUENCY;
+    timestamp_t counter = hardware_time_to_microseconds(timer_vaddr[EPIT_LOAD_REGISTER] - timer_vaddr[EPIT_COUNTER_REGISTER]);
     return current_time + counter;
 }
 
