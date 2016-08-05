@@ -27,7 +27,8 @@
 
 #define EPIT_FREQUENCY 66000000
 
-#define DEFAULT_INTERRUPT_TICK 0xFFFFFFFF
+#define INTERRUPT_THRESHOLD 1000 /* Microseconds */
+#define DEFAULT_INTERRUPT_TICK 0xFFFFFFFFFFFFFFFF
 
 static uint32_t *timer_vaddr;
 
@@ -106,13 +107,13 @@ static void insert(struct timer_handler *to_insert) {
         /* Linked list is currently empty */
         handler_head = to_insert;
         /* Set new interrupt time */
-        set_next_timer_interrupt((to_insert->expire_time - time_stamp()) / 1000);
+        set_next_timer_interrupt(to_insert->expire_time - time_stamp());
     } else if (curr->expire_time > to_insert->expire_time) {
         /* New timer inserted to front */
         to_insert->next = curr;
         handler_head = to_insert;
         /* Set new interrupt time */
-        set_next_timer_interrupt((to_insert->expire_time - time_stamp()) / 1000);
+        set_next_timer_interrupt(to_insert->expire_time - time_stamp());
     } else {
         /* New timer inserted somewhere in the middle (or end) of the list */
         bool inserted = FALSE;
@@ -143,7 +144,7 @@ static struct timer_handler *remove_head() {
     handler_head = handler_head->next;
     if (handler_head != NULL) {
         /* Set new interrupt time of next timer */
-        set_next_timer_interrupt((handler_head->expire_time - time_stamp()) / 1000);
+        set_next_timer_interrupt(handler_head->expire_time - time_stamp());
     } else {
         /* Else set default interrupt time */
         set_next_timer_interrupt(DEFAULT_INTERRUPT_TICK);
@@ -158,9 +159,8 @@ void timer_init(uint32_t *vaddr) {
 }
 
 /* Sets the next timer interrupt time */
-void set_next_timer_interrupt(uint32_t ms) {
-    printf("Set timer interrupt to %d\n", ms);
-    load_register_value = EPIT_FREQUENCY / 1000 * ms;
+void set_next_timer_interrupt(timestamp_t us) {
+    load_register_value = EPIT_FREQUENCY * us / 1000000;
     timer_vaddr[EPIT_LOAD_REGISTER] = load_register_value;
 }
 
@@ -254,8 +254,6 @@ int timer_interrupt(void) {
     current_time += load_register_value * 1000000 / EPIT_FREQUENCY;
 
     /* Handle callback */
-    // TODO 2 at the same time
-    // TODO expire_time might be longer than the interrupt if its > 1m
     printf("LOOKING AT CURRENT LIST\n");
     printf("timestamp: %llu\n", time_stamp());
     struct timer_handler *curr = handler_head;
@@ -264,10 +262,12 @@ int timer_interrupt(void) {
         curr = curr->next;
     }
     printf("----------\n");
-    struct timer_handler *handler = remove_head();
-    if (handler != NULL) {
+    struct timer_handler *handler = handler_head;
+    while (handler != NULL && handler->expire_time - INTERRUPT_THRESHOLD <= time_stamp()) {
+        remove_head();
         handler->callback(handler->id, handler->data);
         free(handler);
+        handler = handler_head;
     }
 
     return CLOCK_R_OK;

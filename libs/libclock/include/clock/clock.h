@@ -26,7 +26,7 @@ typedef void (*timer_callback_t)(uint32_t id, void *data);
 
 void timer_init(uint32_t *vaddr);
 
-void set_next_timer_interrupt(uint32_t ms);
+void set_next_timer_interrupt(timestamp_t ms);
 
 /*
  * Initialise driver. Performs implicit stop_timer() if already initialised.
