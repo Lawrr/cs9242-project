@@ -41,14 +41,16 @@ static timestamp_t load_register_value;
 
 static uint32_t current_id = 1;
 
+/* Stores a registered timer */
 struct timer_handler {
-    timer_callback_t callback;
-    timestamp_t expires;
-    struct timer_handler *next;
     int id;
+    timer_callback_t callback;
+    timestamp_t expire_time;
     void *data;
+    struct timer_handler *next;
 };
 
+/* Head of linked list of timer_handlers - sorted by expire_time */
 static struct timer_handler *handler_head;
 
 static struct timer_irq {
@@ -74,17 +76,20 @@ static seL4_CPtr enable_irq(int irq, seL4_CPtr aep) {
     return cap;
 }
 
-static struct timer_handler *timer_handler_new(timer_callback_t callback, void *data, uint64_t expires){
+/* Creates a new timer_handler */
+static struct timer_handler *timer_handler_new(timer_callback_t callback, void *data, uint64_t expire_time){
     struct timer_handler *h = malloc(sizeof(struct timer_handler));
     if (h == NULL) {
         return NULL;
     }
 
+    /* Set values */
     h->callback = callback;
     h->data = data;
     h->next = NULL;
-    h->expires = current_time + expires;
+    h->expire_time = current_time + expire_time;
 
+    /* id 0 indicates error, so we cannot use it */
     if (current_id == 0) {
         current_id = 1;
     }
@@ -93,19 +98,26 @@ static struct timer_handler *timer_handler_new(timer_callback_t callback, void *
     return h;
 }
 
+/* Inserts a timer_handler into the linked list */
 static void insert(struct timer_handler *to_insert) {
     struct timer_handler *curr = handler_head;
+
     if (curr == NULL) {
+        /* Linked list is currently empty */
         handler_head = to_insert;
-        set_next_timer_interrupt((to_insert->expires - current_time) / 1000);
-    } else if (curr->expires > to_insert->expires) {
+        /* Set new interrupt time */
+        set_next_timer_interrupt((to_insert->expire_time - current_time) / 1000);
+    } else if (curr->expire_time > to_insert->expire_time) {
+        /* New timer inserted to front */
         to_insert->next = curr;
         handler_head = to_insert;
-        set_next_timer_interrupt((to_insert->expires - current_time) / 1000);
+        /* Set new interrupt time */
+        set_next_timer_interrupt((to_insert->expire_time - current_time) / 1000);
     } else {
+        /* New timer inserted somewhere in the middle (or end) of the list */
         bool inserted = FALSE;
         while (curr->next != NULL) {
-            if (curr->next->expires > to_insert->expires) {
+            if (curr->next->expire_time > to_insert->expire_time) {
                 to_insert->next = curr->next;
                 curr->next = to_insert;
                 inserted = TRUE;
@@ -113,15 +125,15 @@ static void insert(struct timer_handler *to_insert) {
             curr = curr->next;
         }
 
-        /* Insert at the end if its the longest */
+        /* Insert at the end if it has not been inserted yet */
         if (!inserted) {
             to_insert->next = curr->next;
             curr->next = to_insert;
-            inserted = TRUE;
         }
     }
 }
 
+/* Remove head of linked list and returns it */
 static struct timer_handler *remove_head() {
     struct timer_handler *ret = handler_head;
     if (ret == NULL) {
@@ -130,8 +142,10 @@ static struct timer_handler *remove_head() {
 
     handler_head = handler_head->next;
     if (handler_head != NULL) {
-        set_next_timer_interrupt((handler_head->expires - current_time) / 1000);
+        /* Set new interrupt time of next timer */
+        set_next_timer_interrupt((handler_head->expire_time - current_time) / 1000);
     } else {
+        /* Else set default interrupt time */
         set_next_timer_interrupt(DEFAULT_INTERRUPT_TICK);
     }
 
@@ -143,6 +157,7 @@ void timer_init(uint32_t *vaddr) {
     timer_vaddr = vaddr;
 }
 
+/* Sets the next timer interrupt time */
 void set_next_timer_interrupt(uint32_t ms) {
     load_register_value = EPIT_FREQUENCY / 1000 * ms;
     timer_vaddr[EPIT_LOAD_REGISTER] = load_register_value;
@@ -210,9 +225,11 @@ int timer_interrupt(void) {
     if (_irq_ep == seL4_CapNull) {
         return CLOCK_R_FAIL;
     }
+    /* Acknowledge */
     timer_vaddr[EPIT_STATUS_REGISTER] = 1;
     int err = seL4_IRQHandler_Ack(_timer_irqs[0].cap);
 
+    /* Keep track of current time */
     current_time += load_register_value * 1000000 / EPIT_FREQUENCY;
 
     /* Handle callback */
