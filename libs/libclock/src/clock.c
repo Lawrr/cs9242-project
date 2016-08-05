@@ -299,7 +299,20 @@ timestamp_t time_stamp(void) {
     return current_time + counter;
 }
 
+
+
+static void handler_queue_destroy(void){
+    struct timer_handler * next; 
+    struct timer_handler * handler = handler_head;
+    while (handler != NULL){
+       next = handler->next;
+       free(handler);
+       handler = next;
+    }
+}
+
 int stop_timer(void) {
     timer_vaddr[EPIT_CONTROL_REGISTER] &= 0 << EPIT_EN;
+    handler_queue_destroy();
     return CLOCK_R_OK;
 }
