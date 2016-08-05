@@ -117,7 +117,7 @@ static void insert(struct timer_handler *to_insert) {
     } else {
         /* New timer inserted somewhere in the middle (or end) of the list */
         bool inserted = FALSE;
-        while (curr->next != NULL) {
+        while (curr->next != NULL && !inserted) {
             if (curr->next->expire_time > to_insert->expire_time) {
                 to_insert->next = curr->next;
                 curr->next = to_insert;
@@ -254,14 +254,14 @@ int timer_interrupt(void) {
     current_time += load_register_value * 1000000 / EPIT_FREQUENCY;
 
     /* Handle callback */
-    printf("LOOKING AT CURRENT LIST\n");
-    printf("timestamp: %llu\n", time_stamp());
-    struct timer_handler *curr = handler_head;
-    while (curr != NULL) {
-        printf("id: %d, expiry: %d\n", curr->id, curr->expire_time);
-        curr = curr->next;
-    }
-    printf("----------\n");
+    //printf("LOOKING AT CURRENT LIST\n");
+    //printf("timestamp: %llu\n", time_stamp());
+    //struct timer_handler *curr = handler_head;
+    //while (curr != NULL) {
+    //    printf("id: %d, expiry: %d, next: %x\n", curr->id, curr->expire_time, curr->next);
+    //    curr = curr->next;
+    //}
+    //printf("----------\n");
     struct timer_handler *handler = handler_head;
     while (handler != NULL && handler->expire_time - INTERRUPT_THRESHOLD <= time_stamp()) {
         remove_head();

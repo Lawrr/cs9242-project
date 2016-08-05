@@ -414,20 +414,20 @@ static inline seL4_CPtr badge_irq_ep(seL4_CPtr ep, seL4_Word badge) {
 
 void print_time_stamp(uint32_t id, void *data) {
     printf("%llu\n", id, time_stamp());
-    //register_timer(1000000, &print_time_stamp, NULL);
+    register_timer(1000000, &print_time_stamp, NULL);
 }
 
 void different_interval(uint32_t id, void *data) {
-    printf("250ms interval\n");
-    //register_timer(2500000, &different_interval, NULL);
+    printf("2500ms interval\n");
+    register_timer(2500000, &different_interval, NULL);
 }
 
 void fast_elapsed(uint32_t id, void *data) {
-    printf("50ms elapsed\n");
+    printf("500ms elapsed\n");
 }
 
 void one_second_elapsed(uint32_t id, void *data) {
-    printf("1s elapsed\n");
+    printf("10s elapsed\n");
 }
 
 /*
