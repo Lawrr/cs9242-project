@@ -87,7 +87,7 @@ static struct timer_handler *timer_handler_new(timer_callback_t callback, void *
     h->callback = callback;
     h->data = data;
     h->next = NULL;
-    h->expire_time = current_time + expire_time;
+    h->expire_time = time_stamp() + expire_time;
 
     /* id 0 indicates error, so we cannot use it */
     if (current_id == 0) {
@@ -106,13 +106,13 @@ static void insert(struct timer_handler *to_insert) {
         /* Linked list is currently empty */
         handler_head = to_insert;
         /* Set new interrupt time */
-        set_next_timer_interrupt((to_insert->expire_time - current_time) / 1000);
+        set_next_timer_interrupt((to_insert->expire_time - time_stamp()) / 1000);
     } else if (curr->expire_time > to_insert->expire_time) {
         /* New timer inserted to front */
         to_insert->next = curr;
         handler_head = to_insert;
         /* Set new interrupt time */
-        set_next_timer_interrupt((to_insert->expire_time - current_time) / 1000);
+        set_next_timer_interrupt((to_insert->expire_time - time_stamp()) / 1000);
     } else {
         /* New timer inserted somewhere in the middle (or end) of the list */
         bool inserted = FALSE;
@@ -143,7 +143,7 @@ static struct timer_handler *remove_head() {
     handler_head = handler_head->next;
     if (handler_head != NULL) {
         /* Set new interrupt time of next timer */
-        set_next_timer_interrupt((handler_head->expire_time - current_time) / 1000);
+        set_next_timer_interrupt((handler_head->expire_time - time_stamp()) / 1000);
     } else {
         /* Else set default interrupt time */
         set_next_timer_interrupt(DEFAULT_INTERRUPT_TICK);
@@ -159,6 +159,7 @@ void timer_init(uint32_t *vaddr) {
 
 /* Sets the next timer interrupt time */
 void set_next_timer_interrupt(uint32_t ms) {
+    printf("Set timer interrupt to %d\n", ms);
     load_register_value = EPIT_FREQUENCY / 1000 * ms;
     timer_vaddr[EPIT_LOAD_REGISTER] = load_register_value;
 }
@@ -201,10 +202,25 @@ uint32_t register_timer(uint64_t delay, timer_callback_t callback, void *data) {
 
 int remove_timer(uint32_t id) {
     struct timer_handler *curr = handler_head;
+    /* None in list */
     if (curr == NULL) {
         return CLOCK_R_FAIL;
     }
 
+    /* One in list */
+    struct timer_handler *prev = curr;
+    curr = curr->next;
+    if (curr == NULL) {
+        if (prev->id == id) {
+            handler_head = NULL;
+            free(prev);
+            return CLOCK_R_OK;
+        } else {
+            return CLOCK_R_FAIL;
+        }
+    }
+
+    /* Multiple items in list */
     while (curr->next != NULL) {
         if (curr->next->id == id) {
             struct timer_handler *del = curr->next;
@@ -212,11 +228,16 @@ int remove_timer(uint32_t id) {
             free(del);
             return CLOCK_R_OK;
         }
+        prev = curr;
         curr = curr->next;
     }
 
     /* Check if its the very last item on the list */
-    // TODO
+    if (curr->id == id) {
+        prev->next = NULL;
+        free(curr);
+        return CLOCK_R_OK;
+    }
 
     return CLOCK_R_FAIL;
 }
@@ -233,6 +254,16 @@ int timer_interrupt(void) {
     current_time += load_register_value * 1000000 / EPIT_FREQUENCY;
 
     /* Handle callback */
+    // TODO 2 at the same time
+    // TODO expire_time might be longer than the interrupt if its > 1m
+    printf("LOOKING AT CURRENT LIST\n");
+    printf("timestamp: %llu\n", time_stamp());
+    struct timer_handler *curr = handler_head;
+    while (curr != NULL) {
+        printf("id: %d, expiry: %d\n", curr->id, curr->expire_time);
+        curr = curr->next;
+    }
+    printf("----------\n");
     struct timer_handler *handler = remove_head();
     if (handler != NULL) {
         handler->callback(handler->id, handler->data);
