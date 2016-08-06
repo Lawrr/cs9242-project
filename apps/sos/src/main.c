@@ -478,9 +478,6 @@ int main(void) {
     timer_init(epit1_vaddr, epit2_vaddr);
     seL4_CPtr timer_badge = badge_irq_ep(_sos_interrupt_ep_cap, IRQ_BADGE_TIMER);
     start_timer(timer_badge);
-    start_timer(timer_badge);
-    printf("-1 %d\n", stop_timer());
-
     
     //register_timer(100000, &print_time_stamp, NULL);
     //register_timer(250000, &different_interval, NULL);

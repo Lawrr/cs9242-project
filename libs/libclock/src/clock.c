@@ -230,7 +230,6 @@ int start_timer(seL4_CPtr interrupt_ep) {
     /* Stop timer to clear all handlers then start it up again */
     stop_timer();
 
-    printf("%lu\n", interrupt_ep);
     if (_irq_ep == NULL || _irq_ep != interrupt_ep) {
         _irq_ep = interrupt_ep;
 
