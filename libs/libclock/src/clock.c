@@ -127,17 +127,25 @@ static struct timer_handler *timer_handler_new(timer_callback_t callback, void *
     h->next = NULL;
     h->delay = delay;
     h->expire_time = time_stamp() + delay;
-
-    /* id 0 indicates error, so we cannot use it */
-    if (current_id == 0) {
-        current_id = 1;
-    }
     
     /*Ideally we can use address of the struct as id*/
-    //h->id = (int) h;
-    h->id = current_id++;
+    h->id = (uint32_t) h;
+    ///* id 0 indicates error, so we cannot use it */
+    //if (current_id == 0) {
+    //    current_id = 1;
+    //}
+    //h->id = current_id++;
 
     return h;
+}
+
+static bool has_init() {
+    return (_irq_ep != seL4_CapNull && epit1_timer != NULL && epit2_timer != NULL);
+}
+
+static bool is_enabled() {
+    return ((epit1_timer->control & (1 << EPIT_EN)) == 1 &&
+            (epit2_timer->control & (1 << EPIT_EN)) == 1);
 }
 
 
@@ -219,26 +227,34 @@ void timer_init(void *epit1_vaddr, void *epit2_vaddr) {
 }
 
 int start_timer(seL4_CPtr interrupt_ep) {
-    /* Destroy all handler */
-    handler_queue_destroy();
+    /* Stop timer to clear all handlers then start it up again */
+    stop_timer();
 
-    _irq_ep = interrupt_ep;
+    printf("%lu\n", interrupt_ep);
+    if (_irq_ep == NULL || _irq_ep != interrupt_ep) {
+        _irq_ep = interrupt_ep;
 
-    _timer_irqs[0].irq = EPIT1_IRQ;
-    _timer_irqs[0].cap = enable_irq(EPIT1_IRQ, _irq_ep);
+        _timer_irqs[0].irq = EPIT1_IRQ;
+        _timer_irqs[0].cap = enable_irq(EPIT1_IRQ, _irq_ep);
 
-    _timer_irqs[1].irq = EPIT2_IRQ;
-    _timer_irqs[1].cap = enable_irq(EPIT2_IRQ, _irq_ep);
+        _timer_irqs[1].irq = EPIT2_IRQ;
+        _timer_irqs[1].cap = enable_irq(EPIT2_IRQ, _irq_ep);
+    }
 
     epit1_timer->control |= 1 << EPIT_EN;
     epit2_timer->control |= 1 << EPIT_EN;
 
     set_epit1_interrupt(DEFAULT_INTERRUPT_TICK);
     reload_epit2_interrupt();
+
     return CLOCK_R_OK;
 }
 
 uint32_t register_timer(uint64_t delay, timer_callback_t callback, void *data) {
+    if (!has_init()) {
+        return CLOCK_R_UINT;
+    }
+
     struct timer_handler *new_handler = timer_handler_new(callback, data, delay);
     if (new_handler == NULL) {
         return 0;
@@ -250,6 +266,10 @@ uint32_t register_timer(uint64_t delay, timer_callback_t callback, void *data) {
 }
 
 int remove_timer(uint32_t id) {
+    if (!has_init()) {
+        return CLOCK_R_UINT;
+    }
+
     struct timer_handler *curr = handler_head;
     /* None in list */
     if (curr == NULL) {
@@ -294,8 +314,8 @@ int remove_timer(uint32_t id) {
 int timer_interrupt(void) {
     int err;
 
-    if (_irq_ep == seL4_CapNull) {
-        return CLOCK_R_FAIL;
+    if (!has_init()) {
+        return CLOCK_R_UINT;
     }
     
     /* Keep track of current time */
@@ -339,14 +359,22 @@ int timer_interrupt(void) {
 }
 
 timestamp_t time_stamp(void) {
+    if (!has_init()) {
+        return -1;
+    }
     timestamp_t counter = frequency_to_microseconds(epit2_timer->load - epit2_timer->counter);
     return current_time + counter;
 }
 
 int stop_timer(void) {
+    /* Check if not initialised / already disabled */
+    if (!has_init() || !is_enabled()) {
+        return CLOCK_R_UINT;
+    }
+
     /* Disable timer */
-    epit1_timer->control |= 0 << EPIT_EN;
-    epit2_timer->control |= 0 << EPIT_EN;
+    epit1_timer->control &= 0 << EPIT_EN;
+    epit2_timer->control &= 0 << EPIT_EN;
 
     /* Destroy all handler */
     handler_queue_destroy();

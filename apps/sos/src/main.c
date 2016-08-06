@@ -455,6 +455,10 @@ void print_id(uint32_t id,void * data){
 
 }
 
+void timer_off(uint32_t id, void *data) {
+    printf("Turn timer off: %d\n", stop_timer());
+}
+
 
 /*
  * Main entry point - called by crt.
@@ -472,11 +476,17 @@ int main(void) {
     void *epit1_vaddr = map_device(EPIT1_PADDR, EPIT_REGISTERS * sizeof(uint32_t));
     void *epit2_vaddr = map_device(EPIT2_PADDR, EPIT_REGISTERS * sizeof(uint32_t));
     timer_init(epit1_vaddr, epit2_vaddr);
-    start_timer(badge_irq_ep(_sos_interrupt_ep_cap, IRQ_BADGE_TIMER));
+    seL4_CPtr timer_badge = badge_irq_ep(_sos_interrupt_ep_cap, IRQ_BADGE_TIMER);
+    start_timer(timer_badge);
+    start_timer(timer_badge);
+    printf("-1 %d\n", stop_timer());
+
     
     //register_timer(100000, &print_time_stamp, NULL);
     //register_timer(250000, &different_interval, NULL);
     //register_timer(50000, &fast_elapsed, NULL);
+    register_timer(1000000, &one_second_elapsed, NULL);
+    register_timer(5000000, &timer_off, NULL);
     register_timer(10000000, &one_second_elapsed, NULL);
     //register_timer(15000000, &one_second_elapsed, NULL);
     //register_timer(30000000, &one_second_elapsed, NULL);
@@ -487,7 +497,7 @@ int main(void) {
     //register_timer(105000000, &one_second_elapsed, NULL);
     register_timer(120000000, &two_minute_elapsed,NULL);
     for (int i = 0 ; i < 3000; i++){
-        register_timer(30000000 + 1500 * i,print_id,NULL);
+        register_timer(30000000 + 150 * i,print_id,NULL);
     }
     /* Initialise serial driver */
     serial_handle = serial_init();
