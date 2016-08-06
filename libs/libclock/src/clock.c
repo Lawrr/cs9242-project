@@ -22,7 +22,7 @@
 #define EPIT_FREQUENCY 66000000 /* One second */
 
 #define INTERRUPT_THRESHOLD 1000 /* In terms of microseconds */
-#define DEFAULT_INTERRUPT_TICK (EPIT_FREQUENCY * 60) /* In terms of frequency */
+#define DEFAULT_INTERRUPT_TICK 3960000000 /* In terms of frequency */
 
 extern const seL4_BootInfo* _boot_info;
 
@@ -120,13 +120,13 @@ static void insert(struct timer_handler *to_insert) {
         /* Linked list is currently empty */
         handler_head = to_insert;
         /* Set new interrupt time */
-        set_next_timer_interrupt(to_insert->expire_time - time_stamp());
+        set_timer_interrupt(to_insert->expire_time - time_stamp());
     } else if (curr->expire_time > to_insert->expire_time) {
         /* New timer inserted to front */
         to_insert->next = curr;
         handler_head = to_insert;
         /* Set new interrupt time */
-        set_next_timer_interrupt(to_insert->expire_time - time_stamp());
+        set_timer_interrupt(to_insert->expire_time - time_stamp());
     } else {
         /* New timer inserted somewhere in the middle (or end) of the list */
         bool inserted = FALSE;
@@ -157,10 +157,10 @@ static struct timer_handler *remove_head() {
     handler_head = handler_head->next;
     if (handler_head != NULL) {
         /* Set new interrupt time of next timer */
-        set_next_timer_interrupt(handler_head->expire_time - time_stamp());
+        set_timer_interrupt(handler_head->expire_time - time_stamp());
     } else {
         /* Else set default interrupt time */
-        set_next_timer_interrupt(DEFAULT_INTERRUPT_TICK);
+        set_timer_interrupt(DEFAULT_INTERRUPT_TICK);
     }
 
     return ret;
@@ -186,7 +186,7 @@ void timer_init(void *vaddr) {
 }
 
 /* Sets the next timer interrupt time */
-void set_next_timer_interrupt(timestamp_t us) {
+void set_timer_interrupt(timestamp_t us) {
     load_register_value = microseconds_to_frequency(us);
     /* Limit at DEFAULT_INTERRUPT_TICK */
     if (load_register_value > DEFAULT_INTERRUPT_TICK) {
@@ -208,7 +208,7 @@ int start_timer(seL4_CPtr interrupt_ep) {
 
     timer->control |= 1 << EPIT_EN;
 
-    set_next_timer_interrupt(DEFAULT_INTERRUPT_TICK);
+    set_timer_interrupt(DEFAULT_INTERRUPT_TICK);
 
     return CLOCK_R_OK;
 }
@@ -281,8 +281,8 @@ int timer_interrupt(void) {
     if (handler_head == NULL) return CLOCK_R_OK;
 
     /* Set new timer interrupt for timers with long delays */
-    if (handler->delay > DEFAULT_INTERRUPT_TICK) {
-        set_next_timer_interrupt(handler->expire_time - time_stamp());
+    if (microseconds_to_frequency(handler->delay) > DEFAULT_INTERRUPT_TICK) {
+        set_timer_interrupt(handler->expire_time - time_stamp());
     }
 
     while (handler != NULL && handler->expire_time - INTERRUPT_THRESHOLD <= time_stamp()) {

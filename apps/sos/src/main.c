@@ -478,12 +478,12 @@ int main(void) {
     //register_timer(10000000, &one_second_elapsed, NULL);
     //register_timer(15000000, &one_second_elapsed, NULL);
     //register_timer(30000000, &one_second_elapsed, NULL);
-    register_timer(45000000, &one_second_elapsed, NULL);
+    //register_timer(45000000, &one_second_elapsed, NULL);
     register_timer(67000000, &one_second_elapsed, NULL);
     //register_timer(75000000, &one_second_elapsed, NULL);
     //register_timer(90000000, &one_second_elapsed, NULL);
     //register_timer(105000000, &one_second_elapsed, NULL);
-    //register_timer(120000000, &two_minute_elapsed,NULL);
+    register_timer(120000000, &two_minute_elapsed,NULL);
     //for (int i = 0 ; i < 1000; i++){
     //    register_timer(30000000,print_id,NULL);
     //}
