@@ -59,8 +59,6 @@ static seL4_CPtr _irq_ep;
 
 static timestamp_t current_time = 0;
 
-static timestamp_t load_register_value;
-
 static uint32_t current_id = 1;
 
 /* Head of linked list of timer_handlers - sorted by expire_time */
@@ -181,13 +179,11 @@ static struct timer_handler *remove_head() {
 
 /* Sets the next timer interrupt time */
 void set_timer_interrupt(timestamp_t us) {
-    load_register_value = microseconds_to_frequency(us);
+    timestamp_t load_register_value = microseconds_to_frequency(us);
     /* Limit at DEFAULT_INTERRUPT_TICK */
     if (load_register_value > DEFAULT_INTERRUPT_TICK) {
         load_register_value = DEFAULT_INTERRUPT_TICK;
     }
-    /* Update current time */
-    current_time += frequency_to_microseconds(epit1_timer->load - epit1_timer->counter);
 
     /* Set new load value */
     epit1_timer->load = load_register_value;
@@ -296,37 +292,39 @@ int timer_interrupt(void) {
     }
     
     /* Keep track of current time */
-    current_time += frequency_to_microseconds(load_register_value);
+    if (!epit2_timer->status) {
+        current_time += frequency_to_microseconds(epit2_timer->load - epit2_timer->counter);
+        epit2_timer->load = MAX_INTERRUPT_TICK;
+    } else {
+        current_time += frequency_to_microseconds(epit2_timer->load);
+    }
 
     /* Handle callback */
     struct timer_handler *handler = handler_head;
 
     /* if the queue is empty, we are using default tick */
-    if (handler_head == NULL) {
-        /* Acknowledge */
-        epit1_timer->status = 1;
-        err = seL4_IRQHandler_Ack(_timer_irqs[0].cap);
-        if (err) {
-            return CLOCK_R_FAIL;
+    if (handler_head != NULL) {
+        /* Set new timer interrupt for timers with long delays */
+        if (microseconds_to_frequency(handler->delay) > DEFAULT_INTERRUPT_TICK) {
+            set_timer_interrupt(handler->expire_time - time_stamp());
         }
-        return CLOCK_R_OK;
-    }
 
-    /* Set new timer interrupt for timers with long delays */
-    if (microseconds_to_frequency(handler->delay) > DEFAULT_INTERRUPT_TICK) {
-        set_timer_interrupt(handler->expire_time - time_stamp());
-    }
-
-    while (handler != NULL && handler->expire_time - INTERRUPT_THRESHOLD <= time_stamp()) {
-        remove_head();
-        handler->callback(handler->id, handler->data);
-        free(handler);
-        handler = handler_head;
+        while (handler != NULL && handler->expire_time - INTERRUPT_THRESHOLD <= time_stamp()) {
+            remove_head();
+            handler->callback(handler->id, handler->data);
+            free(handler);
+            handler = handler_head;
+        }
     }
     
     /* Acknowledge */
-    epit1_timer->status = 1;
-    err = seL4_IRQHandler_Ack(_timer_irqs[0].cap);
+    if (epit1_timer->status) {
+        epit1_timer->status = 1;
+        err = seL4_IRQHandler_Ack(_timer_irqs[0].cap);
+    } else {
+        epit2_timer->status = 1;
+        err = seL4_IRQHandler_Ack(_timer_irqs[1].cap);
+    }
     if (err) {
         return CLOCK_R_FAIL;
     }
@@ -334,7 +332,7 @@ int timer_interrupt(void) {
 }
 
 timestamp_t time_stamp(void) {
-    timestamp_t counter = frequency_to_microseconds(epit1_timer->load - epit1_timer->counter);
+    timestamp_t counter = frequency_to_microseconds(epit2_timer->load - epit2_timer->counter);
     return current_time + counter;
 }
 
