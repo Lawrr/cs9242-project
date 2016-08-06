@@ -414,23 +414,21 @@ static inline seL4_CPtr badge_irq_ep(seL4_CPtr ep, seL4_Word badge) {
 }
 
 void print_time_stamp(uint32_t id, void *data) {
-    printf("%d - %llu\n", id, time_stamp());
-    register_timer(1000000, &print_time_stamp, NULL);
+    printf("%llu\n", time_stamp());
+    register_timer(100000, &print_time_stamp, NULL);
 }
 
-static int counter;
-
 void different_interval(uint32_t id, void *data) {
-    register_timer(2500000, &different_interval, NULL);
+    printf("250ms interval\n", time_stamp());
+    register_timer(250000, &different_interval, NULL);
 }
 
 void fast_elapsed(uint32_t id, void *data) {
     printf("50ms elapsed\n");
 }
 
-void one_second_elapsed(uint32_t id, void *data) {
-    printf("1s elapsed %d\n",counter++);
-    //register_timer(1000000, &one_second_elapsed, NULL);
+void time_elapsed(uint32_t id, void *data) {
+    printf("time elapsed\n");
 }
 
 void two_minute_elapsed(uint32_t id, void *data) {
@@ -438,21 +436,8 @@ void two_minute_elapsed(uint32_t id, void *data) {
 }
 
 void print_id(uint32_t id,void * data){
-    printf("timestamp%ld  ",((long double)time_stamp())/1000000);
+    printf("timestamp %ld - ",((long double)time_stamp())/1000000);
     printf("id=%d\n",id);
-
-    printf("timestamp%ld  ",((long double)time_stamp())/1000000);
-    printf("id=%d\n",id);
-
-    printf("timestamp%ld  ",((long double)time_stamp())/1000000);
-    printf("id=%d\n",id);
-    
-    printf("timestamp%ld  ",((long double)time_stamp())/1000000);
-    printf("id=%d\n",id);
-
-    printf("timestamp%ld  ",((long double)time_stamp())/1000000);
-    printf("id=%d\n",id);
-
 }
 
 void timer_off(uint32_t id, void *data) {
@@ -479,23 +464,16 @@ int main(void) {
     seL4_CPtr timer_badge = badge_irq_ep(_sos_interrupt_ep_cap, IRQ_BADGE_TIMER);
     start_timer(timer_badge);
     
-    //register_timer(100000, &print_time_stamp, NULL);
-    //register_timer(250000, &different_interval, NULL);
-    //register_timer(50000, &fast_elapsed, NULL);
-    register_timer(1000000, &one_second_elapsed, NULL);
-    register_timer(5000000, &timer_off, NULL);
-    register_timer(10000000, &one_second_elapsed, NULL);
-    //register_timer(15000000, &one_second_elapsed, NULL);
-    //register_timer(30000000, &one_second_elapsed, NULL);
-    //register_timer(45000000, &one_second_elapsed, NULL);
-    register_timer(75000000, &one_second_elapsed, NULL);
-    //register_timer(75000000, &one_second_elapsed, NULL);
-    //register_timer(90000000, &one_second_elapsed, NULL);
-    //register_timer(105000000, &one_second_elapsed, NULL);
-    register_timer(120000000, &two_minute_elapsed,NULL);
-    for (int i = 0 ; i < 3000; i++){
-        register_timer(30000000 + 150 * i,print_id,NULL);
-    }
+    register_timer(100000, &print_time_stamp, NULL);
+    register_timer(250000, &different_interval, NULL);
+    register_timer(1000000, &time_elapsed, NULL);
+    register_timer(10000000, &time_elapsed, NULL);
+    register_timer(15000000, &time_elapsed, NULL);
+    register_timer(17000000, &time_elapsed, NULL);
+    //for (int i = 0 ; i < 3000; i++){
+    //    register_timer(30000000 + 150 * i,print_id,NULL);
+    //}
+    
     /* Initialise serial driver */
     serial_handle = serial_init();
 
