@@ -19,20 +19,38 @@
 #define EPIT_ENMOD 1
 #define EPIT_EN 0
 
-#define EPIT_CONTROL_REGISTER 0
-#define EPIT_STATUS_REGISTER 1
-#define EPIT_LOAD_REGISTER 2
-#define EPIT_COMPARE_REGISTER 3
-#define EPIT_COUNTER_REGISTER 4
+#define EPIT_FREQUENCY 66000000 /* One second */
 
-#define EPIT_FREQUENCY 66000000
-
-#define INTERRUPT_THRESHOLD 1000 /* Microseconds */
-#define DEFAULT_INTERRUPT_TICK 3960000000 /* One minute */
-
-static uint32_t *timer_vaddr;
+#define INTERRUPT_THRESHOLD 1000 /* In terms of microseconds */
+#define DEFAULT_INTERRUPT_TICK (EPIT_FREQUENCY * 60) /* In terms of frequency */
 
 extern const seL4_BootInfo* _boot_info;
+
+/* EPIT timer registers */
+static volatile struct epit_timer {
+    uint32_t control;
+    uint32_t status;
+    uint32_t load;
+    uint32_t compare;
+    uint32_t counter;
+};
+
+/* Stores a registered timer */
+static struct timer_handler {
+    int id;
+    timer_callback_t callback;
+    timestamp_t expire_time;
+    timestamp_t delay;
+    void *data;
+    struct timer_handler *next;
+};
+
+static struct timer_irq {
+    int irq;
+    seL4_IRQHandler cap;
+} _timer_irqs[1];
+
+static struct epit_timer *timer;
 
 static seL4_CPtr _irq_ep;
 
@@ -42,23 +60,8 @@ static timestamp_t load_register_value;
 
 static uint32_t current_id = 1;
 
-/* Stores a registered timer */
-struct timer_handler {
-    int id;
-    timer_callback_t callback;
-    timestamp_t expire_time;
-    timestamp_t delay;
-    void *data;
-    struct timer_handler *next;
-};
-
 /* Head of linked list of timer_handlers - sorted by expire_time */
 static struct timer_handler *handler_head;
-
-static struct timer_irq {
-    int irq;
-    seL4_IRQHandler cap;
-} _timer_irqs[1];
 
 static seL4_CPtr enable_irq(int irq, seL4_CPtr aep) {
     seL4_CPtr cap;
@@ -101,11 +104,11 @@ static struct timer_handler *timer_handler_new(timer_callback_t callback, void *
     return h;
 }
 
-static uint64_t hardware_time_to_microseconds(uint64_t time) {
+static uint64_t frequency_to_microseconds(uint64_t time) {
     return time * 1000000 / EPIT_FREQUENCY;
 }
 
-static uint64_t microseconds_to_hardware_time(uint64_t time) {
+static uint64_t microseconds_to_frequency(uint64_t time) {
     return time * EPIT_FREQUENCY / 1000000;
 }
 
@@ -164,44 +167,46 @@ static struct timer_handler *remove_head() {
 }
 
 /* Initialises the timer */
-void timer_init(uint32_t *vaddr) {
-    timer_vaddr = vaddr;
+void timer_init(void *vaddr) {
+    timer = vaddr;
+
+    uint32_t control = (1 << EPIT_CLKSRC |
+                        3 << EPIT_OM |
+                        1 << EPIT_STOPEN |
+                        1 << EPIT_WAITEN |
+                        1 << EPIT_DBGEN |
+                        1 << EPIT_IOVW |
+                        0 << EPIT_SWR |
+                        0 << EPIT_PRESCALAR |
+                        1 << EPIT_RLD |
+                        1 << EPIT_OCIEN |
+                        0 << EPIT_ENMOD |
+                        0 << EPIT_EN);
+    timer->control = control;
 }
 
 /* Sets the next timer interrupt time */
 void set_next_timer_interrupt(timestamp_t us) {
-    load_register_value = microseconds_to_hardware_time(us);
+    load_register_value = microseconds_to_frequency(us);
     /* Limit at DEFAULT_INTERRUPT_TICK */
     if (load_register_value > DEFAULT_INTERRUPT_TICK) {
         load_register_value = DEFAULT_INTERRUPT_TICK;
     }
     /* Update current time */
-    current_time += hardware_time_to_microseconds(timer_vaddr[EPIT_LOAD_REGISTER] - timer_vaddr[EPIT_COUNTER_REGISTER]);
+    current_time += frequency_to_microseconds(timer->load - timer->counter);
 
     /* Set new load value */
-    timer_vaddr[EPIT_LOAD_REGISTER] = load_register_value;
+    timer->load = load_register_value;
 
 }
 
 int start_timer(seL4_CPtr interrupt_ep) {
     _irq_ep = interrupt_ep;
 
-    uint32_t control = (1 << EPIT_CLKSRC |
-                        3 << EPIT_OM |
-                        0 << EPIT_STOPEN |
-                        0 << EPIT_WAITEN |
-                        0 << EPIT_DBGEN |
-                        1 << EPIT_IOVW |
-                        0 << EPIT_SWR |
-                        0 << EPIT_PRESCALAR |
-                        1 << EPIT_RLD |
-                        1 << EPIT_OCIEN |
-                        1 << EPIT_ENMOD |
-                        1 << EPIT_EN);
-    timer_vaddr[EPIT_CONTROL_REGISTER] = control;
-
     _timer_irqs[0].irq = EPIT1_IRQ;
     _timer_irqs[0].cap = enable_irq(EPIT1_IRQ, _irq_ep);
+
+    timer->control |= 1 << EPIT_EN;
 
     set_next_timer_interrupt(DEFAULT_INTERRUPT_TICK);
 
@@ -266,9 +271,8 @@ int timer_interrupt(void) {
         return CLOCK_R_FAIL;
     }
     
-
     /* Keep track of current time */
-    current_time += hardware_time_to_microseconds(load_register_value);
+    current_time += frequency_to_microseconds(load_register_value);
 
     /* Handle callback */
     struct timer_handler *handler = handler_head;
@@ -289,37 +293,32 @@ int timer_interrupt(void) {
     }
     
     /* Acknowledge */
-    timer_vaddr[EPIT_STATUS_REGISTER] = 1;
+    timer->status = 1;
     int err = seL4_IRQHandler_Ack(_timer_irqs[0].cap);
     return CLOCK_R_OK;
 }
 
 timestamp_t time_stamp(void) {
-    timestamp_t counter = hardware_time_to_microseconds(timer_vaddr[EPIT_LOAD_REGISTER] - timer_vaddr[EPIT_COUNTER_REGISTER]);
+    timestamp_t counter = frequency_to_microseconds(timer->load - timer->counter);
     return current_time + counter;
 }
 
-
-
-static void handler_queue_destroy(void){
-    struct timer_handler * next; 
-    struct timer_handler * handler = handler_head;
-    while (handler != NULL){
-       next = handler->next;
-       free(handler);
-       handler = next;
+static void handler_queue_destroy(void) {
+    struct timer_handler *next; 
+    struct timer_handler *handler = handler_head;
+    while (handler != NULL) {
+        next = handler->next;
+        free(handler);
+        handler = next;
     }
 }
 
 int stop_timer(void) {
-    //update the time to be accurate
-    timestamp_t counter = hardware_time_to_microseconds(timer_vaddr[EPIT_LOAD_REGISTER] - timer_vaddr[EPIT_COUNTER_REGISTER]);
-    current_time += counter;
-    
-    //destroy all handler
+    /* Disable timer */
+    timer->control |= 0 << EPIT_EN;
+
+    /* Destroy all handler */
     handler_queue_destroy();
-    
-    //Still have to keep it in order to give timestamp
-    set_next_timer_interrupt(DEFAULT_INTERRUPT_TICK);
+
     return CLOCK_R_OK;
 }

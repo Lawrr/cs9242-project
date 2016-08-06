@@ -413,7 +413,7 @@ static inline seL4_CPtr badge_irq_ep(seL4_CPtr ep, seL4_Word badge) {
 }
 
 void print_time_stamp(uint32_t id, void *data) {
-    printf("%llu\n", id, time_stamp());
+    printf("%d - %llu\n", id, time_stamp());
     register_timer(1000000, &print_time_stamp, NULL);
 }
 
@@ -429,7 +429,7 @@ void fast_elapsed(uint32_t id, void *data) {
 
 void one_second_elapsed(uint32_t id, void *data) {
     printf("1s elapsed %d\n",counter++);
-    register_timer(1000000, &one_second_elapsed, NULL);
+    //register_timer(1000000, &one_second_elapsed, NULL);
 }
 
 void two_minute_elapsed(uint32_t id, void *data) {
@@ -468,18 +468,25 @@ int main(void) {
     network_init(badge_irq_ep(_sos_interrupt_ep_cap, IRQ_BADGE_NETWORK));
 
     /* Initialise the timer */
-    uint32_t *timer_vaddr = map_device(EPIT1_PADDR, EPIT1_NUM_REGISTERS * sizeof(uint32_t));
+    void *timer_vaddr = map_device(EPIT1_PADDR, EPIT1_NUM_REGISTERS * sizeof(uint32_t));
     timer_init(timer_vaddr);
     start_timer(badge_irq_ep(_sos_interrupt_ep_cap, IRQ_BADGE_TIMER));
     
     //register_timer(100000, &print_time_stamp, NULL);
     //register_timer(250000, &different_interval, NULL);
     //register_timer(50000, &fast_elapsed, NULL);
-    //register_timer(1000000, &one_second_elapsed, NULL);
+    //register_timer(10000000, &one_second_elapsed, NULL);
+    //register_timer(15000000, &one_second_elapsed, NULL);
+    //register_timer(30000000, &one_second_elapsed, NULL);
+    register_timer(45000000, &one_second_elapsed, NULL);
+    register_timer(67000000, &one_second_elapsed, NULL);
+    //register_timer(75000000, &one_second_elapsed, NULL);
+    //register_timer(90000000, &one_second_elapsed, NULL);
+    //register_timer(105000000, &one_second_elapsed, NULL);
     //register_timer(120000000, &two_minute_elapsed,NULL);
-    for (int i = 0 ; i < 1000; i++){
-        register_timer(30000000,print_id,NULL);
-    }
+    //for (int i = 0 ; i < 1000; i++){
+    //    register_timer(30000000,print_id,NULL);
+    //}
     /* Initialise serial driver */
     serial_handle = serial_init();
 
