@@ -413,9 +413,11 @@ static inline seL4_CPtr badge_irq_ep(seL4_CPtr ep, seL4_Word badge) {
     return badged_cap;
 }
 
+static uint32_t time_counter = 0;
+
 void print_time_stamp(uint32_t id, void *data) {
     register_timer(100000, &print_time_stamp, NULL);
-    printf("%llu\n", time_stamp());
+    printf("%llu #%lu\n", time_stamp(), time_counter++);
 }
 
 static uint32_t interval_counter = 0;
