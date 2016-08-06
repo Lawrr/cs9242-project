@@ -56,10 +56,8 @@ static struct epit_timer *epit1_timer;
 static struct epit_timer *epit2_timer;
 
 static seL4_CPtr _irq_ep;
-
-static timestamp_t current_time = 0;
-
 static uint32_t current_id = 1;
+static timestamp_t current_time = 0;
 
 /* Head of linked list of timer_handlers - sorted by expire_time */
 static struct timer_handler *handler_head = NULL;
@@ -81,6 +79,30 @@ static seL4_CPtr enable_irq(int irq, seL4_CPtr aep) {
     }
     return cap;
 }
+
+static uint64_t frequency_to_microseconds(uint64_t time) {
+    return time * 1000000 / EPIT_FREQUENCY;
+}
+
+static uint64_t microseconds_to_frequency(uint64_t time) {
+    return time * EPIT_FREQUENCY / 1000000;
+}
+
+void set_epit1(timestamp_t us) {
+    timestamp_t load_register_value = microseconds_to_frequency(us);
+    /* Limit at DEFAULT_INTERRUPT_TICK */
+    if (load_register_value > DEFAULT_INTERRUPT_TICK) {
+        load_register_value = DEFAULT_INTERRUPT_TICK;
+    }
+
+    /* Set new load value */
+    epit1_timer->load = load_register_value;
+}
+
+static void set_epit2(){
+    epit2_timer->load = MAX_INTERRUPT_TICK;
+}
+
 
 static void handler_queue_destroy(void) {
     struct timer_handler *next; 
@@ -110,18 +132,14 @@ static struct timer_handler *timer_handler_new(timer_callback_t callback, void *
     if (current_id == 0) {
         current_id = 1;
     }
+    
+    /*Ideally we can use address of the struct as id*/
+    //h->id = (int) h;
     h->id = current_id++;
 
     return h;
 }
 
-static uint64_t frequency_to_microseconds(uint64_t time) {
-    return time * 1000000 / EPIT_FREQUENCY;
-}
-
-static uint64_t microseconds_to_frequency(uint64_t time) {
-    return time * EPIT_FREQUENCY / 1000000;
-}
 
 /* Inserts a timer_handler into the linked list */
 static void insert(struct timer_handler *to_insert) {
@@ -131,13 +149,13 @@ static void insert(struct timer_handler *to_insert) {
         /* Linked list is currently empty */
         handler_head = to_insert;
         /* Set new interrupt time */
-        set_timer_interrupt(to_insert->expire_time - time_stamp());
+        set_epit1(to_insert->expire_time - time_stamp());
     } else if (curr->expire_time > to_insert->expire_time) {
         /* New timer inserted to front */
         to_insert->next = curr;
         handler_head = to_insert;
         /* Set new interrupt time */
-        set_timer_interrupt(to_insert->expire_time - time_stamp());
+        set_epit1(to_insert->expire_time - time_stamp());
     } else {
         /* New timer inserted somewhere in the middle (or end) of the list */
         bool inserted = FALSE;
@@ -168,26 +186,16 @@ static struct timer_handler *remove_head() {
     handler_head = handler_head->next;
     if (handler_head != NULL) {
         /* Set new interrupt time of next timer */
-        set_timer_interrupt(handler_head->expire_time - time_stamp());
+        set_epit1(handler_head->expire_time - time_stamp());
     } else {
         /* Else set default interrupt time */
-        set_timer_interrupt(DEFAULT_INTERRUPT_TICK);
+        set_epit1(DEFAULT_INTERRUPT_TICK);
     }
 
     return ret;
 }
 
 /* Sets the next timer interrupt time */
-void set_timer_interrupt(timestamp_t us) {
-    timestamp_t load_register_value = microseconds_to_frequency(us);
-    /* Limit at DEFAULT_INTERRUPT_TICK */
-    if (load_register_value > DEFAULT_INTERRUPT_TICK) {
-        load_register_value = DEFAULT_INTERRUPT_TICK;
-    }
-
-    /* Set new load value */
-    epit1_timer->load = load_register_value;
-}
 
 /* Initialises the timer */
 void timer_init(void *epit1_vaddr, void *epit2_vaddr) {
@@ -225,9 +233,8 @@ int start_timer(seL4_CPtr interrupt_ep) {
     epit1_timer->control |= 1 << EPIT_EN;
     epit2_timer->control |= 1 << EPIT_EN;
 
-    set_timer_interrupt(DEFAULT_INTERRUPT_TICK);
-    epit2_timer->load = MAX_INTERRUPT_TICK;
-
+    set_epit1(DEFAULT_INTERRUPT_TICK);
+    set_epit2();
     return CLOCK_R_OK;
 }
 
@@ -294,7 +301,7 @@ int timer_interrupt(void) {
     /* Keep track of current time */
     if (!epit2_timer->status) {
         current_time += frequency_to_microseconds(epit2_timer->load - epit2_timer->counter);
-        epit2_timer->load = MAX_INTERRUPT_TICK;
+        set_epit2();
     } else {
         current_time += frequency_to_microseconds(epit2_timer->load);
     }
@@ -306,7 +313,7 @@ int timer_interrupt(void) {
     if (handler_head != NULL) {
         /* Set new timer interrupt for timers with long delays */
         if (microseconds_to_frequency(handler->delay) > DEFAULT_INTERRUPT_TICK) {
-            set_timer_interrupt(handler->expire_time - time_stamp());
+            set_epit1(handler->expire_time - time_stamp());
         }
 
         while (handler != NULL && handler->expire_time - INTERRUPT_THRESHOLD <= time_stamp()) {
