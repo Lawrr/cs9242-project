@@ -52,7 +52,8 @@
 #define TTY_EP_BADGE         (101)
 
 #define EPIT1_PADDR 0x020D0000
-#define EPIT1_NUM_REGISTERS 5
+#define EPIT2_PADDR 0x020D4000
+#define EPIT_REGISTERS 5
 
 /* The linker will link this symbol to the start address  *
  * of an archive of attached applications.                */
@@ -468,8 +469,9 @@ int main(void) {
     network_init(badge_irq_ep(_sos_interrupt_ep_cap, IRQ_BADGE_NETWORK));
 
     /* Initialise the timer */
-    void *timer_vaddr = map_device(EPIT1_PADDR, EPIT1_NUM_REGISTERS * sizeof(uint32_t));
-    timer_init(timer_vaddr);
+    void *epit1_vaddr = map_device(EPIT1_PADDR, EPIT_REGISTERS * sizeof(uint32_t));
+    void *epit2_vaddr = map_device(EPIT2_PADDR, EPIT_REGISTERS * sizeof(uint32_t));
+    timer_init(epit1_vaddr, epit2_vaddr);
     start_timer(badge_irq_ep(_sos_interrupt_ep_cap, IRQ_BADGE_TIMER));
     
     //register_timer(100000, &print_time_stamp, NULL);
