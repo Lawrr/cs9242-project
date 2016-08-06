@@ -267,6 +267,8 @@ int remove_timer(uint32_t id) {
 }
 
 int timer_interrupt(void) {
+    int err;
+
     if (_irq_ep == seL4_CapNull) {
         return CLOCK_R_FAIL;
     }
@@ -277,8 +279,16 @@ int timer_interrupt(void) {
     /* Handle callback */
     struct timer_handler *handler = handler_head;
 
-    /* if the queue is empty, we are using deafult tick */
-    if (handler_head == NULL) return CLOCK_R_OK;
+    /* if the queue is empty, we are using default tick */
+    if (handler_head == NULL) {
+        /* Acknowledge */
+        timer->status = 1;
+        err = seL4_IRQHandler_Ack(_timer_irqs[0].cap);
+        if (err) {
+            return CLOCK_R_FAIL;
+        }
+        return CLOCK_R_OK;
+    }
 
     /* Set new timer interrupt for timers with long delays */
     if (microseconds_to_frequency(handler->delay) > DEFAULT_INTERRUPT_TICK) {
@@ -294,7 +304,10 @@ int timer_interrupt(void) {
     
     /* Acknowledge */
     timer->status = 1;
-    int err = seL4_IRQHandler_Ack(_timer_irqs[0].cap);
+    err = seL4_IRQHandler_Ack(_timer_irqs[0].cap);
+    if (err) {
+        return CLOCK_R_FAIL;
+    }
     return CLOCK_R_OK;
 }
 
