@@ -468,15 +468,21 @@ int main(void) {
     seL4_CPtr timer_badge = badge_irq_ep(_sos_interrupt_ep_cap, IRQ_BADGE_TIMER);
     start_timer(timer_badge);
     
-    register_timer(100000, &print_time_stamp, NULL);
-    register_timer(250000, &different_interval, NULL);
-    register_timer(1000000, &time_elapsed, NULL);
-    register_timer(10000000, &time_elapsed, NULL);
-    register_timer(15000000, &time_elapsed, NULL);
-    register_timer(17000000, &time_elapsed, NULL);
-    //for (int i = 0 ; i < 3000; i++){
-    //    register_timer(30000000 + 150 * i,print_id,NULL);
-    //}
+    //register_timer(100000, &print_time_stamp, NULL);
+    //register_timer(250000, &different_interval, NULL);
+    //register_timer(1000000, &time_elapsed, NULL);
+    //register_timer(10000000, &time_elapsed, NULL);
+    //register_timer(15000000, &time_elapsed, NULL);
+    //register_timer(17000000, &time_elapsed, NULL);
+    for (int i = 0 ; i < 3000; i++){
+        register_timer(30000000 + 150 * i,print_id,NULL);
+    }
+
+    /* This removement only fine with incement id*/
+    for (int i = 1; i < 3001; i++){
+	printf("Remove %d, result:%d\n",i,remove_timer(i));
+    }
+    
     
     /* Initialise serial driver */
     serial_handle = serial_init();
