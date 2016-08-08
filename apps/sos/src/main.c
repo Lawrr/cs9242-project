@@ -413,15 +413,6 @@ static inline seL4_CPtr badge_irq_ep(seL4_CPtr ep, seL4_Word badge) {
     return badged_cap;
 }
 
-void print_time_stamp(uint32_t id, void *data) {
-    register_timer(100000, &print_time_stamp, data);
-    printf("%llu %s\n", time_stamp(), data);
-}
-
-void time_elapsed(uint32_t id, void *data) {
-    printf("%s\n", data);
-}
-
 /*
  * Main entry point - called by crt.
  */
@@ -440,12 +431,6 @@ int main(void) {
     timer_init(epit1_vaddr, epit2_vaddr);
     seL4_CPtr timer_badge = badge_irq_ep(_sos_interrupt_ep_cap, IRQ_BADGE_TIMER);
     start_timer(timer_badge);
-    
-    register_timer(100000, &print_time_stamp, "tick");
-    register_timer(250000, &time_elapsed, "250ms");
-    register_timer(1000000, &time_elapsed, "1s");
-    register_timer(10000000, &time_elapsed, "10s");
-    register_timer(15000000, &time_elapsed, "15s");
     
     /* Initialise serial driver */
     serial_handle = serial_init();
