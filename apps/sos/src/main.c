@@ -19,6 +19,7 @@
 #include <nfs/nfs.h>
 #include <elf/elf.h>
 #include <serial/serial.h>
+#include <clock/clock.h>
 
 #include "network.h"
 #include "elf.h"
@@ -44,10 +45,15 @@
 /* All badged IRQs set high bet, then we use uniq bits to
  * distinguish interrupt sources */
 #define IRQ_BADGE_NETWORK (1 << 0)
+#define IRQ_BADGE_TIMER (1 << 1)
 
 #define TTY_NAME             CONFIG_SOS_STARTUP_APP
 #define TTY_PRIORITY         (0)
 #define TTY_EP_BADGE         (101)
+
+#define EPIT1_PADDR 0x020D0000
+#define EPIT2_PADDR 0x020D4000
+#define EPIT_REGISTERS 5
 
 /* The linker will link this symbol to the start address  *
  * of an archive of attached applications.                */
@@ -80,6 +86,8 @@ struct {
 seL4_CPtr _sos_ipc_ep_cap;
 seL4_CPtr _sos_interrupt_ep_cap;
 
+struct serial *serial_handle;
+
 /**
  * NFS mount point
  */
@@ -107,8 +115,6 @@ void handle_syscall(seL4_Word badge, int num_args) {
         // Get data to write start ptr
         void *message = &seL4_GetIPCBuffer()->msg[2];
 
-        // Init serial driver
-        struct serial *serial_handle = serial_init();
         // Send data to write
         int bytes_sent = serial_send(serial_handle, message, count);
 
@@ -141,6 +147,8 @@ void syscall_loop(seL4_CPtr ep) {
             /* Interrupt */
             if (badge & IRQ_BADGE_NETWORK) {
                 network_irq();
+            } else if (badge & IRQ_BADGE_TIMER) {
+                timer_interrupt();
             }
 
         }else if(label == seL4_VMFault){
@@ -416,6 +424,16 @@ int main(void) {
 
     /* Initialise the network hardware */
     network_init(badge_irq_ep(_sos_interrupt_ep_cap, IRQ_BADGE_NETWORK));
+
+    /* Initialise the timer */
+    void *epit1_vaddr = map_device(EPIT1_PADDR, EPIT_REGISTERS * sizeof(uint32_t));
+    void *epit2_vaddr = map_device(EPIT2_PADDR, EPIT_REGISTERS * sizeof(uint32_t));
+    timer_init(epit1_vaddr, epit2_vaddr);
+    seL4_CPtr timer_badge = badge_irq_ep(_sos_interrupt_ep_cap, IRQ_BADGE_TIMER);
+    start_timer(timer_badge);
+    
+    /* Initialise serial driver */
+    serial_handle = serial_init();
 
     /* Start the user application */
     start_first_process(TTY_NAME, _sos_ipc_ep_cap);
