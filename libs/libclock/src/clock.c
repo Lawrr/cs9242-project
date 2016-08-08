@@ -122,11 +122,11 @@ static struct timer_handler *timer_handler_new(timer_callback_t callback, void *
     }
 
     /* Set values */
+    h->expire_time = time_stamp() + delay;
     h->callback = callback;
     h->data = data;
     h->next = NULL;
     h->delay = delay;
-    h->expire_time = time_stamp() + delay;
     
     /*Ideally we can use address of the struct as id*/
     h->id = (uint32_t) h;
@@ -269,42 +269,35 @@ int remove_timer(uint32_t id) {
         return CLOCK_R_UINT;
     }
 
-    struct timer_handler *curr = handler_head;
     /* None in list */
-    if (curr == NULL) {
+    if (handler_head == NULL) {
         return CLOCK_R_FAIL;
     }
 
-    /* One in list */
-    struct timer_handler *prev = curr;
-    curr = curr->next;
-    if (curr == NULL) {
-        if (prev->id == id) {
-            handler_head = NULL;
-            free(prev);
-            return CLOCK_R_OK;
+    if (handler_head->id == id) {
+        /* Front of list */
+        struct timer_handler *to_free = handler_head;
+        handler_head = handler_head->next;
+        free(to_free);
+        if (handler_head == NULL) {
+            set_epit1_interrupt(DEFAULT_INTERRUPT_TICK);
         } else {
-            return CLOCK_R_FAIL;
+            set_epit1_interrupt(handler_head->expire_time - time_stamp());
         }
-    }
-
-    /* Multiple items in list */
-    while (curr->next != NULL) {
-        if (curr->next->id == id) {
-            struct timer_handler *del = curr->next;
-            curr->next = del->next;
-            free(del);
-            return CLOCK_R_OK;
-        }
-        prev = curr;
-        curr = curr->next;
-    }
-
-    /* Check if its the very last item on the list */
-    if (curr->id == id) {
-        prev->next = NULL;
-        free(curr);
         return CLOCK_R_OK;
+    } else {
+        /* Middle/end of list */
+        struct timer_handler *curr = handler_head->next;
+        struct timer_handler *prev = handler_head;
+        while (curr != NULL) {
+            if (curr->id == id) {
+                prev->next = curr->next;
+                free(curr);
+                return CLOCK_R_OK;
+            }
+            prev = curr;
+            curr = curr->next;
+        }
     }
 
     return CLOCK_R_FAIL;
@@ -329,7 +322,7 @@ int timer_interrupt(void) {
     struct timer_handler *handler = handler_head;
 
     /* if the queue is empty, we are using default tick */
-    if (handler_head != NULL) {
+    if (handler != NULL) {
         /* Set new timer interrupt for timers with long delays */
         if (microseconds_to_frequency(handler->delay) > DEFAULT_INTERRUPT_TICK) {
             set_epit1_interrupt(handler->expire_time - time_stamp());
