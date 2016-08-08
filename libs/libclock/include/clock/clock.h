@@ -21,7 +21,7 @@
 #define CLOCK_R_CNCL (-2)       /* operation cancelled (driver stopped) */
 #define CLOCK_R_FAIL (-3)       /* operation failed for other reason */
 
-typedef uint64_t timestamp_t;
+typedef int64_t timestamp_t;
 typedef void (*timer_callback_t)(uint32_t id, void *data);
 
 void timer_init(void *epit1_vaddr, void *epit2_vaddr);
