@@ -415,7 +415,7 @@ static inline seL4_CPtr badge_irq_ep(seL4_CPtr ep, seL4_Word badge) {
 
 void print_time_stamp(uint32_t id, void *data) {
     register_timer(100000, &print_time_stamp, data);
-    printf("%llu %s\n", time_stamp(), data);
+    printf("%lld %s\n", time_stamp(), data);
 }
 
 void time_elapsed(uint32_t id, void *data) {
