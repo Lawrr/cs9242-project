@@ -56,7 +56,6 @@ static struct epit_timer *epit1_timer;
 static struct epit_timer *epit2_timer;
 
 static seL4_CPtr _irq_ep;
-static uint32_t current_id = 1;
 static timestamp_t current_time = 0;
 
 /* Head of linked list of timer_handlers - sorted by expire_time */
@@ -130,11 +129,6 @@ static struct timer_handler *timer_handler_new(timer_callback_t callback, void *
     
     /*Ideally we can use address of the struct as id*/
     h->id = (uint32_t) h;
-    ///* id 0 indicates error, so we cannot use it */
-    //if (current_id == 0) {
-    //    current_id = 1;
-    //}
-    //h->id = current_id++;
 
     return h;
 }

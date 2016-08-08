@@ -413,41 +413,14 @@ static inline seL4_CPtr badge_irq_ep(seL4_CPtr ep, seL4_Word badge) {
     return badged_cap;
 }
 
-static uint32_t time_counter = 0;
-
 void print_time_stamp(uint32_t id, void *data) {
-    register_timer(100000, &print_time_stamp, NULL);
-    printf("%llu #%lu\n", time_stamp(), time_counter++);
-}
-
-static uint32_t interval_counter = 0;
-
-void different_interval(uint32_t id, void *data) {
-    register_timer(250000, &different_interval, NULL);
-    printf("250ms interval  %llu %lu\n", time_stamp(), interval_counter++);
-}
-
-void fast_elapsed(uint32_t id, void *data) {
-    printf("50ms elapsed\n");
+    register_timer(100000, &print_time_stamp, data);
+    printf("%llu %s\n", time_stamp(), data);
 }
 
 void time_elapsed(uint32_t id, void *data) {
-    printf("time elapsed\n");
+    printf("%s\n", data);
 }
-
-void two_minute_elapsed(uint32_t id, void *data) {
-    printf("120s elapsed\n");
-}
-
-void print_id(uint32_t id,void * data){
-    printf("timestamp %ld - ",((long double)time_stamp())/1000000);
-    printf("id=%d\n",id);
-}
-
-void timer_off(uint32_t id, void *data) {
-    printf("Turn timer off: %d\n", stop_timer());
-}
-
 
 /*
  * Main entry point - called by crt.
@@ -468,15 +441,11 @@ int main(void) {
     seL4_CPtr timer_badge = badge_irq_ep(_sos_interrupt_ep_cap, IRQ_BADGE_TIMER);
     start_timer(timer_badge);
     
-    register_timer(100000, &print_time_stamp, NULL);
-    register_timer(250000, &different_interval, NULL);
-    register_timer(1000000, &time_elapsed, NULL);
-    register_timer(10000000, &time_elapsed, NULL);
-    register_timer(15000000, &time_elapsed, NULL);
-    register_timer(17000000, &time_elapsed, NULL);
-    //for (int i = 0 ; i < 3000; i++){
-    //    register_timer(30000000 + 150 * i,print_id,NULL);
-    //}
+    register_timer(100000, &print_time_stamp, "tick");
+    register_timer(250000, &time_elapsed, "250ms");
+    register_timer(1000000, &time_elapsed, "1s");
+    register_timer(10000000, &time_elapsed, "10s");
+    register_timer(15000000, &time_elapsed, "15s");
     
     /* Initialise serial driver */
     serial_handle = serial_init();
