@@ -129,12 +129,12 @@ static struct timer_handler *timer_handler_new(timer_callback_t callback, void *
     h->delay = delay;
     
     /*Ideally we can use address of the struct as id*/
-    //h->id = (uint32_t) h;
+    h->id = (uint32_t) h;
     ///* id 0 indicates error, so we cannot use it */
-    if (current_id == 0) {
-        current_id = 1;
-    }
-    h->id = current_id++;
+    //if (current_id == 0) {
+    //    current_id = 1;
+    //}
+    //h->id = current_id++;
 
     return h;
 }
@@ -264,13 +264,6 @@ uint32_t register_timer(uint64_t delay, timer_callback_t callback, void *data) {
     return new_handler->id;
 }
 
-timestamp_t time_stamp(void) {
-    if (!has_init()) {
-        return -1;
-    }
-    timestamp_t counter = frequency_to_microseconds(epit2_timer->load - epit2_timer->counter);
-    return current_time + counter;
-}
 int remove_timer(uint32_t id) {
     if (!has_init()) {
         return CLOCK_R_UINT;
@@ -281,35 +274,26 @@ int remove_timer(uint32_t id) {
         return CLOCK_R_FAIL;
     }
 
-    if (handler_head -> id == id) {
+    if (handler_head->id == id) {
         /* Front of list */
-        if (handler_head -> expire_time > time_stamp()){    
-	   struct timer_handler *to_free = handler_head;
-           handler_head = handler_head->next;
-           free(to_free);
-           if (handler_head == NULL) {
-              set_epit1_interrupt(DEFAULT_INTERRUPT_TICK);
-           } else {
-              set_epit1_interrupt(handler_head->expire_time - time_stamp());
-           }
-           return CLOCK_R_OK;
-        }  else {
-           return CLOCK_R_FAIL;
-	}
-    
+        struct timer_handler *to_free = handler_head;
+        handler_head = handler_head->next;
+        free(to_free);
+        if (handler_head == NULL) {
+            set_epit1_interrupt(DEFAULT_INTERRUPT_TICK);
+        } else {
+            set_epit1_interrupt(handler_head->expire_time - time_stamp());
+        }
+        return CLOCK_R_OK;
     } else {
         /* Middle/end of list */
         struct timer_handler *curr = handler_head->next;
         struct timer_handler *prev = handler_head;
         while (curr != NULL) {
             if (curr->id == id) {
-                if ( curr -> expire_time > time_stamp()){
-                   prev->next = curr->next;
-                   free(curr);
-                   return CLOCK_R_OK;
-		}  else{
-                   return CLOCK_R_FAIL;
-		}
+                prev->next = curr->next;
+                free(curr);
+                return CLOCK_R_OK;
             }
             prev = curr;
             curr = curr->next;
@@ -364,6 +348,14 @@ int timer_interrupt(void) {
         return CLOCK_R_FAIL;
     }
     return CLOCK_R_OK;
+}
+
+timestamp_t time_stamp(void) {
+    if (!has_init()) {
+        return -1;
+    }
+    timestamp_t counter = frequency_to_microseconds(epit2_timer->load - epit2_timer->counter);
+    return current_time + counter;
 }
 
 int stop_timer(void) {
