@@ -21,6 +21,7 @@
 #include <serial/serial.h>
 #include <clock/clock.h>
 
+#include "frametable.h"
 #include "network.h"
 #include "elf.h"
 
@@ -403,6 +404,9 @@ static void _sos_init(seL4_CPtr* ipc_ep, seL4_CPtr* async_ep){
     conditional_panic(err, "Failed to intiialise DMA memory\n");
 
     /* Initialiase other system compenents here */
+
+    /* Initialise frame table */
+    frame_init(low, high);
 
     _sos_ipc_init(ipc_ep, async_ep);
 }
