@@ -305,7 +305,7 @@ int timer_interrupt(void) {
     }
     
     /* Keep track of current time */
-    if (!epit2_timer->status) {
+    if (epit1_timer->status) {
         current_time += frequency_to_microseconds(epit2_timer->load - epit2_timer->counter);
         reload_epit2_interrupt();
     } else {
@@ -346,7 +346,7 @@ int timer_interrupt(void) {
 
 timestamp_t time_stamp(void) {
     if (!has_init()) {
-        return -1;
+        return 0;
     }
     timestamp_t counter = frequency_to_microseconds(epit2_timer->load - epit2_timer->counter);
     return current_time + counter;
