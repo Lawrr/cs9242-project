@@ -51,11 +51,11 @@ void frame_init(seL4_Word high,seL4_Word low) {
         /* ft_section_paddr - low = phys mem untyped region offset (range: 0-high)
          * + PROCESS_VMEM_START = virtual mem offset
          */
-        seL4_Word ft_vaddr = ft_section_paddr - low + PROCESS_VMEM_START;
+        seL4_Word ft_section_vaddr = ft_section_paddr - low + PROCESS_VMEM_START;
 
         /* Set pointer to head of frame_table */
         if (i == 0) {
-            frame_table = ft_vaddr;
+            frame_table = ft_section_vaddr;
         }
 
         err = cspace_ut_retype_addr(ft_section_paddr,
@@ -67,15 +67,14 @@ void frame_init(seL4_Word high,seL4_Word low) {
 
         err = map_page(frame_table_cap,
                 seL4_CapInitThreadPD,
-                ft_vaddr,
+                ft_section_vaddr,
                 seL4_AllRights,
                 seL4_ARM_Default_VMAttributes);
         conditional_panic(err, "Failed to map frame table");
 
-        memset(frame_table, 0, PAGE_SIZE);
+        /* Clear frame_table memory */
+        memset(ft_section_vaddr, 0, PAGE_SIZE);
     }
-
-    /* Clear frame_table memory */
 
     /* Init free index */
     free_index = -1;
@@ -84,6 +83,7 @@ void frame_init(seL4_Word high,seL4_Word low) {
 int32_t frame_alloc(seL4_Word *vaddr) {
     int err;
     int ret_index;
+    seL4_Word frame_vaddr;
     
     if (free_index == -1) {
         /* Free list is empty but there is still memory */
@@ -105,7 +105,7 @@ int32_t frame_alloc(seL4_Word *vaddr) {
         /* frame_paddr - low = phys mem untyped region offset (range: 0-high)
          * + PROCESS_VMEM_START = virtual mem offset
          */
-        seL4_Word frame_vaddr = frame_paddr - low_addr + PROCESS_VMEM_START;
+        frame_vaddr = frame_paddr - low_addr + PROCESS_VMEM_START;
         err = map_page(frame_cap,
                 seL4_CapInitThreadPD,
                 frame_vaddr,
@@ -123,9 +123,10 @@ int32_t frame_alloc(seL4_Word *vaddr) {
     } else {
         ret_index = free_index;
         free_index = frame_table[free_index].next;
+        frame_vaddr = ((ret_index << 12) + PROCESS_VMEM_START);
     }
     
-    memset((void*)(ret_index << 12), 0, PAGE_SIZE);
+    memset(frame_vaddr, 0, PAGE_SIZE);
 
     return ret_index;
 }
