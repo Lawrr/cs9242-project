@@ -71,10 +71,11 @@ void frame_init(seL4_Word high,seL4_Word low) {
                 seL4_AllRights,
                 seL4_ARM_Default_VMAttributes);
         conditional_panic(err, "Failed to map frame table");
+
+        memset(frame_table, 0, PAGE_SIZE);
     }
 
     /* Clear frame_table memory */
-    //memset(frame_table, 0, frame_table_size);
 
     /* Init free index */
     free_index = -1;
@@ -123,6 +124,8 @@ int32_t frame_alloc(seL4_Word *vaddr) {
         ret_index = free_index;
         free_index = frame_table[free_index].next;
     }
+    
+    memset((void*)(ret_index << 12), 0, PAGE_SIZE);
 
     return ret_index;
 }
