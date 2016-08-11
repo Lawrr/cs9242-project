@@ -107,7 +107,7 @@ int32_t frame_alloc(seL4_Word *vaddr) {
         /* frame_paddr - low = phys mem untyped region offset (range: 0-high)
          * + PROCESS_VMEM_START = virtual mem offset
          */
-        frame_vaddr = frame_paddr - low_addr + PROCESS_VMEM_START;
+        frame_vaddr = frame_paddr - base_addr + PROCESS_VMEM_START;
         err = map_page(frame_cap,
                 seL4_CapInitThreadPD,
                 frame_vaddr,
