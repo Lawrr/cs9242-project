@@ -88,8 +88,12 @@ int32_t frame_alloc(seL4_Word *vaddr) {
     if (free_index == -1) {
         /* Free list is empty but there is still memory */
 
-        seL4_Word frame_paddr = ut_alloc(seL4_PageBits);
         seL4_Word frame_cap;
+        seL4_Word frame_paddr = ut_alloc(seL4_PageBits);
+        if (frame_paddr == NULL) {
+            *vaddr = NULL;
+            return -1;
+        }
 
         /* Retype to frame */
         err = cspace_ut_retype_addr(frame_paddr,
@@ -98,6 +102,7 @@ int32_t frame_alloc(seL4_Word *vaddr) {
                 cur_cspace,
                 &frame_cap);
         if (err) {
+            *vaddr = NULL;
             return -1;
         }
 
@@ -112,6 +117,7 @@ int32_t frame_alloc(seL4_Word *vaddr) {
                 seL4_AllRights,
                 seL4_ARM_Default_VMAttributes);
         if (err) {
+            *vaddr = NULL;
             return -1;
         }
 
@@ -122,8 +128,8 @@ int32_t frame_alloc(seL4_Word *vaddr) {
         frame_table[ret_index].cap = frame_cap;
     } else {
         ret_index = free_index;
-        free_index = frame_table[free_index].next;
         frame_vaddr = ((ret_index << 12) + PROCESS_VMEM_START);
+        free_index = frame_table[free_index].next;
     }
     
     memset(frame_vaddr, 0, PAGE_SIZE);

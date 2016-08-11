@@ -436,17 +436,22 @@ int main(void) {
     seL4_CPtr timer_badge = badge_irq_ep(_sos_interrupt_ep_cap, IRQ_BADGE_TIMER);
     start_timer(timer_badge);
 
-    /* Allocate a page */
-    seL4_Word vaddr;
-    frame_alloc(&vaddr);
-    assert(vaddr);
+    /* Test that you eventually run out of memory gracefully,
+       and doesn't crash */
+    while (1) {
+        /* Allocate a page */
+        seL4_Word vaddr;
+        frame_alloc(&vaddr);
+        if (!vaddr) {
+            printf("Out of memory!\n");
+            break;
+        }
 
-    /* Test you can touch the page */
-    int *int_vaddr = (int *) vaddr;
-    *int_vaddr = 0x37;
-    assert(*int_vaddr == 0x37);
-
-    printf("Page allocated at %p with value %d\n", int_vaddr, *int_vaddr);
+        /* Test you can touch the page */
+        int *vvaddr = vaddr;
+        *vvaddr = 0x37;
+        assert(*vvaddr == 0x37);
+    }
     
     /* Initialise serial driver */
     serial_handle = serial_init();
