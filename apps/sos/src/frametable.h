@@ -1,4 +1,4 @@
-void frame_init(seL4_Word low, seL4_Word high);
+void frame_init();
 
 int32_t frame_alloc(seL4_Word *vaddr);
 

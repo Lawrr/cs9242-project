@@ -25,74 +25,35 @@ static struct frame_entry **frame_table;
 static seL4_CPtr frame_table_cap;
 static int free_index;
 
-static uint64_t base_addr;
-
-//static int32_t create_ft(uint32_t index) {
-//    seL4_CPtr cap;
-//    frame_table[index] = ut_alloc(seL4_PageTableBits);
-//    err = cspace_ut_retype_addr(frame_table[index],
-//                                seL4_ARM_PageTableObject,
-//                                seL4_PageTableBits,
-//                                cur_cspace,
-//                                &cap);
-//    if (err) {
-//        return -1;
-//    }
-//
-//    err = map_page(cap,
-//                   seL4_CapInitThreadPD,
-//                   frame_table[index],
-//                   seL4_AllRights,
-//                   seL4_ARM_Default_VMAttributes);
-//    if (err) {
-//        return -1;
-//    }
-//
-//    return 0;
-//}
-
-void frame_init(seL4_Word low, seL4_Word high) {
+static int32_t create_second_level(uint32_t index) {
     int err;
-    uint64_t low64 = low;
-    uint64_t high64 = high;
-    
-    uint64_t entry_size = sizeof(struct frame_entry);
-    base_addr = (high64 * entry_size + PAGE_SIZE * low64) / (entry_size + PAGE_SIZE);
 
-    uint64_t frame_table_size = base_addr - low64;
+    seL4_CPtr cap;
+    frame_table[index] = ut_alloc(seL4_PageBits);
+    err = cspace_ut_retype_addr(frame_table[index],
+                                seL4_ARM_SmallPageObject,
+                                seL4_PageBits,
+                                cur_cspace,
+                                &cap);
+    if (err) {
+        return -1;
+    }
 
-    ///* Get num bits for frame_table */
-    //uint32_t frame_table_bits = 0;
-    //while (frame_table_size >>= 1) {
-    //    frame_table_bits++;
-    //}
-    ///* Reset frame_table_size value */
-    //frame_table_size = base_addr - low64;
+    err = map_page(cap,
+                   seL4_CapInitThreadPD,
+                   frame_table[index],
+                   seL4_AllRights,
+                   seL4_ARM_Default_VMAttributes);
+    if (err) {
+        return -1;
+    }
 
-    //for (uint64_t i = 0; i <= frame_table_size / FRAME_SIZE; i++) {
-    //    seL4_Word *ft_addr;
-    //    seL4_CPtr cap;
-    //    if (i == 0) {
-    //        frame_table = ut_alloc(seL4_PageDirBits);
-    //        ft_addr = frame_table;
-    //    } else {
-    //        ft_addr = ut_alloc(seL4_PageDirBits);
-    //    }
-    //    err = cspace_ut_retype_addr(ft_addr,
-    //                                seL4_ARM_PageDirectoryObject,
-    //                                seL4_PageDirBits,
-    //                                cur_cspace,
-    //                                &cap);
-    //    conditional_panic(err, "Failed to allocate frame table cap");
+    return 0;
+}
 
-    //    /* Map to address space */
-    //    err = map_page(cap,
-    //                   seL4_CapInitThreadPD,
-    //                   ft_addr,
-    //                   seL4_AllRights,
-    //                   seL4_ARM_Default_VMAttributes);
-    //    conditional_panic(err, "Failed to map frame table");
-    //}
+void frame_init() {
+    int err;
+
     frame_table = ut_alloc(seL4_PageBits);
     err = cspace_ut_retype_addr(frame_table,
                                 seL4_ARM_SmallPageObject,
@@ -108,19 +69,35 @@ void frame_init(seL4_Word low, seL4_Word high) {
                    seL4_ARM_Default_VMAttributes);
     conditional_panic(err, "Failed to map frame table");
 
-    memset(frame_table, 0, 4096);
+    memset(frame_table, 0, (1 << seL4_PageBits));
 
     free_index = 0;
 }
 
 int32_t frame_alloc(seL4_Word *vaddr) {
+    printf("11111111111\n");
     int err;
-
+    
+    seL4_Word frame_paddr = ut_alloc(seL4_PageBits);
+    printf("2222222\n");
+    int index1 = frame_paddr >> 22;
+    int index2 = (frame_paddr << 10) >> 22;
+    printf("help: %x %x %x\n", index1, index2, frame_paddr);
+    
+    printf("333333333\n");
     /* Get frame */
-    struct frame_entry *frame = &frame_table[free_index];
+    if (frame_table[index1] == NULL) {
+        printf("123123123123\n");
+        create_second_level(index1);
+    }
+
+    printf("4444444444\n");
+    struct frame_entry *frame = &frame_table[index1][index2];
+    printf("%d, %x, %x\n", index2, frame, frame_paddr);
 
     /* Allocated untyped */
-    frame->addr = ut_alloc(seL4_PageBits);
+    frame->addr = frame_paddr;
+    printf("555555555\n");
 
     /* Retype to frame */
     err = cspace_ut_retype_addr(frame->addr,
@@ -128,6 +105,7 @@ int32_t frame_alloc(seL4_Word *vaddr) {
                                 seL4_PageBits,
                                 cur_cspace,
                                 &frame->cap);
+    printf("666666\n");
     if (err) {
         return -1;
     }
