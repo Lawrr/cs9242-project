@@ -2,7 +2,7 @@
 #include <stdlib.h>
 #include <assert.h>
 #include <string.h>
-
+#include <vmem_layout.h>
 #include <cspace/cspace.h>
 
 #include "ut_manager/ut.h"
@@ -21,56 +21,51 @@ static struct frame_entry {
     int32_t next;
 };
 
-static struct frame_entry **frame_table;
-static seL4_CPtr frame_table_cap;
+static struct frame_entry *frame_table;
+static seL4_Word base_addr;
 static int free_index;
+static seL4_CPtr frame_table_cap;
 
-static int32_t create_second_level(uint32_t index) {
+
+void frame_init(seL4_Word high,seL4_Word low) {
     int err;
+    seL4_Word curr = DMA_VEND;
 
-    seL4_CPtr cap;
-    frame_table[index] = ut_alloc(seL4_PageBits);
-    err = cspace_ut_retype_addr(frame_table[index],
-                                seL4_ARM_SmallPageObject,
-                                seL4_PageBits,
-                                cur_cspace,
-                                &cap);
-    if (err) {
-        return -1;
-    }
+    uint64_t low64 = low;
+    uint64_t high64 = high;
+      
+    uint64_t entry_size = sizeof(struct frame_entry);
+    base_addr = (high64 * entry_size + PAGE_SIZE * low64) / (entry_size + PAGE_SIZE); 
+    uint32_t frame_table_bits = 0;
+    uint64_t frame_table_size = base_addr - low64;
+    while (frame_table_size >>= 1) frame_table_bits++;
 
-    err = map_page(cap,
-                   seL4_CapInitThreadPD,
-                   frame_table[index],
-                   seL4_AllRights,
-                   seL4_ARM_Default_VMAttributes);
-    if (err) {
-        return -1;
-    }
-
-    return 0;
-}
-
-void frame_init() {
-    int err;
-
-    frame_table = ut_alloc(seL4_PageBits);
-    err = cspace_ut_retype_addr(frame_table,
+    ;
+    frame_table_size  = base_addr -low64;
+        printf("00000\n");
+    for (uint64_t i = 0; i < frame_table_size;i+=PAGE_SIZE){
+       printf("11111%d\n",i);
+       frame_table = ut_alloc(seL4_PageBits);
+        
+       printf("22222%d\n",i);
+       err = cspace_ut_retype_addr(frame_table,
                                 seL4_ARM_SmallPageObject,
                                 seL4_PageBits,
                                 cur_cspace,
                                 &frame_table_cap);
-    conditional_panic(err, "Failed to allocate frame table cap");
-
-    err = map_page(frame_table_cap,
+       conditional_panic(err, "Failed to allocate frame table cap");     
+       err = map_page(frame_table_cap,
                    seL4_CapInitThreadPD,
-                   frame_table,
+                   curr,
                    seL4_AllRights,
-                   seL4_ARM_Default_VMAttributes);
-    conditional_panic(err, "Failed to map frame table");
+       seL4_ARM_Default_VMAttributes);
+       printf("------%d\n",err);
+       conditional_panic(err, "Failed to map frame table");
+       curr += PAGE_SIZE;
+    }
 
+    frame_table = (struct frame_entry*)DMA_VEND;
     memset(frame_table, 0, (1 << seL4_PageBits));
-
     free_index = 0;
 }
 
@@ -78,40 +73,28 @@ int32_t frame_alloc(seL4_Word *vaddr) {
     int err;
     
     seL4_Word frame_paddr = ut_alloc(seL4_PageBits);
-    int index1 = frame_paddr >> 22;
-    int index2 = (frame_paddr << 10) >> 22;
-    
-    /* Get frame */
-    if (frame_table[index1] == NULL) {
-        create_second_level(index1);
-    }
-
-    struct frame_entry *frame = &frame_table[index1][index2];
-
-    /* Allocated untyped */
-    frame->addr = frame_paddr;
-
+    seL4_Word frame_cap;
     /* Retype to frame */
-    err = cspace_ut_retype_addr(frame->addr,
+    err = cspace_ut_retype_addr(frame_paddr,
                                 seL4_ARM_SmallPageObject,
                                 seL4_PageBits,
                                 cur_cspace,
-                                &frame->cap);
+                                &frame_cap);
     if (err) {
         return -1;
     }
 
     /* Map to address space */
-    err = map_page(frame->cap,
+    err = map_page(frame_cap,
                    seL4_CapInitThreadPD,
-                   frame->addr,
+                   vaddr,
                    seL4_AllRights,
                    seL4_ARM_Default_VMAttributes);
     if (err) {
         return -1;
     }
 
-    *vaddr = frame->addr;
+    frame_table[frame_paddr>>12].cap = frame_cap;
     return free_index++;
 }
 
