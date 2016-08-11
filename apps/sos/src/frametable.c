@@ -75,29 +75,21 @@ void frame_init() {
 }
 
 int32_t frame_alloc(seL4_Word *vaddr) {
-    printf("11111111111\n");
     int err;
     
     seL4_Word frame_paddr = ut_alloc(seL4_PageBits);
-    printf("2222222\n");
     int index1 = frame_paddr >> 22;
     int index2 = (frame_paddr << 10) >> 22;
-    printf("help: %x %x %x\n", index1, index2, frame_paddr);
     
-    printf("333333333\n");
     /* Get frame */
     if (frame_table[index1] == NULL) {
-        printf("123123123123\n");
         create_second_level(index1);
     }
 
-    printf("4444444444\n");
     struct frame_entry *frame = &frame_table[index1][index2];
-    printf("%d, %x, %x\n", index2, frame, frame_paddr);
 
     /* Allocated untyped */
     frame->addr = frame_paddr;
-    printf("555555555\n");
 
     /* Retype to frame */
     err = cspace_ut_retype_addr(frame->addr,
@@ -105,7 +97,6 @@ int32_t frame_alloc(seL4_Word *vaddr) {
                                 seL4_PageBits,
                                 cur_cspace,
                                 &frame->cap);
-    printf("666666\n");
     if (err) {
         return -1;
     }
