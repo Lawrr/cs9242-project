@@ -42,7 +42,7 @@ void frame_init(seL4_Word high,seL4_Word low) {
 
     /* Calculate frame table size */
     uint64_t frame_table_size = base_addr - low64;
-
+    base_addr = low;
     /* Allocated each section of frame table */
     seL4_Word ft_section_paddr;
     for (uint64_t i = 0; i < frame_table_size; i += PAGE_SIZE) {
@@ -51,7 +51,7 @@ void frame_init(seL4_Word high,seL4_Word low) {
         /* ft_section_paddr - low = phys mem untyped region offset (range: 0-high)
          * + PROCESS_VMEM_START = virtual mem offset
          */
-        seL4_Word ft_section_vaddr = ft_section_paddr - low + PROCESS_VMEM_START;
+        seL4_Word ft_section_vaddr = i+ PROCESS_VMEM_START;
 
         /* Set pointer to head of frame_table */
         if (i == 0) {
@@ -74,8 +74,8 @@ void frame_init(seL4_Word high,seL4_Word low) {
 
         /* Clear frame_table memory */
         memset(ft_section_vaddr, 0, PAGE_SIZE);
+        base_addr += PAGE_SIZE;
     }
-
     /* Init free index */
     free_index = -1;
 }
@@ -84,17 +84,14 @@ int32_t frame_alloc(seL4_Word *vaddr) {
     int err;
     int ret_index;
     seL4_Word frame_vaddr;
-    
     if (free_index == -1) {
         /* Free list is empty but there is still memory */
-
         seL4_Word frame_cap;
         seL4_Word frame_paddr = ut_alloc(seL4_PageBits);
         if (frame_paddr == NULL) {
             *vaddr = NULL;
             return -1;
         }
-
         /* Retype to frame */
         err = cspace_ut_retype_addr(frame_paddr,
                 seL4_ARM_SmallPageObject,
@@ -124,7 +121,9 @@ int32_t frame_alloc(seL4_Word *vaddr) {
         *vaddr = frame_vaddr;
 
         /* Calculate index of frame in the frame table */
-        ret_index = (frame_paddr - low_addr) >> 12;
+       
+        ret_index = (frame_paddr - base_addr) >> 12;
+        
         frame_table[ret_index].cap = frame_cap;
     } else {
         ret_index = free_index;
@@ -133,7 +132,6 @@ int32_t frame_alloc(seL4_Word *vaddr) {
     }
     
     memset(frame_vaddr, 0, PAGE_SIZE);
-
     return ret_index;
 }
 

@@ -441,12 +441,12 @@ int main(void) {
     while (1) {
         /* Allocate a page */
         seL4_Word vaddr;
+        
         frame_alloc(&vaddr);
         if (!vaddr) {
             printf("Out of memory!\n");
             break;
         }
-
         /* Test you can touch the page */
         int *vvaddr = vaddr;
         *vvaddr = 0x37;
