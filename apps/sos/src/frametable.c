@@ -17,13 +17,14 @@ static struct frame_entry {
     /* 000 for 'valid' */
     //seL4_Word entry;
     seL4_CPtr cap;
-    seL4_Word addr;
+    seL4_Word entry;
     int32_t next;
 };
 
 static struct frame_entry *frame_table;
 static seL4_Word base_addr;
-static int free_index;
+static int free_index = -1;/* -1 no free_list but memory is not full
+                              -2 no free_list and memory is full(swaping later)*/
 static seL4_CPtr frame_table_cap;
 
 
@@ -44,10 +45,8 @@ void frame_init(seL4_Word high,seL4_Word low) {
     frame_table_size  = base_addr -low64;
         printf("00000\n");
     for (uint64_t i = 0; i < frame_table_size;i+=PAGE_SIZE){
-       printf("11111%d\n",i);
        frame_table = ut_alloc(seL4_PageBits);
         
-       printf("22222%d\n",i);
        err = cspace_ut_retype_addr(frame_table,
                                 seL4_ARM_SmallPageObject,
                                 seL4_PageBits,
@@ -59,7 +58,6 @@ void frame_init(seL4_Word high,seL4_Word low) {
                    curr,
                    seL4_AllRights,
        seL4_ARM_Default_VMAttributes);
-       printf("------%d\n",err);
        conditional_panic(err, "Failed to map frame table");
        curr += PAGE_SIZE;
     }
@@ -71,31 +69,37 @@ void frame_init(seL4_Word high,seL4_Word low) {
 
 int32_t frame_alloc(seL4_Word *vaddr) {
     int err;
-    
-    seL4_Word frame_paddr = ut_alloc(seL4_PageBits);
-    seL4_Word frame_cap;
-    /* Retype to frame */
-    err = cspace_ut_retype_addr(frame_paddr,
+    int ret_index;
+    if  (free_index == -1){
+    	seL4_Word frame_paddr = ut_alloc(seL4_PageBits);
+    	seL4_Word frame_cap;
+    	/* Retype to frame */
+    	err = cspace_ut_retype_addr(frame_paddr,
                                 seL4_ARM_SmallPageObject,
                                 seL4_PageBits,
                                 cur_cspace,
                                 &frame_cap);
-    if (err) {
-        return -1;
-    }
+    	if (err) {
+        	return -1;
+    	}
 
     /* Map to address space */
-    err = map_page(frame_cap,
+    	err = map_page(frame_cap,
                    seL4_CapInitThreadPD,
                    vaddr,
                    seL4_AllRights,
                    seL4_ARM_Default_VMAttributes);
-    if (err) {
-        return -1;
-    }
+    	if (err) {
+        	return -1;
+    	}
 
-    frame_table[frame_paddr>>12].cap = frame_cap;
-    return free_index++;
+    	ret_index = (frame_paddr-base_addr)>>12;
+    	frame_table[ret_index].cap = frame_cap;
+    }   else {
+        ret_index = free_index;
+        free_index = frame_table[free_index].next;
+    }
+    return ret_index;
 }
 
 void frame_free(int32_t index) {
