@@ -403,10 +403,10 @@ static void _sos_init(seL4_CPtr* ipc_ep, seL4_CPtr* async_ep){
     err = dma_init(dma_addr, DMA_SIZE_BITS);
     conditional_panic(err, "Failed to intiialise DMA memory\n");
 
-    /* Initialiase other system compenents here */
-
     /* Initialise frame table */
-    frame_init(low, high);
+    frame_init();
+
+    /* Initialiase other system compenents here */
 
     _sos_ipc_init(ipc_ep, async_ep);
 }
@@ -435,6 +435,18 @@ int main(void) {
     timer_init(epit1_vaddr, epit2_vaddr);
     seL4_CPtr timer_badge = badge_irq_ep(_sos_interrupt_ep_cap, IRQ_BADGE_TIMER);
     start_timer(timer_badge);
+
+    /* Allocate a page */
+    seL4_Word vaddr;
+    frame_alloc(&vaddr);
+    assert(vaddr);
+
+    /* Test you can touch the page */
+    int *int_vaddr = (int *) vaddr;
+    *int_vaddr = 0x37;
+    assert(*int_vaddr == 0x37);
+
+    printf("Page allocated at %p with value %d\n", int_vaddr, *int_vaddr);
     
     /* Initialise serial driver */
     serial_handle = serial_init();
