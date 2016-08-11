@@ -22,7 +22,7 @@ static struct frame_entry {
 };
 
 static struct frame_entry *frame_table;
-static seL4_Word base_addr;
+static uint64_t base_addr;
 static int free_index = -1;/* -1 no free_list but memory is not full
                               -2 no free_list and memory is full(swaping later)*/
 static seL4_CPtr frame_table_cap;
@@ -43,10 +43,13 @@ void frame_init(seL4_Word high,seL4_Word low) {
 
     ;
     frame_table_size  = base_addr -low64;
-        printf("00000\n");
+    printf("%llu\n",base_addr);
+    printf("%llu\n",low64);
+    printf("%llu\n",frame_table_size);
     for (uint64_t i = 0; i < frame_table_size;i+=PAGE_SIZE){
+       
        frame_table = ut_alloc(seL4_PageBits);
-        
+       //printf("%llu\n",i);
        err = cspace_ut_retype_addr(frame_table,
                                 seL4_ARM_SmallPageObject,
                                 seL4_PageBits,
@@ -62,6 +65,7 @@ void frame_init(seL4_Word high,seL4_Word low) {
        curr += PAGE_SIZE;
     }
 
+    printf("%lu\n",DMA_VEND);
     frame_table = (struct frame_entry*)DMA_VEND;
     memset(frame_table, 0, (1 << seL4_PageBits));
     free_index = 0;

@@ -404,7 +404,7 @@ static void _sos_init(seL4_CPtr* ipc_ep, seL4_CPtr* async_ep){
     conditional_panic(err, "Failed to intiialise DMA memory\n");
 
     /* Initialise frame table */
-    frame_init();
+    frame_init(high,low);
 
     /* Initialiase other system compenents here */
 
