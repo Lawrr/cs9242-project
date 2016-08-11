@@ -22,111 +22,108 @@ static struct frame_entry {
 };
 
 static struct frame_entry *frame_table;
-static uint64_t base_addr;
+static uint64_t base_addr; /* Untyped region after end of frame table */
 static int32_t low_addr;
 static int32_t high_addr;
-static int free_index;/* -1 no free_list but memory is not full
-                         -2 no free_list and memory is full(swaping later)*/
+static int free_index; /*-1 no free_list but memory is not full
+                         -2 no free_list and memory is full (swapping later) */
 static seL4_CPtr frame_table_cap;
 
-
 void frame_init(seL4_Word high,seL4_Word low) {
-    low_addr = low;
-    high_addr = high;
     int err;
-
     uint64_t low64 = low;
     uint64_t high64 = high;
-      
     uint64_t entry_size = sizeof(struct frame_entry);
+
+    /* Set/calculate untyped region bounds */
     base_addr = (high64 * entry_size + PAGE_SIZE * low64) / (entry_size + PAGE_SIZE); 
-    uint32_t frame_table_bits = 0;
+    low_addr = low;
+    high_addr = high;
+
+    /* Calculate frame table size */
     uint64_t frame_table_size = base_addr - low64;
-    while (frame_table_size >>= 1) frame_table_bits++;
 
-    ;
-    frame_table_size  = base_addr -low64;
-    printf("%llu\n",base_addr);
-    printf("%llu\n",low64);
-    printf("%llu\n",frame_table_size);
+    /* Allocated each section of frame table */
+    seL4_Word ft_section_paddr;
+    for (uint64_t i = 0; i < frame_table_size; i += PAGE_SIZE) {
 
-    seL4_Word ft_section;
-    printf("Hi\n");
-    for (uint64_t i = 0; i < frame_table_size;i+=PAGE_SIZE){
+        ft_section_paddr = ut_alloc(seL4_PageBits);
+        /* ft_section_paddr - low = phys mem untyped region offset (range: 0-high)
+         * + PROCESS_VMEM_START = virtual mem offset
+         */
+        seL4_Word ft_vaddr = ft_section_paddr - low + PROCESS_VMEM_START;
 
-        ft_section = ut_alloc(seL4_PageBits);
-        seL4_Word virtual = ft_section - low + PROCESS_VMEM_START;
-
+        /* Set pointer to head of frame_table */
         if (i == 0) {
-            frame_table = virtual;
+            frame_table = ft_vaddr;
         }
-        
-        err = cspace_ut_retype_addr(ft_section,
+
+        err = cspace_ut_retype_addr(ft_section_paddr,
                 seL4_ARM_SmallPageObject,
                 seL4_PageBits,
                 cur_cspace,
                 &frame_table_cap);
         conditional_panic(err, "Failed to allocate frame table cap");     
 
-        //printf("%x - %x + %x\n", ft_section, base_addr, PROCESS_VMEM_START);
-        printf("Phys: %x -> %x\n", ft_section, virtual);
-
         err = map_page(frame_table_cap,
                 seL4_CapInitThreadPD,
-                virtual,
+                ft_vaddr,
                 seL4_AllRights,
                 seL4_ARM_Default_VMAttributes);
         conditional_panic(err, "Failed to map frame table");
     }
-    printf("Bye\n");
 
-    memset(frame_table, 0, (1 << seL4_PageBits));
-    printf("Bye2\n");
+    /* Clear frame_table memory */
+    //memset(frame_table, 0, frame_table_size);
 
+    /* Init free index */
     free_index = -1;
 }
 
 int32_t frame_alloc(seL4_Word *vaddr) {
-    printf("11111111\n");
     int err;
     int ret_index;
-    if  (free_index == -1){
-        printf("2.1\n");
-    	seL4_Word frame_paddr = ut_alloc(seL4_PageBits);
-    	seL4_Word frame_cap;
-    	/* Retype to frame */
-    	err = cspace_ut_retype_addr(frame_paddr,
-                                seL4_ARM_SmallPageObject,
-                                seL4_PageBits,
-                                cur_cspace,
-                                &frame_cap);
-        printf("3.1\n");
-    	if (err) {
-        	return -1;
-    	}
-        printf("4.1\n");
+    
+    if (free_index == -1) {
+        /* Free list is empty but there is still memory */
 
-    /* Map to address space */
-        seL4_Word virtual = frame_paddr - low_addr + PROCESS_VMEM_START;
-        printf("Virtual=%x paddr=%x\n", virtual, frame_paddr);
-    	err = map_page(frame_cap,
-                   seL4_CapInitThreadPD,
-                   virtual,
-                   seL4_AllRights,
-                   seL4_ARM_Default_VMAttributes);
-    	if (err) {
-        	return -1;
-    	}
+        seL4_Word frame_paddr = ut_alloc(seL4_PageBits);
+        seL4_Word frame_cap;
 
-        *vaddr = virtual;
-    	ret_index = (frame_paddr - low_addr)>>12;
-    	frame_table[ret_index].cap = frame_cap;
-    }   else {
-        printf("2.2\n");
+        /* Retype to frame */
+        err = cspace_ut_retype_addr(frame_paddr,
+                seL4_ARM_SmallPageObject,
+                seL4_PageBits,
+                cur_cspace,
+                &frame_cap);
+        if (err) {
+            return -1;
+        }
+
+        /* Map to address space */
+        /* frame_paddr - low = phys mem untyped region offset (range: 0-high)
+         * + PROCESS_VMEM_START = virtual mem offset
+         */
+        seL4_Word frame_vaddr = frame_paddr - low_addr + PROCESS_VMEM_START;
+        err = map_page(frame_cap,
+                seL4_CapInitThreadPD,
+                frame_vaddr,
+                seL4_AllRights,
+                seL4_ARM_Default_VMAttributes);
+        if (err) {
+            return -1;
+        }
+
+        *vaddr = frame_vaddr;
+
+        /* Calculate index of frame in the frame table */
+        ret_index = (frame_paddr - low_addr) >> 12;
+        frame_table[ret_index].cap = frame_cap;
+    } else {
         ret_index = free_index;
         free_index = frame_table[free_index].next;
-        printf("3.2\n");
     }
+
     return ret_index;
 }
 

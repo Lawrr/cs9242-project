@@ -439,7 +439,6 @@ int main(void) {
     /* Allocate a page */
     seL4_Word vaddr;
     frame_alloc(&vaddr);
-    printf("EXIT\n");
     assert(vaddr);
 
     /* Test you can touch the page */
