@@ -131,5 +131,6 @@ int32_t frame_alloc(seL4_Word *vaddr) {
 }
 
 void frame_free(int32_t index) {
-
+        frame_table[index].next = free_index;
+        free_index = index;
 }
