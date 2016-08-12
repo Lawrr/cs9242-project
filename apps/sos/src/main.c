@@ -148,7 +148,8 @@ void syscall_loop(seL4_CPtr ep) {
             /* Interrupt */
             if (badge & IRQ_BADGE_NETWORK) {
                 network_irq();
-            } else if (badge & IRQ_BADGE_TIMER) {
+            }
+            if (badge & IRQ_BADGE_TIMER) {
                 timer_interrupt();
             }
 
