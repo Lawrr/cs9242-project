@@ -9,7 +9,6 @@
 
 #include <sys/panic.h>
 
-#define FRAME_SIZE 1024llu /* Bytes */
 #define PAGE_SIZE 4096lu /* Bytes */
 
 static struct frame_entry {
