@@ -10,6 +10,7 @@
 #include <sys/panic.h>
 
 #define PAGE_SIZE 4096lu /* Bytes */
+#define INDEX_ADDR_OFFSET 12 /* Bits to shift */
 
 static struct frame_entry {
     /* Reserve 3 bits for type */
@@ -107,6 +108,7 @@ int32_t frame_alloc(seL4_Word *vaddr) {
                                     cur_cspace,
                                     &frame_cap);
         if (err) {
+            ut_free(frame_paddr, seL4_PageBits);
             *vaddr = NULL;
             return -1;
         }
@@ -119,6 +121,8 @@ int32_t frame_alloc(seL4_Word *vaddr) {
                        seL4_AllRights,
                        seL4_ARM_Default_VMAttributes);
         if (err) {
+            cspace_delete_cap(cur_cspace, frame_cap);
+            ut_free(frame_paddr, seL4_PageBits);
             *vaddr = NULL;
             return -1;
         }
@@ -126,12 +130,12 @@ int32_t frame_alloc(seL4_Word *vaddr) {
         *vaddr = frame_vaddr;
 
         /* Calculate index of frame in the frame table */
-        ret_index = (frame_paddr - base_addr) >> 12;
+        ret_index = (frame_paddr - base_addr) >> INDEX_ADDR_OFFSET;
         
         frame_table[ret_index].cap = frame_cap;
     } else {
         ret_index = free_index;
-        frame_vaddr = ((ret_index << 12) + base_addr - low_addr + PROCESS_VMEM_START);
+        frame_vaddr = ((ret_index << INDEX_ADDR_OFFSET) + base_addr - low_addr + PROCESS_VMEM_START);
         free_index = frame_table[free_index].next_index;
     }
     
@@ -140,6 +144,8 @@ int32_t frame_alloc(seL4_Word *vaddr) {
 }
 
 void frame_free(int32_t index) {
+    //cspace_delete_cap(cur_cspace, frame_table[index].cap);
+    //ut_free((index << 12) + base_addr, seL4_PageBits);
     frame_table[index].next_index = free_index;
     free_index = index;
 }
