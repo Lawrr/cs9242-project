@@ -40,12 +40,28 @@ void frame_init(seL4_Word high,seL4_Word low) {
     uint64_t entry_size = sizeof(struct frame_entry);
 
     /* Set/calculate untyped region bounds */
+
+    /* base_address is the address right above the frame table where
+     * the untyped memory region which our frame table keeps track of begins.
+     *
+     * The number of frame table entries should correspond
+     * with the number of pages starting from the base_address.
+     *
+     * To find this, solve for base_address using:
+     * (base_address - low) / sizeof(entry) => (high - base_address) / PAGE_SIZE
+     */
     base_addr = (high64 * entry_size + PAGE_SIZE * low64) / (entry_size + PAGE_SIZE); 
     low_addr = low;
     high_addr = high;
 
     /* Calculate frame table size */
     uint64_t frame_table_size = base_addr - low64;
+    uint64_t num_entries = frame_table_size / entry_size;
+    uint64_t num_pages = high64 - base_addr / PAGE_SIZE;
+    /* Make sure num_entries >= num_pages */
+    if (num_entries < num_pages) {
+        frame_table_size += entry_size;
+    }
     base_addr = low;
 
     /* Allocated each section of frame table */
@@ -144,8 +160,6 @@ int32_t frame_alloc(seL4_Word *vaddr) {
 }
 
 void frame_free(int32_t index) {
-    //cspace_delete_cap(cur_cspace, frame_table[index].cap);
-    //ut_free((index << 12) + base_addr, seL4_PageBits);
     frame_table[index].next_index = free_index;
     free_index = index;
 }
