@@ -453,7 +453,7 @@ void frame_table_test() {
             printf("Page #%d allocated at %p\n",  i, vaddr);
         }
 
-        frame_free(page);
+        frame_free(vaddr);
     }
 
     /* Test that you eventually run out of memory gracefully,
