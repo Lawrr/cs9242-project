@@ -115,7 +115,7 @@ int32_t frame_alloc(seL4_Word *vaddr) {
         seL4_Word frame_paddr = ut_alloc(seL4_PageBits);
         if (frame_paddr == NULL) {
             *vaddr = NULL;
-            return -1;
+            return 1;
         }
         /* Retype to frame */
         err = cspace_ut_retype_addr(frame_paddr,
@@ -126,7 +126,7 @@ int32_t frame_alloc(seL4_Word *vaddr) {
         if (err) {
             ut_free(frame_paddr, seL4_PageBits);
             *vaddr = NULL;
-            return -1;
+            return 2;
         }
 
         /* Map to address space */
@@ -140,7 +140,7 @@ int32_t frame_alloc(seL4_Word *vaddr) {
             cspace_delete_cap(cur_cspace, frame_cap);
             ut_free(frame_paddr, seL4_PageBits);
             *vaddr = NULL;
-            return -1;
+            return 3;
         }
 
         *vaddr = frame_vaddr;
@@ -156,11 +156,16 @@ int32_t frame_alloc(seL4_Word *vaddr) {
     }
     
     memset(frame_vaddr, 0, PAGE_SIZE);
-    return ret_index;
+    return 0;
 }
 
 void frame_free(seL4_Word vaddr) {
     uint32_t index = (vaddr - PROCESS_VMEM_START + low_addr - base_addr) >> INDEX_ADDR_OFFSET;
     frame_table[index].next_index = free_index;
     free_index = index;
+}
+
+seL4_CPtr get_cap(seL4_Word vaddr){
+    uint32_t index = (vaddr - PROCESS_VMEM_START + low_addr - base_addr) >> INDEX_ADDR_OFFSET;
+    return frame_table[index].cap;
 }

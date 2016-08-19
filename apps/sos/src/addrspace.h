@@ -4,6 +4,8 @@
 struct app_addrspace {
     struct region *regions;
     struct page_table_entry **page_table;
+   // seL4_CPtr root_cap;
+   // seL4_CPtr *leaf_caps;
 };
 
 struct region {

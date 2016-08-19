@@ -158,8 +158,12 @@ void syscall_loop(seL4_CPtr ep) {
             dprintf(0, "vm fault at 0x%08x, pc = 0x%08x, %s\n", seL4_GetMR(1),
                     seL4_GetMR(0),
                     seL4_GetMR(2) ? "Instruction Fault" : "Data fault");
+            int err;
+            
+            err = sos_map_page(seL4_GetMR(1));
 
-            assert(!"Unable to handle vm faults");
+            conditional_panic(err, "Fail to map the actual page"); 
+            //assert(!"Unable to handle vm faults");
         }else if(label == seL4_NoFault) {
             /* System call */
             handle_syscall(badge, seL4_MessageInfo_get_length(message) - 1);
@@ -306,25 +310,31 @@ void start_first_process(char* app_name, seL4_CPtr fault_ep) {
     conditional_panic(!elf_base, "Unable to locate cpio header");
 
     /* load the elf image */
-    err = elf_load(tty_test_process.vroot, elf_base);
+    tty_test_process.addrspace = as_new();
+    err = app_elf_load(tty_test_process.addrspace, elf_base);
     conditional_panic(err, "Failed to load elf image");
 
+    /* Stack region */
+    as_define_region(tty_test_process.addrspace,
+                     PROCESS_STACK_TOP - (1 << seL4_PageBits),
+                     (1 << seL4_PageBits),
+                     seL4_AllRights);
 
-    /* Create a stack frame */
-    stack_addr = ut_alloc(seL4_PageBits);
-    conditional_panic(!stack_addr, "No memory for stack");
-    err =  cspace_ut_retype_addr(stack_addr,
-                                 seL4_ARM_SmallPageObject,
-                                 seL4_PageBits,
-                                 cur_cspace,
-                                 &stack_cap);
-    conditional_panic(err, "Unable to allocate page for stack");
+  //  /* Create a stack frame */
+  //  stack_addr = ut_alloc(seL4_PageBits);
+  //  conditional_panic(!stack_addr, "No memory for stack");
+  //  err =  cspace_ut_retype_addr(stack_addr,
+  //                               seL4_ARM_SmallPageObject,
+  //                               seL4_PageBits,
+  //                               cur_cspace,
+  //                               &stack_cap);
+  //  conditional_panic(err, "Unable to allocate page for stack");
 
-    /* Map in the stack frame for the user app */
-    err = map_page(stack_cap, tty_test_process.vroot,
-                   PROCESS_STACK_TOP - (1 << seL4_PageBits),
-                   seL4_AllRights, seL4_ARM_Default_VMAttributes);
-    conditional_panic(err, "Unable to map stack IPC buffer for user app");
+  //  /* Map in the stack frame for the user app */
+  //  err = map_page(stack_cap, tty_test_process.vroot,
+  //                 PROCESS_STACK_TOP - (1 << seL4_PageBits),
+  //                 seL4_AllRights, seL4_ARM_Default_VMAttributes);
+  //  conditional_panic(err, "Unable to map stack IPC buffer for user app");
 
     /* Map in the IPC buffer for the thread */
     err = map_page(tty_test_process.ipc_buffer_cap, tty_test_process.vroot,
@@ -473,14 +483,20 @@ void frame_table_test() {
 }
 
 int 
-sos_map_page(seL4_CPtr frame_cap, seL4_ARM_PageDirectory pd, seL4_Word vaddr, 
-             seL4_CapRights rights, seL4_ARM_VMAttributes attr) {
+sos_map_page(seL4_Word vaddr) {
     seL4_Word sos_vaddr;
     int err = frame_alloc(&sos_vaddr);	
     conditional_panic(err, "Probably insufficient memory");
 
+    seL4_CPtr cap = get_cap(sos_vaddr);
+    seL4_CPtr copied_cap = cspace_mint_cap(tty_test_process.croot,
+                                           cur_cspace,
+                                           cap,
+                                           seL4_AllRights);
+
     // Get the addr to simplify later implementation
     struct page_table_entry ***page_table_vaddr = &(tty_test_process.addrspace->page_table);
+    printf("error 3\n");
 
     // Invalid mapping NULL 
     if (vaddr == NULL) {
@@ -489,12 +505,17 @@ sos_map_page(seL4_CPtr frame_cap, seL4_ARM_PageDirectory pd, seL4_Word vaddr,
 
     seL4_Word index1 = vaddr >> 22;
     seL4_Word index2 = (vaddr << 10) >> 22;
+    printf("error 4\n");
 
     // Checking with the region the check the permission
     struct region *curr_region = tty_test_process.addrspace->regions;
+    printf("error 4.1\n");
     while (curr_region != NULL) {
+    printf("error 4.2\n");
+        printf("%x >= %x && %x < %x\n", vaddr, curr_region->baseaddr, vaddr, curr_region->baseaddr + curr_region->size);
         if (vaddr >= curr_region->baseaddr &&
             vaddr < curr_region->baseaddr + curr_region->size) {
+            break;
             /*TODO:Deal with permission stuff
              *
              */
@@ -502,15 +523,18 @@ sos_map_page(seL4_CPtr frame_cap, seL4_ARM_PageDirectory pd, seL4_Word vaddr,
 
         curr_region = curr_region->next;
     } 
+    printf("error 5\n");
 
     // Can't find the region that contains thisvaddr
     if (curr_region == NULL) {
         // Simply conditional panic for now
-        conditional_panic(-1,"No region contains this vaddr");
+        conditional_panic(-1, "No region contains this vaddr");
     }
+    printf("error 6\n");
 
     // No page table yet
     if (*page_table_vaddr == NULL) {
+    printf("error 7.1\n");
         // First level
         err = frame_alloc(page_table_vaddr);
         conditional_panic(err, "No memory for new Shadow Page Directory");
@@ -520,19 +544,25 @@ sos_map_page(seL4_CPtr frame_cap, seL4_ARM_PageDirectory pd, seL4_Word vaddr,
         conditional_panic(err, "No memory for new Shadow Page Directory");
 
     } else if ((*page_table_vaddr)[index1] == NULL) {
+    printf("error 7.2\n");
         // Second level
         err = frame_alloc(&(*page_table_vaddr)[index1]);
         conditional_panic(err,"No memory for new Shadow Page Directory");
 
     }
 
+    printf("error 8\n");
     // Call the internal kernel page mapping 
-    err = map_page(frame_cap, pd, vaddr, rights, attr);
+    printf("%x\n", copied_cap);
+    err = map_page(copied_cap, tty_test_process.vroot, vaddr, seL4_AllRights, seL4_ARM_Default_VMAttributes);
+    printf("Error code: %d\n", err);
     conditional_panic(err, "Internal map_page fail");
+    printf("error 9\n");
 
     struct page_table_entry pte;
-    pte.cap = frame_cap;
+    pte.cap = cap;
     (*page_table_vaddr)[index1][index2] = pte;
+    printf("error 10\n");
 
     return err;
 }
@@ -563,7 +593,7 @@ int main(void) {
     /* Start the user application */
     start_first_process(TTY_NAME, _sos_ipc_ep_cap);
 
-    frame_table_test();
+    //frame_table_test();
 
     /* Wait on synchronous endpoint for IPC */
     dprintf(0, "\nSOS entering syscall loop\n");
