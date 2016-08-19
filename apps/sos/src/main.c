@@ -502,10 +502,8 @@ sos_map_page(seL4_Word vaddr) {
     while (curr_region != NULL) {
         if (vaddr >= curr_region->baseaddr &&
             vaddr < curr_region->baseaddr + curr_region->size) {
-            break;
-            /*TODO:Deal with permission stuff
-             *
-             */
+	    break;
+          
         }
 
         curr_region = curr_region->next;
@@ -543,13 +541,12 @@ sos_map_page(seL4_Word vaddr) {
     seL4_Word copied_cap = cspace_copy_cap(cur_cspace,
                                            cur_cspace,
                                            cap,
-                                           seL4_AllRights);
+                                           curr_region -> permissions);
 
     err = map_page(copied_cap, tty_test_process.vroot, (vaddr>>12)<<12, seL4_AllRights, seL4_ARM_Default_VMAttributes);
     conditional_panic(err, "Internal map_page fail");
 
-    struct page_table_entry pte;
-    pte.cap = cap;
+    struct page_table_entry pte= {(sos_vaddr>>12) |curr_region -> permissions|PTE_VALID};
     (*page_table_vaddr)[index1][index2] = pte;
 
     return err;

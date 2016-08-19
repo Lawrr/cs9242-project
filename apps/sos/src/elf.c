@@ -209,7 +209,7 @@ int app_elf_load(struct app_addrspace *dest_as, char *elf_file) {
 
         /* Copy it across into the vspace. */
         dprintf(1, " * Loading segment %08x-->%08x\n", (int)vaddr, (int)(vaddr + segment_size));
-        as_define_region(dest_as, vaddr, segment_size, flags);
+        as_define_region(dest_as, vaddr, segment_size, get_sel4_rights_from_elf(flags)&seL4_AllRights);
 
         conditional_panic(err != 0, "Elf loading failed!\n");
     }
