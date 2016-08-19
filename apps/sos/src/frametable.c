@@ -159,7 +159,8 @@ int32_t frame_alloc(seL4_Word *vaddr) {
     return ret_index;
 }
 
-void frame_free(int32_t index) {
+void frame_free(seL4_Word vaddr) {
+    uint32_t index = (vaddr - PROCESS_VMEM_START + low_addr - base_addr) >> INDEX_ADDR_OFFSET;
     frame_table[index].next_index = free_index;
     free_index = index;
 }
