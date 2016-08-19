@@ -4,11 +4,11 @@
 
 struct app_addrspace {
     struct region *regions;
-    seL4_ARM_PageDirectory page_table;
+    seL4_Cptr page_table;
 };
 
 struct region {
-    seL4_Word vroot;
+    seL4_Word baseadr;
     seL4_Word size;
     seL4_Word permissions;
     struct region *next;
