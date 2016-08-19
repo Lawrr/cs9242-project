@@ -1,8 +1,21 @@
 #ifndef _ADDRSPACE_H_
 #define _ADDRSPACE_H_
 
-struct app_addrspace;
-struct region;
+struct app_addrspace {
+    struct region *regions;
+    struct page_table_entry **page_table;
+};
+
+struct region {
+    seL4_Word baseaddr;
+    seL4_Word size;
+    seL4_Word permissions;
+    struct region *next;
+};
+
+struct page_table_entry {
+    seL4_CPtr cap;
+};
 
 struct app_addrspace *as_new();
 

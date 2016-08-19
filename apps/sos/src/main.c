@@ -21,6 +21,7 @@
 #include <serial/serial.h>
 #include <clock/clock.h>
 
+#include "addrspace.h"
 #include "frametable.h"
 #include "network.h"
 #include "elf.h"
@@ -75,12 +76,9 @@ struct {
     seL4_CPtr ipc_buffer_cap;
 
     cspace_t *croot;
-    struct app_addrspace * addrspace;
+    struct app_addrspace *addrspace;
 } tty_test_process;
 
-struct PTE{
-    seL4_CPtr cap;
-}
 /*
  * Syscall numbers
  */
@@ -476,62 +474,66 @@ void frame_table_test() {
 
 int 
 sos_map_page(seL4_CPtr frame_cap, seL4_ARM_PageDirectory pd, seL4_Word vaddr, 
-                seL4_CapRights rights, seL4_ARM_VMAttributes attr){
+             seL4_CapRights rights, seL4_ARM_VMAttributes attr) {
     seL4_Word sos_vaddr;
     int err = frame_alloc(&sos_vaddr);	
-    conditional_panic(err,"Probally unsuficient memory");
-    
-    //Get the addr to simplfiy later implementation
-    seL4_Word page_table_vaddr = &(tty_test_process.addrspace -> page_table);
-    
-    seL4_Word index1 = vaddr >> 22;
-    seL4_word index1 = (vaddr << 10)>>22;
- 
-    //Invalid mapping NULL 
-    if (vaddr == NULL){
- 	conditional_paninc(-1,"Mapping NULL virtual address");
+    conditional_panic(err, "Probably insufficient memory");
+
+    // Get the addr to simplify later implementation
+    struct page_table_entry ***page_table_vaddr = &(tty_test_process.addrspace->page_table);
+
+    // Invalid mapping NULL 
+    if (vaddr == NULL) {
+        conditional_panic(-1, "Mapping NULL virtual address");
     }
 
-    //Checking with the region the check the permission
-    struct region *curr_region = tty_test_process.addrspace -> regions;
-    while (curr_region != NULL){
-        if (vaddr >= curr_region -> baseadr && vaddr < curr_region -> baseadr + size){
-           /*TODO:Deal with permission stuff
-	    *
-	    */
+    seL4_Word index1 = vaddr >> 22;
+    seL4_Word index2 = (vaddr << 10) >> 22;
+
+    // Checking with the region the check the permission
+    struct region *curr_region = tty_test_process.addrspace->regions;
+    while (curr_region != NULL) {
+        if (vaddr >= curr_region->baseaddr &&
+            vaddr < curr_region->baseaddr + curr_region->size) {
+            /*TODO:Deal with permission stuff
+             *
+             */
         }
 
-	curr_region = curr_region -> next;
+        curr_region = curr_region->next;
     } 
 
-    //Can't find the region that contains thisvaddr
-    if (curr_region = NULL){
-       //Simply conditional paninc for now
-       conditional_paninc(-1,"No region contains this vaddr");
+    // Can't find the region that contains thisvaddr
+    if (curr_region == NULL) {
+        // Simply conditional panic for now
+        conditional_panic(-1,"No region contains this vaddr");
     }
 
-    //No page table yet
-    if (*addrspace_vaddr = NULL) {
-	//First level
-	err = frame_alloc(page_table_vaddr);
-        conditional_painc(err,"No memory for new Shadow Page Directory");
+    // No page table yet
+    if (*page_table_vaddr == NULL) {
+        // First level
+        err = frame_alloc(page_table_vaddr);
+        conditional_panic(err, "No memory for new Shadow Page Directory");
 
-        //Second level
-	err = frame_alloc(&(*page_table_vaddr)[index1]);
-	conditional_painc(err,"No memory for new Shadow Page Directory");
-    
-    }	else if((*page_table_vaddr)[index1] == NULL) {
-	//Second level
+        // Second level
         err = frame_alloc(&(*page_table_vaddr)[index1]);
-	conditional_painc(err,"No memory for new Shadow Page Directory");
-    
+        conditional_panic(err, "No memory for new Shadow Page Directory");
+
+    } else if ((*page_table_vaddr)[index1] == NULL) {
+        // Second level
+        err = frame_alloc(&(*page_table_vaddr)[index1]);
+        conditional_panic(err,"No memory for new Shadow Page Directory");
+
     }
 
-    //Call the internal kernel page mapping 
-    err = map_page(frame_cap,pd,vaddr,rights,attr);
-    conditional_painc(err,"Internal map_page fail");
-    (*page_table_vaddr)[index1][index2] = struct PTE{frame_cap};
-    
+    // Call the internal kernel page mapping 
+    err = map_page(frame_cap, pd, vaddr, rights, attr);
+    conditional_panic(err, "Internal map_page fail");
+
+    struct page_table_entry pte;
+    pte.cap = frame_cap;
+    (*page_table_vaddr)[index1][index2] = pte;
+
     return err;
 }
 
