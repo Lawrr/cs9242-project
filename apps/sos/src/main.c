@@ -484,19 +484,10 @@ void frame_table_test() {
 
 int 
 sos_map_page(seL4_Word vaddr) {
-    seL4_Word sos_vaddr;
-    int err = frame_alloc(&sos_vaddr);	
-    conditional_panic(err, "Probably insufficient memory");
-
-    seL4_CPtr cap = get_cap(sos_vaddr);
-    seL4_CPtr copied_cap = cspace_mint_cap(tty_test_process.croot,
-                                           cur_cspace,
-                                           cap,
-                                           seL4_AllRights);
-
+    int err;
+    
     // Get the addr to simplify later implementation
     struct page_table_entry ***page_table_vaddr = &(tty_test_process.addrspace->page_table);
-    printf("error 3\n");
 
     // Invalid mapping NULL 
     if (vaddr == NULL) {
@@ -505,14 +496,10 @@ sos_map_page(seL4_Word vaddr) {
 
     seL4_Word index1 = vaddr >> 22;
     seL4_Word index2 = (vaddr << 10) >> 22;
-    printf("error 4\n");
 
     // Checking with the region the check the permission
     struct region *curr_region = tty_test_process.addrspace->regions;
-    printf("error 4.1\n");
     while (curr_region != NULL) {
-    printf("error 4.2\n");
-        printf("%x >= %x && %x < %x\n", vaddr, curr_region->baseaddr, vaddr, curr_region->baseaddr + curr_region->size);
         if (vaddr >= curr_region->baseaddr &&
             vaddr < curr_region->baseaddr + curr_region->size) {
             break;
@@ -523,18 +510,15 @@ sos_map_page(seL4_Word vaddr) {
 
         curr_region = curr_region->next;
     } 
-    printf("error 5\n");
 
     // Can't find the region that contains thisvaddr
     if (curr_region == NULL) {
         // Simply conditional panic for now
         conditional_panic(-1, "No region contains this vaddr");
     }
-    printf("error 6\n");
 
     // No page table yet
     if (*page_table_vaddr == NULL) {
-    printf("error 7.1\n");
         // First level
         err = frame_alloc(page_table_vaddr);
         conditional_panic(err, "No memory for new Shadow Page Directory");
@@ -544,25 +528,29 @@ sos_map_page(seL4_Word vaddr) {
         conditional_panic(err, "No memory for new Shadow Page Directory");
 
     } else if ((*page_table_vaddr)[index1] == NULL) {
-    printf("error 7.2\n");
         // Second level
         err = frame_alloc(&(*page_table_vaddr)[index1]);
         conditional_panic(err,"No memory for new Shadow Page Directory");
 
     }
 
-    printf("error 8\n");
     // Call the internal kernel page mapping 
-    printf("%x\n", copied_cap);
-    err = map_page(copied_cap, tty_test_process.vroot, vaddr, seL4_AllRights, seL4_ARM_Default_VMAttributes);
-    printf("Error code: %d\n", err);
+    seL4_Word sos_vaddr;
+    err = frame_alloc(&sos_vaddr);	
+    conditional_panic(err, "Probably insufficient memory");
+
+    seL4_Word cap = get_cap(sos_vaddr);
+    seL4_Word copied_cap = cspace_copy_cap(cur_cspace,
+                                           cur_cspace,
+                                           cap,
+                                           seL4_AllRights);
+
+    err = map_page(copied_cap, tty_test_process.vroot, (vaddr>>12)<<12, seL4_AllRights, seL4_ARM_Default_VMAttributes);
     conditional_panic(err, "Internal map_page fail");
-    printf("error 9\n");
 
     struct page_table_entry pte;
     pte.cap = cap;
     (*page_table_vaddr)[index1][index2] = pte;
-    printf("error 10\n");
 
     return err;
 }
