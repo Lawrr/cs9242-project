@@ -165,6 +165,7 @@ sos_map_page(seL4_Word vaddr, seL4_ARM_PageDirectory pd, struct app_addrspace *a
     *sos_vaddr_ret = sos_vaddr;
 
     //This function would not fail if it pass the conditional paninc above. No need to check.
+    printf("Mapping %x to %x\n", sos_vaddr, (vaddr >> 12) << 12);
     seL4_Word cap = get_cap(sos_vaddr);
     seL4_Word copied_cap = cspace_copy_cap(cur_cspace,
                                            cur_cspace,
@@ -176,6 +177,7 @@ sos_map_page(seL4_Word vaddr, seL4_ARM_PageDirectory pd, struct app_addrspace *a
 		           (vaddr >> 12) << 12,
 		           curr_region->permissions,
 		           seL4_ARM_Default_VMAttributes);
+    if (err) printf("Error: %d\n", err);
     conditional_panic(err, "Internal map_page fail");
 
     insert_app_cap((sos_vaddr >> 12)<<12, copied_cap);
