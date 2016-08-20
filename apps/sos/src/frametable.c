@@ -23,6 +23,7 @@ static struct frame_entry {
 
 static struct frame_table_cap {
     seL4_CPtr cap;
+    int ref;
     struct frame_table_cap *next;
 };
 
