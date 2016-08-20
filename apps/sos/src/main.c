@@ -155,9 +155,9 @@ void syscall_loop(seL4_CPtr ep) {
 
         }else if(label == seL4_VMFault){
             /* Page fault */
-            dprintf(0, "vm fault at 0x%08x, pc = 0x%08x, %s\n", seL4_GetMR(1),
+            /*dprintf(0, "vm fault at 0x%08x, pc = 0x%08x, %s\n", seL4_GetMR(1),
                     seL4_GetMR(0),
-                    seL4_GetMR(2) ? "Instruction Fault" : "Data fault");
+                    seL4_GetMR(2) ? "Instruction Fault" : "Data fault");*/
             int err;
             
             err = sos_map_page(seL4_GetMR(1));
@@ -485,10 +485,11 @@ void frame_table_test() {
 int 
 sos_map_page(seL4_Word vaddr) {
     int err;
-    
+    printf("Entering\n"); 
     // Get the addr to simplify later implementation
     struct page_table_entry ***page_table_vaddr = &(tty_test_process.addrspace->page_table);
-
+    seL4_CPtr target_pd = tty_test_process.vroot;
+    
     // Invalid mapping NULL 
     if (vaddr == NULL) {
         conditional_panic(-1, "Mapping NULL virtual address");
@@ -537,18 +538,24 @@ sos_map_page(seL4_Word vaddr) {
     err = frame_alloc(&sos_vaddr);	
     conditional_panic(err, "Probably insufficient memory");
 
+    //This function would not fail if it pass the conditional paninc above. No need to check.
     seL4_Word cap = get_cap(sos_vaddr);
     seL4_Word copied_cap = cspace_copy_cap(cur_cspace,
                                            cur_cspace,
                                            cap,
-                                           curr_region -> permissions);
+                                           seL4_AllRights);
 
-    err = map_page(copied_cap, tty_test_process.vroot, (vaddr>>12)<<12, seL4_AllRights, seL4_ARM_Default_VMAttributes);
+    err = map_page(copied_cap, 
+		   target_pd, 
+		   (vaddr>>12)<<12, 
+		   curr_region -> permissions, 
+		   seL4_ARM_Default_VMAttributes);
     conditional_panic(err, "Internal map_page fail");
 
-    struct page_table_entry pte= {(sos_vaddr>>12) |curr_region -> permissions|PTE_VALID};
+    insert_app_cap((sos_vaddr >> 12)<<12, copied_cap);
+    struct page_table_entry pte= {((sos_vaddr>>12) <<12)|curr_region -> permissions|PTE_VALID};
     (*page_table_vaddr)[index1][index2] = pte;
-
+    printf("returnling\n");
     return err;
 }
 
