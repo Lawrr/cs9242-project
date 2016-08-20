@@ -14,8 +14,6 @@
 #include <sel4/sel4.h>
 #include "addrspace.h"
 
-int elf_load(seL4_ARM_PageDirectory dest_pd, char* elf_file);
-
-int app_elf_load(struct app_addrspace *dest_as, char *elf_file);
+int elf_load(seL4_ARM_PageDirectory dest_pd, struct app_addrspace *dest_as, char* elf_file);
 
 #endif /* _LIBOS_ELF_H_ */
