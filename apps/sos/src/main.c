@@ -311,14 +311,17 @@ void start_first_process(char* app_name, seL4_CPtr fault_ep) {
 
     /* load the elf image */
     tty_test_process.addrspace = as_new();
-    err = app_elf_load(tty_test_process.addrspace, elf_base);
+    printf("loading elf\n");
+    err = elf_load(tty_test_process.vroot, tty_test_process.addrspace, elf_base);
     conditional_panic(err, "Failed to load elf image");
 
+    printf("adding stack\n");
     /* Stack region */
-    as_define_region(tty_test_process.addrspace,
-                     PROCESS_STACK_TOP - (1 << seL4_PageBits),
-                     (1 << seL4_PageBits),
-                     seL4_AllRights);
+    err = as_define_region(tty_test_process.addrspace,
+                           PROCESS_STACK_TOP - (1 << seL4_PageBits),
+                           (1 << seL4_PageBits),
+                           seL4_AllRights);
+    conditional_panic(err, "Could not define region");
 
   //  /* Create a stack frame */
   //  stack_addr = ut_alloc(seL4_PageBits);
@@ -336,17 +339,20 @@ void start_first_process(char* app_name, seL4_CPtr fault_ep) {
   //                 seL4_AllRights, seL4_ARM_Default_VMAttributes);
   //  conditional_panic(err, "Unable to map stack IPC buffer for user app");
 
+    printf("mapping ipc\n");
     /* Map in the IPC buffer for the thread */
     err = map_page(tty_test_process.ipc_buffer_cap, tty_test_process.vroot,
                    PROCESS_IPC_BUFFER,
                    seL4_AllRights, seL4_ARM_Default_VMAttributes);
     conditional_panic(err, "Unable to map IPC buffer for user app");
 
+    printf("starting proccess\n");
     /* Start the new process */
     memset(&context, 0, sizeof(context));
     context.pc = elf_getEntryPoint(elf_base);
     context.sp = PROCESS_STACK_TOP;
     seL4_TCB_WriteRegisters(tty_test_process.tcb_cap, 1, 0, 2, &context);
+    printf("donennnn\n");
 }
 
 static void _sos_ipc_init(seL4_CPtr* ipc_ep, seL4_CPtr* async_ep){

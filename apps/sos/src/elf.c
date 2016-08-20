@@ -16,6 +16,7 @@
 
 #include "elf.h"
 #include "addrspace.h"
+#include "frametable.h"
 
 #include <vmem_layout.h>
 #include <ut_manager/ut.h>
@@ -117,19 +118,20 @@ static int load_segment_into_vspace(seL4_ARM_PageDirectory dest_as,
         err = map_page(tty_cap, dest_as, vpage, permissions, 
                        seL4_ARM_Default_VMAttributes);
         conditional_panic(err, "Failed to map to tty address space");
-        /* Map the frame into sos address spaces */
-        err = map_page(sos_cap, seL4_CapInitThreadPD, kvpage, seL4_AllRights, 
-                       seL4_ARM_Default_VMAttributes);
-        conditional_panic(err, "Failed to map sos address space");
+        printf("Mapped to tty\n");
 
         /* Now copy our data into the destination vspace. */
         nbytes = PAGESIZE - (dst & PAGEMASK);
+        printf("COPYING\n");
         if (pos < file_size){
+            printf("NOW COPYING\n");
             memcpy((void*)kdst, (void*)src, MIN(nbytes, file_size - pos));
         }
 
+        printf("UNIFYING\n");
         /* Not observable to I-cache yet so flush the frame */
         seL4_ARM_Page_Unify_Instruction(sos_cap, 0, PAGESIZE);
+        printf("asdfasdfas");
 
         pos += nbytes;
         dst += nbytes;
@@ -138,7 +140,7 @@ static int load_segment_into_vspace(seL4_ARM_PageDirectory dest_as,
     return 0;
 }
 
-int elf_load(seL4_ARM_PageDirectory dest_as, char *elf_file) {
+int elf_load(seL4_ARM_PageDirectory dest_pd, struct app_addrspace *dest_as, char *elf_file) {
 
     int num_headers;
     int err;
@@ -167,45 +169,9 @@ int elf_load(seL4_ARM_PageDirectory dest_as, char *elf_file) {
 
         /* Copy it across into the vspace. */
         dprintf(1, " * Loading segment %08x-->%08x\n", (int)vaddr, (int)(vaddr + segment_size));
-        err = load_segment_into_vspace(dest_as, source_addr, segment_size, file_size, vaddr,
-                                       get_sel4_rights_from_elf(flags) & seL4_AllRights);
-        conditional_panic(err != 0, "Elf loading failed!\n");
-    }
-
-    return 0;
-}
-
-int app_elf_load(struct app_addrspace *dest_as, char *elf_file) {
-
-    int num_headers;
-    int err;
-    int i;
-
-    /* Ensure that the ELF file looks sane. */
-    if (elf_checkFile(elf_file)){
-        return seL4_InvalidArgument;
-    }
-
-    num_headers = elf_getNumProgramHeaders(elf_file);
-    for (i = 0; i < num_headers; i++) {
-        char *source_addr;
-        unsigned long flags, file_size, segment_size, vaddr;
-
-        /* Skip non-loadable segments (such as debugging data). */
-        if (elf_getProgramHeaderType(elf_file, i) != PT_LOAD)
-            continue;
-
-        /* Fetch information about this segment. */
-        source_addr = elf_file + elf_getProgramHeaderOffset(elf_file, i);
-        file_size = elf_getProgramHeaderFileSize(elf_file, i);
-        segment_size = elf_getProgramHeaderMemorySize(elf_file, i);
-        vaddr = elf_getProgramHeaderVaddr(elf_file, i);
-        flags = elf_getProgramHeaderFlags(elf_file, i);
-
-        /* Copy it across into the vspace. */
-        dprintf(1, " * Loading segment %08x-->%08x\n", (int)vaddr, (int)(vaddr + segment_size));
-        as_define_region(dest_as, vaddr, segment_size, get_sel4_rights_from_elf(flags)&seL4_AllRights);
-
+        err = as_define_region(dest_as, vaddr, segment_size, get_sel4_rights_from_elf(flags)&seL4_AllRights);
+        conditional_panic(err != 0, "Could not define region\n");
+        err = load_segment_into_vspace(dest_pd, source_addr, segment_size, file_size, vaddr, get_sel4_rights_from_elf(flags) & seL4_AllRights);
         conditional_panic(err != 0, "Elf loading failed!\n");
     }
 
