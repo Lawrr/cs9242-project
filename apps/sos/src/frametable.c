@@ -6,6 +6,7 @@
 #include <cspace/cspace.h>
 
 #include "ut_manager/ut.h"
+#include "mapping.h"
 
 #include <sys/panic.h>
 
@@ -174,6 +175,8 @@ int32_t frame_free(seL4_Word vaddr) {
     
     frame_table[index].next_index = free_index;
     free_index = index;
+
+    return 0;
 }
 
 seL4_CPtr get_cap(seL4_Word vaddr){

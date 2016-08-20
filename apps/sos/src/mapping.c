@@ -8,6 +8,8 @@
  * @TAG(NICTA_BSD)
  */
 
+#include <elf/elf.h>
+
 #include "mapping.h"
 
 #include <ut_manager/ut.h>
