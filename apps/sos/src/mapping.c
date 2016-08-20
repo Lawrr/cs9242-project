@@ -12,6 +12,8 @@
 
 #include <ut_manager/ut.h>
 #include "vmem_layout.h"
+#include "addrspace.h"
+#include "frametable.h"
 
 #define verbose 0
 #include <sys/panic.h>
@@ -105,4 +107,78 @@ map_device(void* paddr, int size){
     return (void*)vstart;
 }
 
+int 
+sos_map_page(seL4_Word vaddr, seL4_ARM_PageDirectory pd, struct app_addrspace *as) {
+    int err;
+    printf("Entering\n"); 
+    // Get the addr to simplify later implementation
+    struct page_table_entry ***page_table_vaddr = &(as->page_table);
+    
+    // Invalid mapping NULL 
+    if (vaddr == NULL) {
+        conditional_panic(-1, "Mapping NULL virtual address");
+    }
 
+    seL4_Word index1 = vaddr >> 22;
+    seL4_Word index2 = (vaddr << 10) >> 22;
+
+    // Checking with the region the check the permission
+    struct region *curr_region = as->regions;
+    while (curr_region != NULL) {
+        if (vaddr >= curr_region->baseaddr &&
+            vaddr < curr_region->baseaddr + curr_region->size) {
+	    break;
+          
+        }
+
+        curr_region = curr_region->next;
+    } 
+
+    // Can't find the region that contains thisvaddr
+    if (curr_region == NULL) {
+        // Simply conditional panic for now
+        conditional_panic(-1, "No region contains this vaddr");
+    }
+
+    // No page table yet
+    if (*page_table_vaddr == NULL) {
+        // First level
+        err = frame_alloc(page_table_vaddr);
+        conditional_panic(err, "No memory for new Shadow Page Directory");
+
+        // Second level
+        err = frame_alloc(&(*page_table_vaddr)[index1]);
+        conditional_panic(err, "No memory for new Shadow Page Directory");
+
+    } else if ((*page_table_vaddr)[index1] == NULL) {
+        // Second level
+        err = frame_alloc(&(*page_table_vaddr)[index1]);
+        conditional_panic(err,"No memory for new Shadow Page Directory");
+
+    }
+
+    // Call the internal kernel page mapping 
+    seL4_Word sos_vaddr;
+    err = frame_alloc(&sos_vaddr);	
+    conditional_panic(err, "Probably insufficient memory");
+
+    //This function would not fail if it pass the conditional paninc above. No need to check.
+    seL4_Word cap = get_cap(sos_vaddr);
+    seL4_Word copied_cap = cspace_copy_cap(cur_cspace,
+                                           cur_cspace,
+                                           cap,
+                                           seL4_AllRights);
+
+    err = map_page(copied_cap, 
+		           pd, 
+		           (vaddr>>12)<<12, 
+		           curr_region->permissions, 
+		           seL4_ARM_Default_VMAttributes);
+    conditional_panic(err, "Internal map_page fail");
+
+    insert_app_cap((sos_vaddr >> 12)<<12, copied_cap);
+    struct page_table_entry pte = {((sos_vaddr>>12) <<12)|curr_region -> permissions|PTE_VALID};
+    (*page_table_vaddr)[index1][index2] = pte;
+    printf("returning from sos_map_page\n");
+    return err;
+}
