@@ -95,7 +95,7 @@ static int load_segment_into_vspace(seL4_ARM_PageDirectory dest_pd,
     /* We work a page at a time in the destination vspace. */
     pos = 0;
     while(pos < segment_size) {
-        seL4_Word vaddr;
+        seL4_Word vaddr, sos_vaddr;
         seL4_CPtr sos_cap, tty_cap;
         seL4_Word vpage, kvpage;
         unsigned long kdst;
@@ -107,22 +107,18 @@ static int load_segment_into_vspace(seL4_ARM_PageDirectory dest_pd,
         kvpage = PAGE_ALIGN(kdst);
 
         /* Map the frame into tty_test address spaces */
-        err = sos_map_page(vpage, dest_pd, dest_as);
+        err = sos_map_page(vpage, dest_pd, dest_as, &sos_vaddr);
         conditional_panic(err, "Failed to map to tty address space");
-        printf("Mapped to tty\n");
 
         /* Now copy our data into the destination vspace. */
         nbytes = PAGESIZE - (dst & PAGEMASK);
-        printf("COPYING\n");
         if (pos < file_size){
-            printf("NOW COPYING\n");
-            memcpy((void*)kdst, (void*)src, MIN(nbytes, file_size - pos));
+            memcpy((void*)sos_vaddr, (void*)src, MIN(nbytes, file_size - pos));
         }
+        sos_cap = get_cap(sos_vaddr);
 
-        printf("UNIFYING\n");
         /* Not observable to I-cache yet so flush the frame */
         seL4_ARM_Page_Unify_Instruction(sos_cap, 0, PAGESIZE);
-        printf("asdfasdfas");
 
         pos += nbytes;
         dst += nbytes;

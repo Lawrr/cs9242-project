@@ -155,12 +155,14 @@ void syscall_loop(seL4_CPtr ep) {
 
         }else if(label == seL4_VMFault){
             /* Page fault */
-            /*dprintf(0, "vm fault at 0x%08x, pc = 0x%08x, %s\n", seL4_GetMR(1),
+            dprintf(0, "vm fault at 0x%08x, pc = 0x%08x, %s\n", seL4_GetMR(1),
                     seL4_GetMR(0),
-                    seL4_GetMR(2) ? "Instruction Fault" : "Data fault");*/
+                    seL4_GetMR(2) ? "Instruction Fault" : "Data fault");
             int err;
             
-            err = sos_map_page(seL4_GetMR(1), tty_test_process.vroot, tty_test_process.addrspace);
+            seL4_Word sos_vaddr;
+            seL4_Word map_vaddr = seL4_GetMR(2) ? seL4_GetMR(1) : seL4_GetMR(0);
+            err = sos_map_page(map_vaddr, tty_test_process.vroot, tty_test_process.addrspace, &sos_vaddr);
 
             conditional_panic(err, "Fail to map the actual page"); 
             //assert(!"Unable to handle vm faults");

@@ -110,9 +110,8 @@ map_device(void* paddr, int size){
 }
 
 int 
-sos_map_page(seL4_Word vaddr, seL4_ARM_PageDirectory pd, struct app_addrspace *as) {
+sos_map_page(seL4_Word vaddr, seL4_ARM_PageDirectory pd, struct app_addrspace *as, seL4_Word *sos_vaddr_ret) {
     int err;
-    printf("Entering\n"); 
     // Get the addr to simplify later implementation
     struct page_table_entry ***page_table_vaddr = &(as->page_table);
     
@@ -163,6 +162,7 @@ sos_map_page(seL4_Word vaddr, seL4_ARM_PageDirectory pd, struct app_addrspace *a
     seL4_Word sos_vaddr;
     err = frame_alloc(&sos_vaddr);	
     conditional_panic(err, "Probably insufficient memory");
+    *sos_vaddr_ret = sos_vaddr;
 
     //This function would not fail if it pass the conditional paninc above. No need to check.
     seL4_Word cap = get_cap(sos_vaddr);
@@ -171,16 +171,15 @@ sos_map_page(seL4_Word vaddr, seL4_ARM_PageDirectory pd, struct app_addrspace *a
                                            cap,
                                            seL4_AllRights);
 
-    err = map_page(copied_cap, 
-		           pd, 
-		           (vaddr>>12)<<12, 
-		           curr_region->permissions, 
+    err = map_page(copied_cap,
+		           pd,
+		           (vaddr >> 12) << 12,
+		           curr_region->permissions,
 		           seL4_ARM_Default_VMAttributes);
     conditional_panic(err, "Internal map_page fail");
 
     insert_app_cap((sos_vaddr >> 12)<<12, copied_cap);
     struct page_table_entry pte = {((sos_vaddr>>12) <<12)|curr_region -> permissions|PTE_VALID};
     (*page_table_vaddr)[index1][index2] = pte;
-    printf("returning from sos_map_page\n");
     return err;
 }
