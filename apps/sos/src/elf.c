@@ -57,7 +57,8 @@ static inline seL4_Word get_sel4_rights_from_elf(unsigned long permissions) {
  * Inject data into the given vspace.
  * TODO: Don't keep these pages mapped in
  */
-static int load_segment_into_vspace(seL4_ARM_PageDirectory dest_as,
+static int load_segment_into_vspace(seL4_ARM_PageDirectory dest_pd,
+                                    struct app_addrspace *dest_as,
                                     char *src, unsigned long segment_size,
                                     unsigned long file_size, unsigned long dst,
                                     unsigned long permissions) {
@@ -105,18 +106,8 @@ static int load_segment_into_vspace(seL4_ARM_PageDirectory dest_as,
         vpage  = PAGE_ALIGN(dst);
         kvpage = PAGE_ALIGN(kdst);
 
-        /* First we need to create a frame */
-        err = frame_alloc(&vaddr);
-        conditional_panic(err, "Out of memory - could not allocate frame");
-
-        /* Copy the frame cap as we need to map it into 2 address spaces */
-        sos_cap = get_cap(vaddr);
-        tty_cap = cspace_copy_cap(cur_cspace, cur_cspace, sos_cap, seL4_AllRights);
-        conditional_panic(tty_cap == 0, "Failed to copy frame cap");
-
         /* Map the frame into tty_test address spaces */
-        err = map_page(tty_cap, dest_as, vpage, permissions, 
-                       seL4_ARM_Default_VMAttributes);
+        err = sos_map_page(vpage, dest_pd, dest_as);
         conditional_panic(err, "Failed to map to tty address space");
         printf("Mapped to tty\n");
 
@@ -171,7 +162,7 @@ int elf_load(seL4_ARM_PageDirectory dest_pd, struct app_addrspace *dest_as, char
         dprintf(1, " * Loading segment %08x-->%08x\n", (int)vaddr, (int)(vaddr + segment_size));
         err = as_define_region(dest_as, vaddr, segment_size, get_sel4_rights_from_elf(flags)&seL4_AllRights);
         conditional_panic(err != 0, "Could not define region\n");
-        err = load_segment_into_vspace(dest_pd, source_addr, segment_size, file_size, vaddr, get_sel4_rights_from_elf(flags) & seL4_AllRights);
+        err = load_segment_into_vspace(dest_pd, dest_as, source_addr, segment_size, file_size, vaddr, get_sel4_rights_from_elf(flags) & seL4_AllRights);
         conditional_panic(err != 0, "Elf loading failed!\n");
     }
 
