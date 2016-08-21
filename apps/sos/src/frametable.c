@@ -22,27 +22,33 @@ static struct frame_entry {
     int32_t next_index;
 };
 
-static struct frame_table_cap {
-    seL4_CPtr cap;
+static struct frame_table_cap { 
     int ref;
+    seL4_CPtr cap;
     struct frame_table_cap *next;
 };
 
 struct app_cap{
-    struct app_cap * next;
     seL4_CPtr cap;
+    struct app_cap * next;
 };
 
 static struct frame_entry *frame_table;
-static uint64_t base_addr; /* Untyped region after end of frame table */
+
+/* Untyped region after end of frame table */
+static uint64_t base_addr;
+
 static int32_t low_addr;
 static int32_t high_addr;
-static int free_index; /* -1 no free_list but memory is not full
-                          -2 no free_list and memory is full (swapping later) */
+
+/* -1 no free_list but memory is not full
+   -2 no free_list and memory is full (swapping later)*/
+static int32_t free_index; 
+
 static struct frame_table_cap *frame_table_cap_head;
 
 void frame_init(seL4_Word high,seL4_Word low) {
-    int err;
+    int32_t err;
     uint64_t low64 = low;
     uint64_t high64 = high;
     uint64_t entry_size = sizeof(struct frame_entry);

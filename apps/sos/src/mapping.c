@@ -21,7 +21,10 @@
 #include <sys/panic.h>
 #include <sys/debug.h>
 #include <cspace/cspace.h>
-
+#define INDEX1_SHIFT 22 
+#define PAGE_BITS 12
+#define INDEX2_MASK (1023 << PAGE_BITS)
+#define PAGE_MASK (~0xFFF)
 extern const seL4_BootInfo* _boot_info;
 
 
@@ -116,12 +119,12 @@ sos_map_page(seL4_Word vaddr, seL4_ARM_PageDirectory pd, struct app_addrspace *a
     struct page_table_entry ***page_table_vaddr = &(as->page_table);
     
     // Invalid mapping NULL 
-    if (vaddr == NULL) {
+    if (((void*)vaddr) == NULL) {
         conditional_panic(-1, "Mapping NULL virtual address");
     }
 
-    seL4_Word index1 = vaddr >> 22;
-    seL4_Word index2 = (vaddr << 10) >> 22;
+    seL4_Word index1 = vaddr >> INDEX1_SHIFT;
+    seL4_Word index2 = (vaddr & INDEX2_MASK)>> PAGE_BITS;
 
     // Checking with the region the check the permission
     struct region *curr_region = as->regions;
@@ -173,13 +176,17 @@ sos_map_page(seL4_Word vaddr, seL4_ARM_PageDirectory pd, struct app_addrspace *a
 
     err = map_page(copied_cap,
 		           pd,
-		           (vaddr >> 12) << 12,
+		           (vaddr >> PAGE_BITS) << PAGE_BITS,
 		           curr_region->permissions,
 		           seL4_ARM_Default_VMAttributes);
     conditional_panic(err, "Internal map_page fail");
-
-    insert_app_cap((sos_vaddr >> 12)<<12, copied_cap);
-    struct page_table_entry pte = {((sos_vaddr>>12) <<12)|curr_region -> permissions|PTE_VALID};
+    
+    //Book keeping the copied caps
+    insert_app_cap(sos_vaddr & PAGE_MASK, copied_cap);
+    
+    //Book keeping in our own page table
+    struct page_table_entry pte 
+	    = {(sos_vaddr & PAGE_MASK)|curr_region -> permissions|PTE_VALID};
     (*page_table_vaddr)[index1][index2] = pte;
     return err;
 }
