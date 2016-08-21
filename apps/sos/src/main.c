@@ -320,26 +320,26 @@ void start_first_process(char* app_name, seL4_CPtr fault_ep) {
     printf("adding stack\n");
     /* Stack region */
     err = as_define_region(tty_test_process.addrspace,
-                           PROCESS_STACK_TOP - (1 << seL4_PageBits),
-                           (1 << seL4_PageBits),
+                           PROCESS_STACK_TOP - ((1 << seL4_PageBits) * 28),
+                           (1 << seL4_PageBits) * 28,
                            seL4_AllRights);
     conditional_panic(err, "Could not define region");
 
-  //  /* Create a stack frame */
-  //  stack_addr = ut_alloc(seL4_PageBits);
-  //  conditional_panic(!stack_addr, "No memory for stack");
-  //  err =  cspace_ut_retype_addr(stack_addr,
-  //                               seL4_ARM_SmallPageObject,
-  //                               seL4_PageBits,
-  //                               cur_cspace,
-  //                               &stack_cap);
-  //  conditional_panic(err, "Unable to allocate page for stack");
+    /* Create a stack frame */
+    stack_addr = ut_alloc(seL4_PageBits);
+    conditional_panic(!stack_addr, "No memory for stack");
+    err =  cspace_ut_retype_addr(stack_addr,
+                                 seL4_ARM_SmallPageObject,
+                                 seL4_PageBits,
+                                 cur_cspace,
+                                 &stack_cap);
+    conditional_panic(err, "Unable to allocate page for stack");
 
-  //  /* Map in the stack frame for the user app */
-  //  err = map_page(stack_cap, tty_test_process.vroot,
-  //                 PROCESS_STACK_TOP - (1 << seL4_PageBits),
-  //                 seL4_AllRights, seL4_ARM_Default_VMAttributes);
-  //  conditional_panic(err, "Unable to map stack IPC buffer for user app");
+    /* Map in the stack frame for the user app */
+    err = map_page(stack_cap, tty_test_process.vroot,
+                   PROCESS_STACK_TOP - (1 << seL4_PageBits),
+                   seL4_AllRights, seL4_ARM_Default_VMAttributes);
+    conditional_panic(err, "Unable to map stack IPC buffer for user app");
 
     printf("mapping ipc\n");
     /* Map in the IPC buffer for the thread */
