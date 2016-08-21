@@ -63,19 +63,19 @@ static void
 pt_test( void )
 {
     /* need a decent sized stack */
-    //char buf1[NPAGES * PAGE_SIZE_4K], *buf2 = NULL;
+    char buf1[NPAGES * PAGE_SIZE_4K], *buf2 = NULL;
 
     /* check the stack is above phys mem */
-    //assert((void *) buf1 > (void *) TEST_ADDRESS);
+    assert((void *) buf1 > (void *) TEST_ADDRESS);
 
     /* stack test */
-   // do_pt_test(buf1);
+    do_pt_test(buf1);
 
     /* heap test */
-    //buf2 = malloc(NPAGES * PAGE_SIZE_4K);
-    //assert(buf2);
-    //do_pt_test(buf2);
-    //free(buf2);
+    buf2 = malloc(NPAGES * PAGE_SIZE_4K);
+    assert(buf2);
+    do_pt_test(buf2);
+    free(buf2);
 }
 
 int main(void){

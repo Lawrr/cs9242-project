@@ -113,7 +113,8 @@ static int load_segment_into_vspace(seL4_ARM_PageDirectory dest_pd,
         /* Now copy our data into the destination vspace. */
         nbytes = PAGESIZE - (dst & PAGEMASK);
         if (pos < file_size){
-            memcpy((void*)sos_vaddr, (void*)src, MIN(nbytes, file_size - pos));
+            printf("Memcpy %x (%x)\n", (sos_vaddr | ((vaddr << 20) >> 20)), sos_vaddr);
+            memcpy((void*) (sos_vaddr | ((vaddr << 20) >> 20)), (void*)src, MIN(nbytes, file_size - pos));
         }
         sos_cap = get_cap(sos_vaddr);
 
