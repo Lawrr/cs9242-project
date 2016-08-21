@@ -59,18 +59,15 @@ do_pt_test(char *buf)
     }
 }
 
-static void
+void
 pt_test( void )
 {
-    printf("entered pt_test\n");
     /* need a decent sized stack */
     char buf1[NPAGES * PAGE_SIZE_4K], *buf2 = NULL;
-    printf("buffers created\n");
 
     /* check the stack is above phys mem */
     assert((void *) buf1 > (void *) TEST_ADDRESS);
 
-    printf("doing pt_test\n");
     /* stack test */
     do_pt_test(buf1);
 
@@ -87,9 +84,7 @@ int main(void){
 
     do {
         printf("task:\tHello world, I'm\ttty_test!\n");
-        printf("entering pt_test\n");
         pt_test();
-        printf("end pt test\n");
         thread_block();
         // sleep(1);	// Implement this as a syscall
     } while(1);

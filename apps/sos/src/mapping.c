@@ -170,7 +170,6 @@ sos_map_page(seL4_Word vaddr, seL4_ARM_PageDirectory pd, struct app_addrspace *a
                                            cur_cspace,
                                            cap,
                                            seL4_AllRights);
-    printf("Mapping page %x (sos) to %x (app)\n", sos_vaddr, (vaddr>>12)<<12);
 
     err = map_page(copied_cap,
 		           pd,

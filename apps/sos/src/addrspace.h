@@ -1,7 +1,9 @@
 #ifndef _ADDRSPACE_H_
 #define _ADDRSPACE_H_
+
 #define PTE_VALID (1 << 3)
 #define PTE_SWAP  (1 << 4)
+
 struct app_addrspace {
     struct region *regions;
     struct page_table_entry **page_table;
