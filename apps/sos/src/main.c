@@ -323,6 +323,12 @@ void start_first_process(char* app_name, seL4_CPtr fault_ep) {
     err = elf_load(tty_test_process.vroot, tty_test_process.addrspace, elf_base);
     conditional_panic(err, "Failed to load elf image");
 
+    /* Heap region */
+    err = as_define_region(tty_test_process.addrspace,
+                           0x20000000,
+                           (PROCESS_STACK_TOP - ((1 << seL4_PageBits) * 28)) - 0x20000000,
+                           seL4_AllRights);
+
     /* Stack region */
     err = as_define_region(tty_test_process.addrspace,
                            PROCESS_STACK_TOP - ((1 << seL4_PageBits) * 28),
