@@ -34,6 +34,7 @@
 #define PAGE_ALIGN(addr)      ((addr) & ~(PAGEMASK))
 #define IS_PAGESIZE_ALIGNED(addr) !((addr) &  (PAGEMASK))
 
+#define LOWER_BITS_SHIFT 20
 
 extern seL4_ARM_PageDirectory dest_as;
 
@@ -108,13 +109,15 @@ static int load_segment_into_vspace(seL4_ARM_PageDirectory dest_pd,
 
         /* Map the frame into tty_test address spaces */
         err = sos_map_page(vpage, dest_pd, dest_as, &sos_vaddr);
-        conditional_panic(err, "Failed to map to tty address space");
+        if (err) {
+            return err;
+        }
 
         /* Now copy our data into the destination vspace. */
         nbytes = PAGESIZE - (dst & PAGEMASK);
         if (pos < file_size){
-            printf("Memcpy %x (%x)\n", (sos_vaddr | ((vaddr << 20) >> 20)), sos_vaddr);
-            memcpy((void*) (sos_vaddr | ((vaddr << 20) >> 20)), (void*)src, MIN(nbytes, file_size - pos));
+            memcpy((void*) (sos_vaddr | ((vaddr << LOWER_BITS_SHIFT) >> LOWER_BITS_SHIFT)),
+                   (void*)src, MIN(nbytes, file_size - pos));
         }
         sos_cap = get_cap(sos_vaddr);
 
@@ -158,8 +161,13 @@ int elf_load(seL4_ARM_PageDirectory dest_pd, struct app_addrspace *dest_as, char
         /* Copy it across into the vspace. */
         dprintf(1, " * Loading segment %08x-->%08x\n", (int)vaddr, (int)(vaddr + segment_size));
         err = as_define_region(dest_as, vaddr, segment_size, get_sel4_rights_from_elf(flags) & seL4_AllRights);
-        conditional_panic(err != 0, "Could not define region\n");
+        if (err) {
+            return err;
+        }
         err = load_segment_into_vspace(dest_pd, dest_as, source_addr, segment_size, file_size, vaddr, get_sel4_rights_from_elf(flags) & seL4_AllRights);
+        if (err) {
+            return err;
+        }
         conditional_panic(err != 0, "Elf loading failed!\n");
     }
 

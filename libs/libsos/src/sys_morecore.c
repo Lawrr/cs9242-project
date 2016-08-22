@@ -18,7 +18,7 @@
 #include <sel4/types.h>
 
 #define PROCESS_HEAP_START  (0x20000000)
-#define PROCESS_HEAP_END    (0x70000000)
+#define PROCESS_HEAP_END    (0x60000000)
 
 /* Pointer to free space in the morecore area. */
 static uintptr_t morecore_base = (uintptr_t) PROCESS_HEAP_START;

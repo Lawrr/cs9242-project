@@ -175,7 +175,7 @@ void syscall_loop(seL4_CPtr ep) {
                                tty_test_process.vroot, 
                                tty_test_process.addrspace, 
                                &sos_vaddr);
-            conditional_panic(err, "Fail to map the actual page"); 
+            conditional_panic(err, "Fail to map the page to the application\n"); 
 
             /* Save the caller */
             seL4_CPtr reply_cap = cspace_save_reply_cap(cur_cspace);
@@ -260,8 +260,6 @@ static void print_bootinfo(const seL4_BootInfo* info) {
 void start_first_process(char* app_name, seL4_CPtr fault_ep) {
     int err;
 
-    seL4_Word stack_addr;
-    seL4_CPtr stack_cap;
     seL4_CPtr user_ep_cap;
 
     /* These required for setting up the TCB */
@@ -339,35 +337,21 @@ void start_first_process(char* app_name, seL4_CPtr fault_ep) {
                            PROCESS_HEAP_START,
                            PROCESS_HEAP_END - PROCESS_HEAP_START,
                            seL4_AllRights);
+    conditional_panic(err, "Could not define heap region");
 
     /* Stack region */
     err = as_define_region(tty_test_process.addrspace,
                            PROCESS_STACK_BOT,
                            PROCESS_STACK_TOP - PROCESS_STACK_BOT,
                            seL4_AllRights);
-    conditional_panic(err, "Could not define region");
+    conditional_panic(err, "Could not define stack region");
 
-  //  /* Create a stack frame */
-  //  stack_addr = ut_alloc(seL4_PageBits);
-  //  conditional_panic(!stack_addr, "No memory for stack");
-  //  err =  cspace_ut_retype_addr(stack_addr,
-  //                               seL4_ARM_SmallPageObject,
-  //                               seL4_PageBits,
-  //                               cur_cspace,
-  //                               &stack_cap);
-  //  conditional_panic(err, "Unable to allocate page for stack");
-
-  //  /* Map in the stack frame for the user app */
-  //  err = map_page(stack_cap, tty_test_process.vroot,
-  //                 PROCESS_STACK_TOP - (1 << seL4_PageBits),
-  //                 seL4_AllRights, seL4_ARM_Default_VMAttributes);
-  //  conditional_panic(err, "Unable to map stack IPC buffer for user app");
-
-    /* Map in the IPC buffer for the thread */
-    err = map_page(tty_test_process.ipc_buffer_cap, tty_test_process.vroot,
-                   PROCESS_IPC_BUFFER,
-                   seL4_AllRights, seL4_ARM_Default_VMAttributes);
-    conditional_panic(err, "Unable to map IPC buffer for user app");
+    /* IPC buffer region */
+    err = as_define_region(tty_test_process.addrspace,
+                           PROCESS_IPC_BUFFER,
+                           PROCESS_VMEM_START - PROCESS_IPC_BUFFER,
+                           seL4_AllRights);
+    conditional_panic(err, "Could not define IPC buffer region");
 
     /* Start the new process */
     memset(&context, 0, sizeof(context));

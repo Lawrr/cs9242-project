@@ -25,8 +25,8 @@
 #define PAGE_BITS 12
 #define INDEX2_MASK (1023 << PAGE_BITS)
 #define PAGE_MASK (~0xFFF)
-extern const seL4_BootInfo* _boot_info;
 
+extern const seL4_BootInfo* _boot_info;
 
 /**
  * Maps a page table into the root servers page directory
@@ -170,8 +170,6 @@ sos_map_page(seL4_Word vaddr, seL4_ARM_PageDirectory pd, struct app_addrspace *a
         return err;
     }
 
-    *sos_vaddr_ret = sos_vaddr;
-
     seL4_Word cap = get_cap(sos_vaddr);
 
     seL4_Word copied_cap = cspace_copy_cap(cur_cspace,
@@ -185,6 +183,8 @@ sos_map_page(seL4_Word vaddr, seL4_ARM_PageDirectory pd, struct app_addrspace *a
 		           curr_region->permissions,
 		           seL4_ARM_Default_VMAttributes);
     if (err) {
+        cspace_delete_cap(cur_cspace, copied_cap);
+        frame_free(sos_vaddr);
         return err;
     }
     
@@ -196,5 +196,6 @@ sos_map_page(seL4_Word vaddr, seL4_ARM_PageDirectory pd, struct app_addrspace *a
                                    (curr_region->permissions | PTE_VALID)};
     (*page_table_vaddr)[index1][index2] = pte;
 
+    *sos_vaddr_ret = sos_vaddr;
     return 0;
 }

@@ -25,9 +25,9 @@ static struct frame_table_cap {
     struct frame_table_cap *next;
 };
 
-struct app_cap{
+struct app_cap {
     seL4_CPtr cap;
-    struct app_cap * next;
+    struct app_cap *next;
 };
 
 static struct frame_entry *frame_table;

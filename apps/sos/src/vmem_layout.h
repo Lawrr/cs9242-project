@@ -27,7 +27,7 @@
 /* Constants for how SOS will layout the address space of any
  * processes it loads up */
 #define PROCESS_HEAP_START  (0x20000000)
-#define PROCESS_HEAP_END    (0x70000000)
+#define PROCESS_HEAP_END    (0x60000000)
 #define PROCESS_STACK_BOT   (0x70000000)
 #define PROCESS_STACK_TOP   (0x90000000)
 #define PROCESS_IPC_BUFFER  (0xA0000000)
