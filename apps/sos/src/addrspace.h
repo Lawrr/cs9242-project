@@ -5,6 +5,7 @@
 #define PTE_SWAP  (1 << 4)
 
 struct app_addrspace {
+    seL4_Word asid;
     struct region *regions;
     struct page_table_entry **page_table;
 };
