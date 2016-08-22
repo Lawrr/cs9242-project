@@ -115,60 +115,65 @@ map_device(void* paddr, int size){
 int 
 sos_map_page(seL4_Word vaddr, seL4_ARM_PageDirectory pd, struct app_addrspace *as, seL4_Word *sos_vaddr_ret) {
     int err;
-    // Get the addr to simplify later implementation
+    /* Get the addr to simplify later implementation */
     struct page_table_entry ***page_table_vaddr = &(as->page_table);
     
-    // Invalid mapping NULL 
-    if (((void*)vaddr) == NULL) {
-        conditional_panic(-1, "Mapping NULL virtual address");
+    /* Invalid mapping NULL */
+    if (((void *) vaddr) == NULL) {
+        return -1;
     }
 
     seL4_Word index1 = vaddr >> INDEX1_SHIFT;
-    seL4_Word index2 = (vaddr & INDEX2_MASK)>> PAGE_BITS;
+    seL4_Word index2 = (vaddr & INDEX2_MASK) >> PAGE_BITS;
 
-    // Checking with the region the check the permission
+    /* Checking with the region the check the permission */
     struct region *curr_region = as->regions;
     while (curr_region != NULL) {
         if (vaddr >= curr_region->baseaddr &&
             vaddr < curr_region->baseaddr + curr_region->size) {
-	    break;
-          
+            break;
+        }
+        curr_region = curr_region->next;
+    }
+
+    /* Can't find the region that contains thisvaddr */
+    if (curr_region == NULL) {
+        return -1;
+    }
+
+    /* No page table yet */
+    if (*page_table_vaddr == NULL) {
+        /* First level */
+        err = frame_alloc(page_table_vaddr);
+        if (err) {
+            return err;
         }
 
-        curr_region = curr_region->next;
-    } 
-
-    // Can't find the region that contains thisvaddr
-    if (curr_region == NULL) {
-        // Simply conditional panic for now
-        conditional_panic(-1, "No region contains this vaddr");
-    }
-
-    // No page table yet
-    if (*page_table_vaddr == NULL) {
-        // First level
-        err = frame_alloc(page_table_vaddr);
-        conditional_panic(err, "No memory for new Shadow Page Directory");
-
-        // Second level
+        /* Second level */
         err = frame_alloc(&(*page_table_vaddr)[index1]);
-        conditional_panic(err, "No memory for new Shadow Page Directory");
+        if (err) {
+            return err;
+        }
 
     } else if ((*page_table_vaddr)[index1] == NULL) {
-        // Second level
+        /* Second level */
         err = frame_alloc(&(*page_table_vaddr)[index1]);
-        conditional_panic(err,"No memory for new Shadow Page Directory");
-
+        if (err) {
+            return err;
+        }
     }
 
-    // Call the internal kernel page mapping 
+    /* Call the internal kernel page mapping */
     seL4_Word sos_vaddr;
     err = frame_alloc(&sos_vaddr);	
-    conditional_panic(err, "Probably insufficient memory");
+    if (err) {
+        return err;
+    }
+
     *sos_vaddr_ret = sos_vaddr;
 
-    //This function would not fail if it pass the conditional paninc above. No need to check.
     seL4_Word cap = get_cap(sos_vaddr);
+
     seL4_Word copied_cap = cspace_copy_cap(cur_cspace,
                                            cur_cspace,
                                            cap,
@@ -179,14 +184,17 @@ sos_map_page(seL4_Word vaddr, seL4_ARM_PageDirectory pd, struct app_addrspace *a
 		           (vaddr >> PAGE_BITS) << PAGE_BITS,
 		           curr_region->permissions,
 		           seL4_ARM_Default_VMAttributes);
-    conditional_panic(err, "Internal map_page fail");
+    if (err) {
+        return err;
+    }
     
-    //Book keeping the copied caps
+    /* Book keeping the copied caps */
     insert_app_cap(sos_vaddr & PAGE_MASK, copied_cap);
     
-    //Book keeping in our own page table
-    struct page_table_entry pte 
-	    = {(sos_vaddr & PAGE_MASK)|curr_region -> permissions|PTE_VALID};
+    /* Book keeping in our own page table */
+    struct page_table_entry pte = {(sos_vaddr & PAGE_MASK) |
+                                   (curr_region->permissions | PTE_VALID)};
     (*page_table_vaddr)[index1][index2] = pte;
-    return err;
+
+    return 0;
 }

@@ -14,11 +14,8 @@
 #define INDEX_ADDR_OFFSET 12 /* Bits to shift */
 
 static struct frame_entry {
-    /* Reserve 3 bits for type */
-    /* 000 for 'valid' */
-    //seL4_Word entry;
     seL4_CPtr cap;
-    struct app_cap * app_cap_list;
+    struct app_cap *app_cap_list;
     int32_t next_index;
 };
 
@@ -185,24 +182,24 @@ int32_t frame_free(seL4_Word vaddr) {
     return 0;
 }
 
-seL4_CPtr get_cap(seL4_Word vaddr){
+seL4_CPtr get_cap(seL4_Word vaddr) {
     uint32_t index = (vaddr - PROCESS_VMEM_START + low_addr - base_addr) >> INDEX_ADDR_OFFSET;
     return frame_table[index].cap;
 }
 
-static struct app_cap* app_cap_new(seL4_CPtr cap){
+static struct app_cap* app_cap_new(seL4_CPtr cap) {
     struct app_cap * new_app_cap = malloc(sizeof(struct app_cap));
-    if (new_app_cap == NULL) conditional_panic(-1,"Not enopugh memory"); 
-    new_app_cap -> next = NULL;
-    new_app_cap -> cap = cap;
+    if (new_app_cap == NULL) return NULL;
+    new_app_cap->next = NULL;
+    new_app_cap->cap = cap;
     return new_app_cap;
 }
 
-int32_t insert_app_cap(seL4_Word vaddr,seL4_CPtr cap){
+int32_t insert_app_cap(seL4_Word vaddr, seL4_CPtr cap) {
     uint32_t index = (vaddr - PROCESS_VMEM_START + low_addr - base_addr) >> INDEX_ADDR_OFFSET;
-    struct app_cap * copied_cap = app_cap_new(cap);
-    copied_cap -> next = frame_table[index].app_cap_list;
-    
+    struct app_cap *copied_cap = app_cap_new(cap);
+    copied_cap->next = frame_table[index].app_cap_list;
+
     frame_table[index].app_cap_list = copied_cap;
     return 0;
 }

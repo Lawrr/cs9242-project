@@ -41,22 +41,23 @@ int as_define_region(struct app_addrspace *as,
     return 0;
 }
 
-int as_free(struct app_addrspace *as){
+int as_free(struct app_addrspace *as) {
     for (int i = 0; i < 1024; i++){
         if (as->page_table[i] == NULL) continue;
-	for (int j = 0;j < 1024; j++){
-            if (as->page_table[i][j].sos_vaddr &PTE_VALID){
-		frame_free(as->page_table[i][j].sos_vaddr);
+        for (int j = 0;j < 1024; j++) {
+            if (as->page_table[i][j].sos_vaddr & PTE_VALID) {
+                frame_free(as->page_table[i][j].sos_vaddr);
             }
-	}
-        frame_free((seL4_Word)as->page_table[i]);
+        }
+        frame_free((seL4_Word) as->page_table[i]);
     }
 
-    struct region *curr_region = as -> regions;
-    while (curr_region !=NULL){
-	struct region *region_to_free = curr_region;
-	curr_region = curr_region -> next;
-	free(region_to_free);
+    struct region *curr_region = as->regions;
+    while (curr_region != NULL) {
+        struct region *region_to_free = curr_region;
+        curr_region = curr_region->next;
+        free(region_to_free);
     }
+
     return 0;
 }
