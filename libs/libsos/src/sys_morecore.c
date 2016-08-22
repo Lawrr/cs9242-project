@@ -17,12 +17,12 @@
 #include <assert.h>
 #include <sel4/types.h>
 
-#define HEAP_START (0x20000000)
-#define STACK_TOP  (0x90000000)
+#define PROCESS_HEAP_START  (0x20000000)
+#define PROCESS_HEAP_END    (0x70000000)
 
 /* Pointer to free space in the morecore area. */
-static uintptr_t morecore_base = (uintptr_t) HEAP_START;
-static uintptr_t morecore_top = (uintptr_t) STACK_TOP - ((1 << seL4_PageBits) * 28);
+static uintptr_t morecore_base = (uintptr_t) PROCESS_HEAP_START;
+static uintptr_t morecore_top = (uintptr_t) PROCESS_HEAP_END;
 
 /* Actual morecore implementation
    returns 0 if failure, returns newbrk if success.

@@ -336,14 +336,14 @@ void start_first_process(char* app_name, seL4_CPtr fault_ep) {
 
     /* Heap region */
     err = as_define_region(tty_test_process.addrspace,
-                           0x20000000,
-                           (PROCESS_STACK_TOP - ((1 << seL4_PageBits) * 28)) - 0x20000000,
+                           PROCESS_HEAP_START,
+                           PROCESS_HEAP_END - PROCESS_HEAP_START,
                            seL4_AllRights);
 
     /* Stack region */
     err = as_define_region(tty_test_process.addrspace,
-                           PROCESS_STACK_TOP - ((1 << seL4_PageBits) * 28),
-                           (1 << seL4_PageBits) * 28,
+                           PROCESS_STACK_BOT,
+                           PROCESS_STACK_TOP - PROCESS_STACK_BOT,
                            seL4_AllRights);
     conditional_panic(err, "Could not define region");
 
