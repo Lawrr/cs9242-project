@@ -5,7 +5,9 @@ void frame_init();
 
 int32_t frame_alloc(seL4_Word *vaddr);
 
-void frame_free(seL4_Word vaddr);
+int32_t frame_free(seL4_Word vaddr);
 
 seL4_CPtr get_cap(seL4_Word vaddr);
+seL4_CPtr get_app_cap(seL4_Word vadrr,seL4_Word asid,seL4_CPtr *cap_ret);
+int32_t insert_app_cap(seL4_Word vaddr,seL4_CPtr cap,seL4_Word asid);
 #endif /* _FRAMETABLE_H_ */

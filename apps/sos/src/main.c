@@ -65,7 +65,6 @@ const seL4_BootInfo* _boot_info;
 
 
 struct {
-
     seL4_Word tcb_addr;
     seL4_TCB tcb_cap;
 
@@ -76,6 +75,7 @@ struct {
     seL4_CPtr ipc_buffer_cap;
 
     cspace_t *croot;
+
     struct app_addrspace *addrspace;
 } tty_test_process;
 
@@ -155,15 +155,35 @@ void syscall_loop(seL4_CPtr ep) {
 
         }else if(label == seL4_VMFault){
             /* Page fault */
-            dprintf(0, "vm fault at 0x%08x, pc = 0x%08x, %s\n", seL4_GetMR(1),
+            dprintf(0, "vm fault at 0x%08x, pc = 0x%08x, %s\n", 
+                    seL4_GetMR(1),
                     seL4_GetMR(0),
                     seL4_GetMR(2) ? "Instruction Fault" : "Data fault");
             int err;
             
-            err = sos_map_page(seL4_GetMR(1));
+            seL4_Word sos_vaddr, map_vaddr;
 
-            conditional_panic(err, "Fail to map the actual page"); 
-            //assert(!"Unable to handle vm faults");
+            /* Check whether instruction fault or data fault */
+            if (seL4_GetMR(2)) {
+                /* Instruction fault */
+                map_vaddr = seL4_GetMR(0);
+            } else {
+                /* Data fault */
+                map_vaddr = seL4_GetMR(1);
+            }
+            err = sos_map_page(map_vaddr, 
+                               tty_test_process.vroot, 
+                               tty_test_process.addrspace, 
+                               &sos_vaddr);
+            conditional_panic(err, "Fail to map the page to the application\n"); 
+
+            /* Save the caller */
+            seL4_CPtr reply_cap = cspace_save_reply_cap(cur_cspace);
+            assert(reply_cap != CSPACE_NULL);
+
+            seL4_MessageInfo_t reply = seL4_MessageInfo_new(0, 0, 0, 0);
+            seL4_Send(reply_cap, reply);
+
         }else if(label == seL4_NoFault) {
             /* System call */
             handle_syscall(badge, seL4_MessageInfo_get_length(message) - 1);
@@ -240,8 +260,6 @@ static void print_bootinfo(const seL4_BootInfo* info) {
 void start_first_process(char* app_name, seL4_CPtr fault_ep) {
     int err;
 
-    seL4_Word stack_addr;
-    seL4_CPtr stack_cap;
     seL4_CPtr user_ep_cap;
 
     /* These required for setting up the TCB */
@@ -311,36 +329,29 @@ void start_first_process(char* app_name, seL4_CPtr fault_ep) {
 
     /* load the elf image */
     tty_test_process.addrspace = as_new();
-    err = app_elf_load(tty_test_process.addrspace, elf_base);
+    err = elf_load(tty_test_process.vroot, tty_test_process.addrspace, elf_base);
     conditional_panic(err, "Failed to load elf image");
 
+    /* Heap region */
+    err = as_define_region(tty_test_process.addrspace,
+                           PROCESS_HEAP_START,
+                           PROCESS_HEAP_END - PROCESS_HEAP_START,
+                           seL4_AllRights);
+    conditional_panic(err, "Could not define heap region");
+
     /* Stack region */
-    as_define_region(tty_test_process.addrspace,
-                     PROCESS_STACK_TOP - (1 << seL4_PageBits),
-                     (1 << seL4_PageBits),
-                     seL4_AllRights);
+    err = as_define_region(tty_test_process.addrspace,
+                           PROCESS_STACK_BOT,
+                           PROCESS_STACK_TOP - PROCESS_STACK_BOT,
+                           seL4_AllRights);
+    conditional_panic(err, "Could not define stack region");
 
-  //  /* Create a stack frame */
-  //  stack_addr = ut_alloc(seL4_PageBits);
-  //  conditional_panic(!stack_addr, "No memory for stack");
-  //  err =  cspace_ut_retype_addr(stack_addr,
-  //                               seL4_ARM_SmallPageObject,
-  //                               seL4_PageBits,
-  //                               cur_cspace,
-  //                               &stack_cap);
-  //  conditional_panic(err, "Unable to allocate page for stack");
-
-  //  /* Map in the stack frame for the user app */
-  //  err = map_page(stack_cap, tty_test_process.vroot,
-  //                 PROCESS_STACK_TOP - (1 << seL4_PageBits),
-  //                 seL4_AllRights, seL4_ARM_Default_VMAttributes);
-  //  conditional_panic(err, "Unable to map stack IPC buffer for user app");
-
-    /* Map in the IPC buffer for the thread */
-    err = map_page(tty_test_process.ipc_buffer_cap, tty_test_process.vroot,
-                   PROCESS_IPC_BUFFER,
-                   seL4_AllRights, seL4_ARM_Default_VMAttributes);
-    conditional_panic(err, "Unable to map IPC buffer for user app");
+    /* IPC buffer region */
+    err = as_define_region(tty_test_process.addrspace,
+                           PROCESS_IPC_BUFFER,
+                           PROCESS_VMEM_START - PROCESS_IPC_BUFFER,
+                           seL4_AllRights);
+    conditional_panic(err, "Could not define IPC buffer region");
 
     /* Start the new process */
     memset(&context, 0, sizeof(context));
@@ -481,92 +492,6 @@ void frame_table_test() {
         assert(*vaddr == 0x37);
     }
 }
-
-int 
-sos_map_page(seL4_Word vaddr) {
-    seL4_Word sos_vaddr;
-    int err = frame_alloc(&sos_vaddr);	
-    conditional_panic(err, "Probably insufficient memory");
-
-    seL4_CPtr cap = get_cap(sos_vaddr);
-    seL4_CPtr copied_cap = cspace_mint_cap(tty_test_process.croot,
-                                           cur_cspace,
-                                           cap,
-                                           seL4_AllRights);
-
-    // Get the addr to simplify later implementation
-    struct page_table_entry ***page_table_vaddr = &(tty_test_process.addrspace->page_table);
-    printf("error 3\n");
-
-    // Invalid mapping NULL 
-    if (vaddr == NULL) {
-        conditional_panic(-1, "Mapping NULL virtual address");
-    }
-
-    seL4_Word index1 = vaddr >> 22;
-    seL4_Word index2 = (vaddr << 10) >> 22;
-    printf("error 4\n");
-
-    // Checking with the region the check the permission
-    struct region *curr_region = tty_test_process.addrspace->regions;
-    printf("error 4.1\n");
-    while (curr_region != NULL) {
-    printf("error 4.2\n");
-        printf("%x >= %x && %x < %x\n", vaddr, curr_region->baseaddr, vaddr, curr_region->baseaddr + curr_region->size);
-        if (vaddr >= curr_region->baseaddr &&
-            vaddr < curr_region->baseaddr + curr_region->size) {
-            break;
-            /*TODO:Deal with permission stuff
-             *
-             */
-        }
-
-        curr_region = curr_region->next;
-    } 
-    printf("error 5\n");
-
-    // Can't find the region that contains thisvaddr
-    if (curr_region == NULL) {
-        // Simply conditional panic for now
-        conditional_panic(-1, "No region contains this vaddr");
-    }
-    printf("error 6\n");
-
-    // No page table yet
-    if (*page_table_vaddr == NULL) {
-    printf("error 7.1\n");
-        // First level
-        err = frame_alloc(page_table_vaddr);
-        conditional_panic(err, "No memory for new Shadow Page Directory");
-
-        // Second level
-        err = frame_alloc(&(*page_table_vaddr)[index1]);
-        conditional_panic(err, "No memory for new Shadow Page Directory");
-
-    } else if ((*page_table_vaddr)[index1] == NULL) {
-    printf("error 7.2\n");
-        // Second level
-        err = frame_alloc(&(*page_table_vaddr)[index1]);
-        conditional_panic(err,"No memory for new Shadow Page Directory");
-
-    }
-
-    printf("error 8\n");
-    // Call the internal kernel page mapping 
-    printf("%x\n", copied_cap);
-    err = map_page(copied_cap, tty_test_process.vroot, vaddr, seL4_AllRights, seL4_ARM_Default_VMAttributes);
-    printf("Error code: %d\n", err);
-    conditional_panic(err, "Internal map_page fail");
-    printf("error 9\n");
-
-    struct page_table_entry pte;
-    pte.cap = cap;
-    (*page_table_vaddr)[index1][index2] = pte;
-    printf("error 10\n");
-
-    return err;
-}
-
 
 /*
  * Main entry point - called by crt.

@@ -6,6 +6,7 @@
 #include <cspace/cspace.h>
 
 #include "ut_manager/ut.h"
+#include "mapping.h"
 
 #include <sys/panic.h>
 
@@ -13,28 +14,39 @@
 #define INDEX_ADDR_OFFSET 12 /* Bits to shift */
 
 static struct frame_entry {
-    /* Reserve 3 bits for type */
-    /* 000 for 'valid' */
-    //seL4_Word entry;
     seL4_CPtr cap;
+    struct app_cap *app_cap_list;
     int32_t next_index;
 };
 
-static struct frame_table_cap {
+static struct frame_table_cap { 
+    int ref;
     seL4_CPtr cap;
     struct frame_table_cap *next;
 };
 
+struct app_cap {
+    seL4_Word asid;
+    seL4_CPtr cap;
+    struct app_cap *next;
+};
+
 static struct frame_entry *frame_table;
-static uint64_t base_addr; /* Untyped region after end of frame table */
+
+/* Untyped region after end of frame table */
+static uint64_t base_addr;
+
 static int32_t low_addr;
 static int32_t high_addr;
-static int free_index; /* -1 no free_list but memory is not full
-                          -2 no free_list and memory is full (swapping later) */
+
+/* -1 no free_list but memory is not full
+   -2 no free_list and memory is full (swapping later)*/
+static int32_t free_index; 
+
 static struct frame_table_cap *frame_table_cap_head;
 
 void frame_init(seL4_Word high,seL4_Word low) {
-    int err;
+    int32_t err;
     uint64_t low64 = low;
     uint64_t high64 = high;
     uint64_t entry_size = sizeof(struct frame_entry);
@@ -159,13 +171,52 @@ int32_t frame_alloc(seL4_Word *vaddr) {
     return 0;
 }
 
-void frame_free(seL4_Word vaddr) {
+int32_t frame_free(seL4_Word vaddr) {
     uint32_t index = (vaddr - PROCESS_VMEM_START + low_addr - base_addr) >> INDEX_ADDR_OFFSET;
+    
+    //The frame is not yet allocated
+    if (frame_table[index].cap == seL4_CapNull) return -1;
+    
     frame_table[index].next_index = free_index;
     free_index = index;
+
+    return 0;
 }
 
-seL4_CPtr get_cap(seL4_Word vaddr){
+seL4_CPtr get_cap(seL4_Word vaddr) {
     uint32_t index = (vaddr - PROCESS_VMEM_START + low_addr - base_addr) >> INDEX_ADDR_OFFSET;
     return frame_table[index].cap;
+}
+
+static struct app_cap* app_cap_new(seL4_CPtr cap,seL4_Word asid) {
+    struct app_cap * new_app_cap = malloc(sizeof(struct app_cap));
+    if (new_app_cap == NULL) return NULL;
+    new_app_cap->next = NULL;
+    new_app_cap->asid = asid;
+    new_app_cap->cap = cap;
+    return new_app_cap;
+}
+
+int32_t insert_app_cap(seL4_Word vaddr, seL4_CPtr cap,seL4_Word asid) {
+    uint32_t index = (vaddr - PROCESS_VMEM_START + low_addr - base_addr) >> INDEX_ADDR_OFFSET;
+    struct app_cap *copied_cap = app_cap_new(cap,asid);
+    if (frame_table[index].cap == seL4_CapNull) return -1;
+    copied_cap->next = frame_table[index].app_cap_list;
+    frame_table[index].app_cap_list = copied_cap;
+    return 0;
+}
+
+int32_t get_app_cap(seL4_Word vaddr, seL4_Word asid,seL4_CPtr *cap_ret){
+    uint32_t index = (vaddr - PROCESS_VMEM_START + low_addr - base_addr) >> INDEX_ADDR_OFFSET;
+    struct app_cap * curr_cap = frame_table[index].app_cap_list;
+    if (frame_table[index].cap == seL4_CapNull) return -1;
+    while (curr_cap != NULL){
+	if (curr_cap -> asid == asid) break;
+    }  
+    if (curr_cap == NULL) {
+       return -1;
+    }  else{
+       *cap_ret = curr_cap -> cap;
+       return 0;
+    }
 }

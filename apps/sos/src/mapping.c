@@ -8,18 +8,25 @@
  * @TAG(NICTA_BSD)
  */
 
+#include <elf/elf.h>
+
 #include "mapping.h"
 
 #include <ut_manager/ut.h>
 #include "vmem_layout.h"
+#include "addrspace.h"
+#include "frametable.h"
 
 #define verbose 0
 #include <sys/panic.h>
 #include <sys/debug.h>
 #include <cspace/cspace.h>
+#define INDEX1_SHIFT 22 
+#define PAGE_BITS 12
+#define INDEX2_MASK (1023 << PAGE_BITS)
+#define PAGE_MASK (~0xFFF)
 
 extern const seL4_BootInfo* _boot_info;
-
 
 /**
  * Maps a page table into the root servers page directory
@@ -105,4 +112,100 @@ map_device(void* paddr, int size){
     return (void*)vstart;
 }
 
+int sos_ummap_page(seL4_Word vaddr,seL4_Word asid){
+    seL4_CPtr cap;
+    int err = get_app_cap((vaddr>>PAGE_BITS)<<PAGE_BITS,asid,&cap); 
+    if (err != 0) return err;
+    err = seL4_ARM_Page_Unmap(cap);
+    if (err != 0) return err;
+    cspace_delete_cap(cur_cspace,cap);
+    return err;
+}
 
+int 
+sos_map_page(seL4_Word vaddr, seL4_ARM_PageDirectory pd, struct app_addrspace *as, seL4_Word *sos_vaddr_ret) {
+    int err;
+    /* Get the addr to simplify later implementation */
+    struct page_table_entry ***page_table_vaddr = &(as->page_table);
+    
+    /* Invalid mapping NULL */
+    if (((void *) vaddr) == NULL) {
+        return -1;
+    }
+
+    seL4_Word index1 = vaddr >> INDEX1_SHIFT;
+    seL4_Word index2 = (vaddr & INDEX2_MASK) >> PAGE_BITS;
+
+    /* Checking with the region the check the permission */
+    struct region *curr_region = as->regions;
+    while (curr_region != NULL) {
+        if (vaddr >= curr_region->baseaddr &&
+            vaddr < curr_region->baseaddr + curr_region->size) {
+            break;
+        }
+        curr_region = curr_region->next;
+    }
+
+    /* Can't find the region that contains thisvaddr */
+    if (curr_region == NULL) {
+        return -1;
+    }
+
+    /* No page table yet */
+    if (*page_table_vaddr == NULL) {
+        /* First level */
+        err = frame_alloc(page_table_vaddr);
+        if (err) {
+            return err;
+        }
+
+        /* Second level */
+        err = frame_alloc(&(*page_table_vaddr)[index1]);
+        if (err) {
+            return err;
+        }
+
+    } else if ((*page_table_vaddr)[index1] == NULL) {
+        /* Second level */
+        err = frame_alloc(&(*page_table_vaddr)[index1]);
+        if (err) {
+            return err;
+        }
+    }
+
+    /* Call the internal kernel page mapping */
+    seL4_Word sos_vaddr;
+    err = frame_alloc(&sos_vaddr);	
+    if (err) {
+        return err;
+    }
+
+    seL4_Word cap = get_cap(sos_vaddr);
+
+    seL4_Word copied_cap = cspace_copy_cap(cur_cspace,
+                                           cur_cspace,
+                                           cap,
+                                           seL4_AllRights);
+
+    err = map_page(copied_cap,
+		           pd,
+		           (vaddr >> PAGE_BITS) << PAGE_BITS,
+		           curr_region->permissions,
+		           seL4_ARM_Default_VMAttributes);
+    if (err) {
+        cspace_delete_cap(cur_cspace, copied_cap);
+        frame_free(sos_vaddr);
+        return err;
+    }
+    
+    /* Book keeping the copied caps */
+    insert_app_cap(sos_vaddr & PAGE_MASK, copied_cap,0);//dull asid for now
+    
+    /* Book keeping in our own page table */
+    struct page_table_entry pte = {(sos_vaddr & PAGE_MASK) |
+                                   (curr_region->permissions | PTE_VALID)};
+    (*page_table_vaddr)[index1][index2] = pte;
+
+    *sos_vaddr_ret = sos_vaddr;
+    return 0;
+}

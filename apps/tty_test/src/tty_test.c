@@ -59,7 +59,7 @@ do_pt_test(char *buf)
     }
 }
 
-static void
+void
 pt_test( void )
 {
     /* need a decent sized stack */
