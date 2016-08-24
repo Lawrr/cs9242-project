@@ -112,13 +112,13 @@ map_device(void* paddr, int size){
     return (void*)vstart;
 }
 
-int sos_ummap_page(seL4_Word vaddr,seL4_Word asid){
+int sos_ummap_page(seL4_Word vaddr, seL4_Word asid){
     seL4_CPtr cap;
-    int err = get_app_cap((vaddr>>PAGE_BITS)<<PAGE_BITS,asid,&cap); 
+    int err = get_app_cap((vaddr>>PAGE_BITS) << PAGE_BITS, asid, &cap); 
     if (err != 0) return err;
     err = seL4_ARM_Page_Unmap(cap);
     if (err != 0) return err;
-    cspace_delete_cap(cur_cspace,cap);
+    cspace_delete_cap(cur_cspace, cap);
     return err;
 }
 
@@ -199,7 +199,8 @@ sos_map_page(seL4_Word vaddr, seL4_ARM_PageDirectory pd, struct app_addrspace *a
     }
     
     /* Book keeping the copied caps */
-    insert_app_cap(sos_vaddr & PAGE_MASK, copied_cap,0);//dull asid for now
+    // TODO dud asid for now
+    insert_app_cap(sos_vaddr & PAGE_MASK, copied_cap, 0);
     
     /* Book keeping in our own page table */
     struct page_table_entry pte = {(sos_vaddr & PAGE_MASK) |
