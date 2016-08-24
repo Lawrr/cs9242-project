@@ -347,10 +347,9 @@ void start_first_process(char* app_name, seL4_CPtr fault_ep) {
     conditional_panic(err, "Could not define stack region");
 
     /* IPC buffer region */
-    err = as_define_region(tty_test_process.addrspace,
-                           PROCESS_IPC_BUFFER,
-                           PROCESS_VMEM_START - PROCESS_IPC_BUFFER,
-                           seL4_AllRights);
+    err = map_page(tty_test_process.ipc_buffer_cap, tty_test_process.vroot,
+                   PROCESS_IPC_BUFFER,
+                   seL4_AllRights, seL4_ARM_Default_VMAttributes);
     conditional_panic(err, "Could not define IPC buffer region");
 
     /* Start the new process */
