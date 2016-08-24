@@ -112,7 +112,7 @@ map_device(void* paddr, int size){
     return (void*)vstart;
 }
 
-int sos_ummap_page(seL4_Word vaddr, seL4_Word asid){
+int sos_ummap_page(seL4_Word vaddr, seL4_Word asid) {
     seL4_CPtr cap;
     int err = get_app_cap((vaddr>>PAGE_BITS) << PAGE_BITS, asid, &cap); 
     if (err != 0) return err;
