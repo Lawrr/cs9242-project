@@ -22,21 +22,25 @@
 #define SYSCALL_ENDPOINT_SLOT  (1)
 
 int sos_sys_open(const char *path, fmode_t mode) {
+    // TODO for M4
     assert(!"You need to implement this");
     return -1;
 }
 
 int sos_sys_close(int file) {
+    // TODO for M4
     printf("System call not yet implemented\n");
     return -1;
 }
 
 int sos_sys_read(int file, char *buf, size_t nbyte) {
+    // TODO for M4
     assert(!"You need to implement this");
     return -1;
 }
 
 int sos_sys_write(int file, const char *buf, size_t nbyte) {
+    // TODO for M4
     assert(!"You need to implement this");
     return -1;
 }
@@ -77,10 +81,12 @@ pid_t sos_process_wait(pid_t pid) {
 }
 
 void sos_sys_usleep(int msec) {
+    // TODO for M4
     assert(!"You need to implement this");
 }
 
 int64_t sos_sys_time_stamp(void) {
+    // TODO for M4
     assert(!"You need to implement this");
     return -1;
 }
