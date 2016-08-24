@@ -123,8 +123,9 @@ int sos_ummap_page(seL4_Word vaddr, seL4_Word asid) {
 }
 
 int 
-sos_map_page(seL4_Word vaddr, seL4_ARM_PageDirectory pd, struct app_addrspace *as, seL4_Word *sos_vaddr_ret) {
+sos_map_page(seL4_Word vaddr_unaligned, seL4_ARM_PageDirectory pd, struct app_addrspace *as, seL4_Word *sos_vaddr_ret) {
     int err;
+    seL4_Word vaddr = vaddr_unaligned & PAGE_MASK;
     /* Get the addr to simplify later implementation */
     struct page_table_entry ***page_table_vaddr = &(as->page_table);
     
@@ -139,8 +140,8 @@ sos_map_page(seL4_Word vaddr, seL4_ARM_PageDirectory pd, struct app_addrspace *a
     /* Checking with the region the check the permission */
     struct region *curr_region = as->regions;
     while (curr_region != NULL) {
-        if (vaddr >= curr_region->baseaddr &&
-            vaddr < curr_region->baseaddr + curr_region->size) {
+        if (vaddr_unaligned >= curr_region->baseaddr &&
+            vaddr_unaligned < curr_region->baseaddr + curr_region->size) {
             break;
         }
         curr_region = curr_region->next;
@@ -148,6 +149,7 @@ sos_map_page(seL4_Word vaddr, seL4_ARM_PageDirectory pd, struct app_addrspace *a
 
     /* Can't find the region that contains thisvaddr */
     if (curr_region == NULL) {
+        printf("%x\n", vaddr);
         return -1;
     }
 
@@ -171,6 +173,10 @@ sos_map_page(seL4_Word vaddr, seL4_ARM_PageDirectory pd, struct app_addrspace *a
         if (err) {
             return err;
         }
+    }
+
+    if ((*page_table_vaddr)[index1][index2].sos_vaddr != NULL) {
+        return -1;
     }
 
     /* Call the internal kernel page mapping */
