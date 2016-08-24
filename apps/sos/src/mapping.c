@@ -112,19 +112,20 @@ map_device(void* paddr, int size){
     return (void*)vstart;
 }
 
-int sos_ummap_page(seL4_Word vaddr,seL4_Word asid){
+int sos_ummap_page(seL4_Word vaddr, seL4_Word asid) {
     seL4_CPtr cap;
-    int err = get_app_cap((vaddr>>PAGE_BITS)<<PAGE_BITS,asid,&cap); 
+    int err = get_app_cap((vaddr>>PAGE_BITS) << PAGE_BITS, asid, &cap); 
     if (err != 0) return err;
     err = seL4_ARM_Page_Unmap(cap);
     if (err != 0) return err;
-    cspace_delete_cap(cur_cspace,cap);
+    cspace_delete_cap(cur_cspace, cap);
     return err;
 }
 
 int 
-sos_map_page(seL4_Word vaddr, seL4_ARM_PageDirectory pd, struct app_addrspace *as, seL4_Word *sos_vaddr_ret) {
+sos_map_page(seL4_Word vaddr_unaligned, seL4_ARM_PageDirectory pd, struct app_addrspace *as, seL4_Word *sos_vaddr_ret) {
     int err;
+    seL4_Word vaddr = vaddr_unaligned & PAGE_MASK;
     /* Get the addr to simplify later implementation */
     struct page_table_entry ***page_table_vaddr = &(as->page_table);
     
@@ -139,8 +140,8 @@ sos_map_page(seL4_Word vaddr, seL4_ARM_PageDirectory pd, struct app_addrspace *a
     /* Checking with the region the check the permission */
     struct region *curr_region = as->regions;
     while (curr_region != NULL) {
-        if (vaddr >= curr_region->baseaddr &&
-            vaddr < curr_region->baseaddr + curr_region->size) {
+        if (vaddr_unaligned >= curr_region->baseaddr &&
+            vaddr_unaligned < curr_region->baseaddr + curr_region->size) {
             break;
         }
         curr_region = curr_region->next;
@@ -148,6 +149,7 @@ sos_map_page(seL4_Word vaddr, seL4_ARM_PageDirectory pd, struct app_addrspace *a
 
     /* Can't find the region that contains thisvaddr */
     if (curr_region == NULL) {
+        printf("%x\n", vaddr);
         return -1;
     }
 
@@ -171,6 +173,10 @@ sos_map_page(seL4_Word vaddr, seL4_ARM_PageDirectory pd, struct app_addrspace *a
         if (err) {
             return err;
         }
+    }
+
+    if ((*page_table_vaddr)[index1][index2].sos_vaddr != NULL) {
+        return -1;
     }
 
     /* Call the internal kernel page mapping */
@@ -199,7 +205,8 @@ sos_map_page(seL4_Word vaddr, seL4_ARM_PageDirectory pd, struct app_addrspace *a
     }
     
     /* Book keeping the copied caps */
-    insert_app_cap(sos_vaddr & PAGE_MASK, copied_cap,0);//dull asid for now
+    // TODO dud asid for now
+    insert_app_cap(sos_vaddr & PAGE_MASK, copied_cap, 0);
     
     /* Book keeping in our own page table */
     struct page_table_entry pte = {(sos_vaddr & PAGE_MASK) |

@@ -108,7 +108,7 @@ static int load_segment_into_vspace(seL4_ARM_PageDirectory dest_pd,
         kvpage = PAGE_ALIGN(kdst);
 
         /* Map the frame into tty_test address spaces */
-        err = sos_map_page(vpage, dest_pd, dest_as, &sos_vaddr);
+        err = sos_map_page(dst, dest_pd, dest_as, &sos_vaddr);
         if (err) {
             return err;
         }
