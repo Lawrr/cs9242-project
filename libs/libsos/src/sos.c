@@ -15,7 +15,6 @@
 #include <sos.h>
 
 #include <sel4/sel4.h>
-
 /**
  * This is our system call endpoint cap, as defined by the root server
  */
@@ -35,6 +34,20 @@ int sos_sys_close(int file) {
 
 int sos_sys_read(int file, char *buf, size_t nbyte) {
     // TODO for M4
+
+    // Set up message
+    int numRegs = 3;
+    seL4_MessageInfo_t tag = seL4_MessageInfo_new(seL4_NoFault, 0, 0, numRegs);
+    seL4_SetTag(tag);
+
+    char hello[30];
+    // Set syscall number
+    seL4_SetMR(0, 1);
+    // Set data length
+    seL4_SetMR(1, 30);
+    seL4_SetMR(2,&hello);
+    
+    seL4_Call(SYSCALL_ENDPOINT_SLOT,tag);
     assert(!"You need to implement this");
     return -1;
 }

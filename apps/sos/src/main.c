@@ -25,10 +25,12 @@
 #include "frametable.h"
 #include "network.h"
 #include "elf.h"
-
+#include "sos_syscall.h"
 #include "ut_manager/ut.h"
 #include "vmem_layout.h"
 #include "mapping.h"
+
+#include "sos_syscall.h"
 
 #include <autoconf.h>
 
@@ -79,10 +81,6 @@ struct {
     struct app_addrspace *addrspace;
 } tty_test_process;
 
-/*
- * Syscall numbers
- */
-#define SOS_WRITE_DATA 0
 
 seL4_CPtr _sos_ipc_ep_cap;
 seL4_CPtr _sos_interrupt_ep_cap;
@@ -94,6 +92,33 @@ struct serial *serial_handle;
  */
 extern fhandle_t mnt_point;
 
+//10 for now
+char serialBuffer[10];
+int curr = 0;
+void serial_handler(struct serial * serial, char c){
+    serialBuffer[curr%10] = c;    
+    curr=(curr+1)%10;
+    if (curr == 10) {
+       
+    }
+    dprintf(-2,"Inside serialhandler%d\n",curr);
+}
+void timer_callback(int id,void *data){
+   if (curr == 9) {
+      seL4_CPtr reply_cap = ((seL4_CPtr *)data)[0];
+      seL4_Word sosAddr = ((seL4_CPtr *)data)[4];
+      seL4_MessageInfo_t reply = seL4_MessageInfo_new(0, 0, 0, 1);
+    
+      serialBuffer[9] = '\0';
+      memcpy((void*)sosAddr,(void *)serialBuffer,10);
+      seL4_SetMR(0, 10);
+      seL4_Send(reply_cap, reply);
+      printf("gg\n");
+   }  else{
+      register_timer(200000,timer_callback,data);
+      printf("in timer%d\n",curr);
+   }
+}
 
 void handle_syscall(seL4_Word badge, int num_args) {
     seL4_Word syscall_number;
@@ -108,7 +133,7 @@ void handle_syscall(seL4_Word badge, int num_args) {
 
     /* Process system call */
     switch (syscall_number) {
-    case SOS_WRITE_DATA:
+    case SOS_WRITE_SYSCALL:
         dprintf(0, "Message received from user program\n");
 
         // Get data length
@@ -125,6 +150,41 @@ void handle_syscall(seL4_Word badge, int num_args) {
         seL4_Send(reply_cap, reply);
         break;
 
+    case SOS_READ_SYSCALL:{
+           seL4_Word uBufSize = seL4_GetMR(1);
+	   seL4_Word userAddr = seL4_GetMR(2);
+	   seL4_Word index1 = userAddr >> 22;
+	  
+	   seL4_Word index2 = (userAddr << 10)>>22;
+	   struct page_table_entry ** page_table = tty_test_process.addrspace->page_table;
+	   if (page_table == NULL || page_table[index1] == NULL){
+              seL4_CPtr app_cap;
+              seL4_CPtr sos_vaddr;
+	      int err = sos_map_page(userAddr, 
+                               tty_test_process.vroot, 
+                               tty_test_process.addrspace, 
+                               &sos_vaddr,
+			       &app_cap);
+              conditional_panic(err, "Fail to map the page to the application\n");
+	   }
+
+
+	   seL4_Word sosAddr = tty_test_process.addrspace->page_table[index1][index2].sos_vaddr;
+           if (curr == 9){
+	       serialBuffer[10] = '\0';
+               memcpy((void*)sosAddr,(void *)serialBuffer,10);
+               seL4_SetMR(0, 10);
+               seL4_Send(reply_cap, reply);
+           }   else{
+	       char buffer[8];
+	       *((seL4_CPtr*)buffer) = reply_cap;
+               *((seL4_Word*)(buffer+4)) = sosAddr;	        
+               register_timer(2000000,timer_callback,(void*)buffer);
+
+           }
+	}
+        break;	
+    
     default:
         printf("Unknown syscall %d\n", syscall_number);
         /* we don't want to reply to an unknown syscall */
@@ -501,6 +561,10 @@ void frame_table_test() {
     }
 }
 
+
+
+
+
 /*
  * Main entry point - called by crt.
  */
@@ -522,6 +586,8 @@ int main(void) {
     
     /* Initialise serial driver */
     serial_handle = serial_init();
+    serial_register_handler(serial_handle, serial_handler); 
+
 
     /* Start the user application */
     start_first_process(TTY_NAME, _sos_ipc_ep_cap);
@@ -535,5 +601,6 @@ int main(void) {
     /* Not reached */
     return 0;
 }
+
 
 
