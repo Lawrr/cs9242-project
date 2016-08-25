@@ -231,10 +231,14 @@ void syscall_loop(seL4_CPtr ep) {
                 /* Data fault */
                 map_vaddr = seL4_GetMR(1);
             }
+
+	    //Not used
+	    seL4_CPtr app_cap;
             err = sos_map_page(map_vaddr, 
                                tty_test_process.vroot, 
                                tty_test_process.addrspace, 
-                               &sos_vaddr);
+                               &sos_vaddr,
+			       &app_cap);
             conditional_panic(err, "Fail to map the page to the application\n"); 
 
             /* Save the caller */
@@ -357,13 +361,14 @@ void start_first_process(char* app_name, seL4_CPtr fault_ep) {
     err = sos_map_page(PROCESS_IPC_BUFFER,
                        tty_test_process.vroot,
                        tty_test_process.addrspace,
-                       &tty_test_process.ipc_buffer_addr);
+                       &tty_test_process.ipc_buffer_addr,
+		       &tty_test_process.ipc_buffer_cap);
     conditional_panic(err, "No memory for ipc buffer");
-    // TODO dud asid number
+    /* TODO dud asid number
     err = get_app_cap(tty_test_process.ipc_buffer_addr,
-                      0,
+                      tty_test_process.addrspace->page_table,
                       &tty_test_process.ipc_buffer_cap);
-    conditional_panic(err, "Can't get app cap");
+    conditional_panic(err, "Can't get app cap");*/
 
     /* Copy the fault endpoint to the user app to enable IPC */
     user_ep_cap = cspace_mint_cap(tty_test_process.croot,
