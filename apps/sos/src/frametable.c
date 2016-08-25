@@ -9,7 +9,7 @@
 #include "mapping.h"
 
 #include <sys/panic.h>
-
+#define PAGE_TABLE_MASK (0xFFF00000)
 #define PAGE_SIZE 4096lu /* Bytes */
 #define INDEX_ADDR_OFFSET 12 /* Bits to shift */
 
@@ -26,7 +26,7 @@ static struct frame_table_cap {
 };
 
 struct app_cap {
-    seL4_Word asid;
+    struct page_table_entry *pte;
     seL4_CPtr cap;
     struct app_cap *next;
 };
@@ -188,20 +188,20 @@ seL4_CPtr get_cap(seL4_Word vaddr) {
     return frame_table[index].cap;
 }
 
-static struct app_cap *app_cap_new(seL4_CPtr cap, seL4_Word asid) {
+static struct app_cap *app_cap_new(seL4_CPtr cap, struct page_table_entry* pte) {
     struct app_cap *new_app_cap = malloc(sizeof(struct app_cap));
     if (new_app_cap == NULL) return NULL;
     new_app_cap->next = NULL;
-    new_app_cap->asid = asid;
+    new_app_cap->pte = pte;
     new_app_cap->cap = cap;
     return new_app_cap;
 }
 
-int32_t insert_app_cap(seL4_Word vaddr, seL4_CPtr cap, seL4_Word asid) {
+int32_t insert_app_cap(seL4_Word vaddr, seL4_CPtr cap, struct page_table_entry * pte) {
     uint32_t index = (vaddr - PROCESS_VMEM_START + low_addr - base_addr) >> INDEX_ADDR_OFFSET;
     if (frame_table[index].cap == seL4_CapNull) return -1;
 
-    struct app_cap *copied_cap = app_cap_new(cap, asid);
+    struct app_cap *copied_cap = app_cap_new(cap, pte);
     if (copied_cap == NULL) return -1;
     
     copied_cap->next = frame_table[index].app_cap_list;
@@ -209,14 +209,17 @@ int32_t insert_app_cap(seL4_Word vaddr, seL4_CPtr cap, seL4_Word asid) {
     return 0;
 }
 
-int32_t get_app_cap(seL4_Word vaddr, seL4_Word asid, seL4_CPtr *cap_ret) {
+//Assume we don't need to traverse the list to find the corrsponding app_cap
+/*
+int32_t get_app_cap(seL4_Word vaddr, struct page_table_entry **page_table, seL4_CPtr *cap_ret) {
     uint32_t index = (vaddr - PROCESS_VMEM_START + low_addr - base_addr) >> INDEX_ADDR_OFFSET;
     if (frame_table[index].cap == seL4_CapNull) return -1;
 
     struct app_cap *curr_cap = frame_table[index].app_cap_list;
     while (curr_cap != NULL) {
-        if (curr_cap->asid == asid) break;
-        curr_cap = curr_cap->next;
+        if ((curr_cap->pte->sos_vaddr & PAGE_TABLE_MASK) == page_table) break;
+        printf("%x----%x\n",curr_cap->pte->sos_vaddr,page_table);
+	curr_cap = curr_cap->next;
     }
     if (curr_cap == NULL) {
        return -1;
@@ -224,4 +227,4 @@ int32_t get_app_cap(seL4_Word vaddr, seL4_Word asid, seL4_CPtr *cap_ret) {
        *cap_ret = curr_cap->cap;
        return 0;
     }
-}
+}*/
