@@ -101,22 +101,21 @@ void serial_handler(struct serial * serial, char c){
     if (curr == 10) {
        
     }
-    dprintf(-2,"Inside serialhandler%d\n",curr);
 }
 void timer_callback(int id,void *data){
    if (curr == 9) {
       seL4_CPtr reply_cap = ((seL4_CPtr *)data)[0];
-      seL4_Word sosAddr = ((seL4_CPtr *)data)[4];
+      seL4_Word sosAddr = ((seL4_Word *)data)[1];
       seL4_MessageInfo_t reply = seL4_MessageInfo_new(0, 0, 0, 1);
     
       serialBuffer[9] = '\0';
+      printf("cacacaca%x\n",reply_cap);
       memcpy((void*)sosAddr,(void *)serialBuffer,10);
       seL4_SetMR(0, 10);
       seL4_Send(reply_cap, reply);
       printf("gg\n");
    }  else{
       register_timer(200000,timer_callback,data);
-      printf("in timer%d\n",curr);
    }
 }
 
@@ -130,6 +129,8 @@ void handle_syscall(seL4_Word badge, int num_args) {
     /* Save the caller */
     reply_cap = cspace_save_reply_cap(cur_cspace);
     assert(reply_cap != CSPACE_NULL);
+    
+    int handled = 1;
 
     /* Process system call */
     switch (syscall_number) {
@@ -149,12 +150,12 @@ void handle_syscall(seL4_Word badge, int num_args) {
         seL4_SetMR(0, bytes_sent);
         seL4_Send(reply_cap, reply);
         break;
-
+         
     case SOS_READ_SYSCALL:{
            seL4_Word uBufSize = seL4_GetMR(1);
 	   seL4_Word userAddr = seL4_GetMR(2);
+	   printf("userAddr%x\n",userAddr); 
 	   seL4_Word index1 = userAddr >> 22;
-	  
 	   seL4_Word index2 = (userAddr << 10)>>22;
 	   struct page_table_entry ** page_table = tty_test_process.addrspace->page_table;
 	   if (page_table == NULL || page_table[index1] == NULL){
@@ -175,24 +176,28 @@ void handle_syscall(seL4_Word badge, int num_args) {
                memcpy((void*)sosAddr,(void *)serialBuffer,10);
                seL4_SetMR(0, 10);
                seL4_Send(reply_cap, reply);
+	       handled = 0;
            }   else{
-	       char buffer[8];
-	       *((seL4_CPtr*)buffer) = reply_cap;
-               *((seL4_Word*)(buffer+4)) = sosAddr;	        
+	       seL4_Word *buffer = malloc(2*sizeof(seL4_Word));
+	       buffer[0] = (seL4_Word)reply_cap;
+               printf("replaycap---%x\n",reply_cap);
+	       buffer[1] = sosAddr;	        
                register_timer(2000000,timer_callback,(void*)buffer);
-
+               handled = 0;
            }
 	}
         break;	
     
     default:
         printf("Unknown syscall %d\n", syscall_number);
-        /* we don't want to reply to an unknown syscall */
+        ///* we don't want to reply to an unknown syscall */
 
     }
 
+    if (handled){
     /* Free the saved reply cap */
-    cspace_free_slot(cur_cspace, reply_cap);
+       cspace_free_slot(cur_cspace, reply_cap);
+    }
 }
 
 void syscall_loop(seL4_CPtr ep) {
