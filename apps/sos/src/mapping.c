@@ -111,7 +111,7 @@ map_device(void* paddr, int size){
     }
     return (void*)vstart;
 }
-/*
+
 int sos_ummap_page(seL4_Word vaddr, seL4_Word asid) {
     seL4_CPtr cap;
     int err = get_app_cap((vaddr>>PAGE_BITS) << PAGE_BITS, asid, &cap); 
@@ -120,10 +120,10 @@ int sos_ummap_page(seL4_Word vaddr, seL4_Word asid) {
     if (err != 0) return err;
     cspace_delete_cap(cur_cspace, cap);
     return err;
-}*/
+}
 
 int 
-sos_map_page(seL4_Word vaddr_unaligned, seL4_ARM_PageDirectory pd, struct app_addrspace *as, seL4_Word *sos_vaddr_ret,seL4_CPtr*app_cap) {
+sos_map_page(seL4_Word vaddr_unaligned, seL4_ARM_PageDirectory pd, struct app_addrspace *as, seL4_Word *sos_vaddr_ret) {
     int err;
     seL4_Word vaddr = vaddr_unaligned & PAGE_MASK;
     /* Get the addr to simplify later implementation */
@@ -205,13 +205,14 @@ sos_map_page(seL4_Word vaddr_unaligned, seL4_ARM_PageDirectory pd, struct app_ad
     }
     
     /* Book keeping the copied caps */
-    insert_app_cap(sos_vaddr & PAGE_MASK, copied_cap, &(*page_table_vaddr)[index1][index2]);
+    // TODO dud asid for now
+    insert_app_cap(sos_vaddr & PAGE_MASK, copied_cap, 0);
     
     /* Book keeping in our own page table */
     struct page_table_entry pte = {(sos_vaddr & PAGE_MASK) |
                                    (curr_region->permissions | PTE_VALID)};
     (*page_table_vaddr)[index1][index2] = pte;
-    *app_cap = copied_cap;
+
     *sos_vaddr_ret = sos_vaddr;
     return 0;
 }
