@@ -20,6 +20,7 @@
 #include <elf/elf.h>
 #include <serial/serial.h>
 #include <clock/clock.h>
+#include <utils/page.h>
 
 #include "addrspace.h"
 #include "frametable.h"
@@ -58,8 +59,6 @@
 #define EPIT1_PADDR 0x020D0000
 #define EPIT2_PADDR 0x020D4000
 #define EPIT_REGISTERS 5
-
-#define PAGE_MASK (~0xFFF)
 
 /* The linker will link this symbol to the start address  *
  * of an archive of attached applications.                */
@@ -173,7 +172,7 @@ void handle_syscall(seL4_Word badge, int num_args) {
 
         seL4_Word sosAddr = ((tty_test_process.addrspace->page_table[index1][index2].sos_vaddr) >> 12) << 12;
         // Add offset
-        sosAddr |= (userAddr & ~PAGE_MASK);
+        sosAddr |= (userAddr & PAGE_MASK_4K);
         if (curr == 9) {
             serialBuffer[10] = '\0';
             memcpy((void*) sosAddr, (void *) serialBuffer, 10);
