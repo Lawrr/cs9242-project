@@ -26,6 +26,7 @@
 #include "frametable.h"
 #include "network.h"
 #include "elf.h"
+#include "sos_syscall.h"
 
 #include "ut_manager/ut.h"
 #include "vmem_layout.h"

@@ -208,7 +208,7 @@ sos_map_page(seL4_Word vaddr_unaligned, seL4_ARM_PageDirectory pd, struct app_ad
     insert_app_cap(PAGE_ALIGN_4K(sos_vaddr), copied_cap, &(*page_table_vaddr)[index1][index2]);
     
     /* Book keeping in our own page table */
-    struct page_table_entry pte = {(PAGE_ALIGN_4K(sos_vaddr) |
+    struct page_table_entry pte = {PAGE_ALIGN_4K(sos_vaddr) |
                                    (curr_region->permissions | PTE_VALID)};
     (*page_table_vaddr)[index1][index2] = pte;
     *app_cap = copied_cap;
