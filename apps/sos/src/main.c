@@ -26,12 +26,10 @@
 #include "frametable.h"
 #include "network.h"
 #include "elf.h"
-#include "sos_syscall.h"
+
 #include "ut_manager/ut.h"
 #include "vmem_layout.h"
 #include "mapping.h"
-
-#include "sos_syscall.h"
 
 #include <autoconf.h>
 
@@ -82,6 +80,10 @@ struct {
     struct app_addrspace *addrspace;
 } tty_test_process;
 
+/*
+ * Syscall numbers
+ */
+#define SOS_WRITE_DATA 0
 
 seL4_CPtr _sos_ipc_ep_cap;
 seL4_CPtr _sos_interrupt_ep_cap;
@@ -135,7 +137,7 @@ void handle_syscall(seL4_Word badge, int num_args) {
 
     /* Process system call */
     switch (syscall_number) {
-    case SOS_WRITE_SYSCALL:
+    case SOS_WRITE_DATA:
         dprintf(0, "Message received from user program\n");
 
         // Get data length
@@ -568,10 +570,6 @@ void frame_table_test() {
     }
 }
 
-
-
-
-
 /*
  * Main entry point - called by crt.
  */
@@ -593,8 +591,6 @@ int main(void) {
     
     /* Initialise serial driver */
     serial_handle = serial_init();
-    serial_register_handler(serial_handle, serial_handler); 
-
 
     /* Start the user application */
     start_first_process(TTY_NAME, _sos_ipc_ep_cap);
@@ -608,6 +604,5 @@ int main(void) {
     /* Not reached */
     return 0;
 }
-
 
 

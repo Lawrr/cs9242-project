@@ -15,6 +15,7 @@
 #include <sos.h>
 
 #include <sel4/sel4.h>
+
 /**
  * This is our system call endpoint cap, as defined by the root server
  */
