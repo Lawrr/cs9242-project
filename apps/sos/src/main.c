@@ -123,7 +123,6 @@ void handle_syscall(seL4_Word badge, int num_args) {
     seL4_Word syscall_number;
     seL4_CPtr reply_cap;
 
-
     syscall_number = seL4_GetMR(0);
 
     /* Save the caller */
@@ -151,43 +150,42 @@ void handle_syscall(seL4_Word badge, int num_args) {
         seL4_Send(reply_cap, reply);
         break;
          
-    case SOS_READ_SYSCALL:{
-           seL4_Word uBufSize = seL4_GetMR(1);
-	   seL4_Word userAddr = seL4_GetMR(2);
-	   printf("userAddr%x\n",userAddr); 
-	   seL4_Word index1 = userAddr >> 22;
-	   seL4_Word index2 = (userAddr << 10)>>22;
-	   struct page_table_entry ** page_table = tty_test_process.addrspace->page_table;
-	   if (page_table == NULL || page_table[index1] == NULL){
-              seL4_CPtr app_cap;
-              seL4_CPtr sos_vaddr;
-	      int err = sos_map_page(userAddr, 
-                               tty_test_process.vroot, 
-                               tty_test_process.addrspace, 
-                               &sos_vaddr,
-			       &app_cap);
-              conditional_panic(err, "Fail to map the page to the application\n");
-	   }
+    case SOS_READ_SYSCALL: {
+        seL4_Word uBufSize = seL4_GetMR(1);
+        seL4_Word userAddr = seL4_GetMR(2);
+        printf("userAddr: %x\n",userAddr); 
+        seL4_Word index1 = userAddr >> 22;
+        seL4_Word index2 = (userAddr << 10) >> 22;
+        struct page_table_entry **page_table = tty_test_process.addrspace->page_table;
+        if (page_table == NULL || page_table[index1] == NULL) {
+            seL4_CPtr app_cap;
+            seL4_CPtr sos_vaddr;
+            int err = sos_map_page(userAddr, 
+                                   tty_test_process.vroot, 
+                                   tty_test_process.addrspace, 
+                                   &sos_vaddr,
+                                   &app_cap);
+            conditional_panic(err, "Fail to map the page to the application\n");
+        }
 
-
-	   seL4_Word sosAddr = tty_test_process.addrspace->page_table[index1][index2].sos_vaddr;
-           if (curr == 9){
-	       serialBuffer[10] = '\0';
-               memcpy((void*)sosAddr,(void *)serialBuffer,10);
-               seL4_SetMR(0, 10);
-               seL4_Send(reply_cap, reply);
-	       handled = 0;
-           }   else{
-	       seL4_Word *buffer = malloc(2*sizeof(seL4_Word));
-	       buffer[0] = (seL4_Word)reply_cap;
-               printf("replaycap---%x\n",reply_cap);
-	       buffer[1] = sosAddr;	        
-               register_timer(2000000,timer_callback,(void*)buffer);
-               handled = 0;
-           }
-	}
+        seL4_Word sosAddr = tty_test_process.addrspace->page_table[index1][index2].sos_vaddr;
+        if (curr == 9) {
+            serialBuffer[10] = '\0';
+            memcpy((void*) sosAddr, (void *) serialBuffer, 10);
+            seL4_SetMR(0, 10);
+            seL4_Send(reply_cap, reply);
+            handled = 0;
+        } else {
+            seL4_Word *buffer = malloc(2*sizeof(seL4_Word));
+            buffer[0] = (seL4_Word) reply_cap;
+            printf("replaycap---%x\n", reply_cap);
+            buffer[1] = sosAddr;
+            register_timer(2000000, timer_callback, (void*) buffer);
+            handled = 0;
+        }
         break;	
-    
+    }
+
     default:
         printf("Unknown syscall %d\n", syscall_number);
         ///* we don't want to reply to an unknown syscall */

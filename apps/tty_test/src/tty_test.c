@@ -85,9 +85,10 @@ int main(void){
     do {
         printf("task:\tHello world, I'm\ttty_test!\n");
         char str[30];
-	sos_sys_read(-1,str,30);
-	printf("string%s\n",str);
-	//pt_test();
+        printf("vaddr: %x\n", str); 
+        read(-1, str, 30);
+        printf("Output: %s\n", str);
+        //pt_test();
         thread_block();
         // sleep(1);	// Implement this as a syscall
     } while(1);

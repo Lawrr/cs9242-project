@@ -6,11 +6,4 @@
 #define SOS_OPEN_SYSCALL 2
 #define SOS_CLOSE_SYSCALL 3
 
-
-
-
-
-
-
-
 #endif
