@@ -20,15 +20,18 @@
 #include <elf/elf.h>
 #include <serial/serial.h>
 #include <clock/clock.h>
+#include <utils/page.h>
 
 #include "addrspace.h"
 #include "frametable.h"
 #include "network.h"
 #include "elf.h"
-
+#include "sos_syscall.h"
 #include "ut_manager/ut.h"
 #include "vmem_layout.h"
 #include "mapping.h"
+
+#include "sos_syscall.h"
 
 #include <autoconf.h>
 
@@ -79,10 +82,6 @@ struct {
     struct app_addrspace *addrspace;
 } tty_test_process;
 
-/*
- * Syscall numbers
- */
-#define SOS_WRITE_DATA 0
 
 seL4_CPtr _sos_ipc_ep_cap;
 seL4_CPtr _sos_interrupt_ep_cap;
@@ -94,21 +93,49 @@ struct serial *serial_handle;
  */
 extern fhandle_t mnt_point;
 
+//10 for now
+char serialBuffer[10];
+int curr = 0;
+void serial_handler(struct serial *serial, char c) {
+    serialBuffer[curr%10] = c;
+    curr=(curr+1)%10;
+    if (curr == 10) {
+
+    }
+}
+
+void timer_callback(int id,void *data){
+    if (curr == 9) {
+        seL4_CPtr reply_cap = ((seL4_CPtr *)data)[0];
+        seL4_Word sosAddr = ((seL4_Word *)data)[1];
+        seL4_MessageInfo_t reply = seL4_MessageInfo_new(0, 0, 0, 1);
+
+        serialBuffer[9] = '\0';
+        memcpy((void*) sosAddr, (void *) serialBuffer, 10);
+        printf("Message: %s\n", serialBuffer);
+        seL4_SetMR(0, 10);
+        seL4_Send(reply_cap, reply);
+        printf("gg\n");
+    } else {
+        register_timer(200000, timer_callback, data);
+    }
+}
 
 void handle_syscall(seL4_Word badge, int num_args) {
     seL4_Word syscall_number;
     seL4_CPtr reply_cap;
-
 
     syscall_number = seL4_GetMR(0);
 
     /* Save the caller */
     reply_cap = cspace_save_reply_cap(cur_cspace);
     assert(reply_cap != CSPACE_NULL);
+    
+    int handled = 1;
 
     /* Process system call */
     switch (syscall_number) {
-    case SOS_WRITE_DATA:
+    case SOS_WRITE_SYSCALL:
         dprintf(0, "Message received from user program\n");
 
         // Get data length
@@ -124,15 +151,55 @@ void handle_syscall(seL4_Word badge, int num_args) {
         seL4_SetMR(0, bytes_sent);
         seL4_Send(reply_cap, reply);
         break;
+         
+    case SOS_READ_SYSCALL: {
+        seL4_Word uBufSize = seL4_GetMR(1);
+        seL4_Word userAddr = seL4_GetMR(2);
+        printf("userAddr: %x\n",userAddr); 
+        seL4_Word index1 = userAddr >> 22;
+        seL4_Word index2 = (userAddr << 10) >> 22;
+        struct page_table_entry **page_table = tty_test_process.addrspace->page_table;
+        if (page_table == NULL || page_table[index1] == NULL) {
+            seL4_CPtr app_cap;
+            seL4_CPtr sos_vaddr;
+            int err = sos_map_page(userAddr, 
+                                   tty_test_process.vroot, 
+                                   tty_test_process.addrspace, 
+                                   &sos_vaddr,
+                                   &app_cap);
+            conditional_panic(err, "Fail to map the page to the application\n");
+        }
+
+        seL4_Word sosAddr = ((tty_test_process.addrspace->page_table[index1][index2].sos_vaddr) >> 12) << 12;
+        // Add offset
+        sosAddr |= (userAddr & PAGE_MASK_4K);
+        if (curr == 9) {
+            serialBuffer[10] = '\0';
+            memcpy((void*) sosAddr, (void *) serialBuffer, 10);
+            seL4_SetMR(0, 10);
+            seL4_Send(reply_cap, reply);
+            handled = 0;
+        } else {
+            seL4_Word *buffer = malloc(2 * sizeof(seL4_Word));
+            buffer[0] = (seL4_Word) reply_cap;
+            printf("reply cap: %x\n", reply_cap);
+            buffer[1] = sosAddr;
+            register_timer(2000000, timer_callback, (void *) buffer);
+            handled = 0;
+        }
+        break;	
+    }
 
     default:
         printf("Unknown syscall %d\n", syscall_number);
-        /* we don't want to reply to an unknown syscall */
+        ///* we don't want to reply to an unknown syscall */
 
     }
 
+    if (handled){
     /* Free the saved reply cap */
-    cspace_free_slot(cur_cspace, reply_cap);
+       cspace_free_slot(cur_cspace, reply_cap);
+    }
 }
 
 void syscall_loop(seL4_CPtr ep) {
@@ -171,10 +238,14 @@ void syscall_loop(seL4_CPtr ep) {
                 /* Data fault */
                 map_vaddr = seL4_GetMR(1);
             }
-            err = sos_map_page(map_vaddr, 
-                               tty_test_process.vroot, 
-                               tty_test_process.addrspace, 
-                               &sos_vaddr);
+
+            //Not used
+            seL4_CPtr app_cap;
+            err = sos_map_page(map_vaddr,
+                               tty_test_process.vroot,
+                               tty_test_process.addrspace,
+                               &sos_vaddr,
+                               &app_cap);
             conditional_panic(err, "Fail to map the page to the application\n"); 
 
             /* Save the caller */
@@ -297,13 +368,14 @@ void start_first_process(char* app_name, seL4_CPtr fault_ep) {
     err = sos_map_page(PROCESS_IPC_BUFFER,
                        tty_test_process.vroot,
                        tty_test_process.addrspace,
-                       &tty_test_process.ipc_buffer_addr);
+                       &tty_test_process.ipc_buffer_addr,
+		       &tty_test_process.ipc_buffer_cap);
     conditional_panic(err, "No memory for ipc buffer");
-    // TODO dud asid number
+    /* TODO dud asid number
     err = get_app_cap(tty_test_process.ipc_buffer_addr,
-                      0,
+                      tty_test_process.addrspace->page_table,
                       &tty_test_process.ipc_buffer_cap);
-    conditional_panic(err, "Can't get app cap");
+    conditional_panic(err, "Can't get app cap");*/
 
     /* Copy the fault endpoint to the user app to enable IPC */
     user_ep_cap = cspace_mint_cap(tty_test_process.croot,
@@ -496,6 +568,10 @@ void frame_table_test() {
     }
 }
 
+
+
+
+
 /*
  * Main entry point - called by crt.
  */
@@ -517,6 +593,8 @@ int main(void) {
     
     /* Initialise serial driver */
     serial_handle = serial_init();
+    serial_register_handler(serial_handle, serial_handler); 
+
 
     /* Start the user application */
     start_first_process(TTY_NAME, _sos_ipc_ep_cap);
@@ -530,5 +608,6 @@ int main(void) {
     /* Not reached */
     return 0;
 }
+
 
 

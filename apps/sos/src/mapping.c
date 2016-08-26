@@ -13,6 +13,8 @@
 #include "mapping.h"
 
 #include <ut_manager/ut.h>
+#include <utils/page.h>
+
 #include "vmem_layout.h"
 #include "addrspace.h"
 #include "frametable.h"
@@ -22,9 +24,7 @@
 #include <sys/debug.h>
 #include <cspace/cspace.h>
 #define INDEX1_SHIFT 22 
-#define PAGE_BITS 12
-#define INDEX2_MASK (1023 << PAGE_BITS)
-#define PAGE_MASK (~0xFFF)
+#define INDEX2_MASK (1023 << PAGE_BITS_4K)
 
 extern const seL4_BootInfo* _boot_info;
 
@@ -111,21 +111,21 @@ map_device(void* paddr, int size){
     }
     return (void*)vstart;
 }
-
+/*
 int sos_ummap_page(seL4_Word vaddr, seL4_Word asid) {
     seL4_CPtr cap;
-    int err = get_app_cap((vaddr>>PAGE_BITS) << PAGE_BITS, asid, &cap); 
+    int err = get_app_cap((vaddr>>PAGE_BITS_4K) << PAGE_BITS_4K, asid, &cap); 
     if (err != 0) return err;
     err = seL4_ARM_Page_Unmap(cap);
     if (err != 0) return err;
     cspace_delete_cap(cur_cspace, cap);
     return err;
-}
+}*/
 
 int 
-sos_map_page(seL4_Word vaddr_unaligned, seL4_ARM_PageDirectory pd, struct app_addrspace *as, seL4_Word *sos_vaddr_ret) {
+sos_map_page(seL4_Word vaddr_unaligned, seL4_ARM_PageDirectory pd, struct app_addrspace *as, seL4_Word *sos_vaddr_ret,seL4_CPtr*app_cap) {
     int err;
-    seL4_Word vaddr = vaddr_unaligned & PAGE_MASK;
+    seL4_Word vaddr = PAGE_ALIGN_4K(vaddr_unaligned);
     /* Get the addr to simplify later implementation */
     struct page_table_entry ***page_table_vaddr = &(as->page_table);
     
@@ -135,7 +135,7 @@ sos_map_page(seL4_Word vaddr_unaligned, seL4_ARM_PageDirectory pd, struct app_ad
     }
 
     seL4_Word index1 = vaddr >> INDEX1_SHIFT;
-    seL4_Word index2 = (vaddr & INDEX2_MASK) >> PAGE_BITS;
+    seL4_Word index2 = (vaddr & INDEX2_MASK) >> PAGE_BITS_4K;
 
     /* Checking with the region the check the permission */
     struct region *curr_region = as->regions;
@@ -195,7 +195,7 @@ sos_map_page(seL4_Word vaddr_unaligned, seL4_ARM_PageDirectory pd, struct app_ad
 
     err = map_page(copied_cap,
 		           pd,
-		           (vaddr >> PAGE_BITS) << PAGE_BITS,
+		           (vaddr >> PAGE_BITS_4K) << PAGE_BITS_4K,
 		           curr_region->permissions,
 		           seL4_ARM_Default_VMAttributes);
     if (err) {
@@ -205,14 +205,13 @@ sos_map_page(seL4_Word vaddr_unaligned, seL4_ARM_PageDirectory pd, struct app_ad
     }
     
     /* Book keeping the copied caps */
-    // TODO dud asid for now
-    insert_app_cap(sos_vaddr & PAGE_MASK, copied_cap, 0);
+    insert_app_cap(PAGE_ALIGN_4K(sos_vaddr), copied_cap, &(*page_table_vaddr)[index1][index2]);
     
     /* Book keeping in our own page table */
-    struct page_table_entry pte = {(sos_vaddr & PAGE_MASK) |
+    struct page_table_entry pte = {(PAGE_ALIGN_4K(sos_vaddr) |
                                    (curr_region->permissions | PTE_VALID)};
     (*page_table_vaddr)[index1][index2] = pte;
-
+    *app_cap = copied_cap;
     *sos_vaddr_ret = sos_vaddr;
     return 0;
 }
