@@ -59,6 +59,8 @@
 #define EPIT2_PADDR 0x020D4000
 #define EPIT_REGISTERS 5
 
+#define PAGE_MASK (~0xFFF)
+
 /* The linker will link this symbol to the start address  *
  * of an archive of attached applications.                */
 extern char _cpio_archive[];
@@ -95,28 +97,29 @@ extern fhandle_t mnt_point;
 //10 for now
 char serialBuffer[10];
 int curr = 0;
-void serial_handler(struct serial * serial, char c){
-    serialBuffer[curr%10] = c;    
+void serial_handler(struct serial *serial, char c) {
+    serialBuffer[curr%10] = c;
     curr=(curr+1)%10;
     if (curr == 10) {
-       
+
     }
 }
+
 void timer_callback(int id,void *data){
-   if (curr == 9) {
-      seL4_CPtr reply_cap = ((seL4_CPtr *)data)[0];
-      seL4_Word sosAddr = ((seL4_Word *)data)[1];
-      seL4_MessageInfo_t reply = seL4_MessageInfo_new(0, 0, 0, 1);
-    
-      serialBuffer[9] = '\0';
-      printf("cacacaca%x\n",reply_cap);
-      memcpy((void*)sosAddr,(void *)serialBuffer,10);
-      seL4_SetMR(0, 10);
-      seL4_Send(reply_cap, reply);
-      printf("gg\n");
-   }  else{
-      register_timer(200000,timer_callback,data);
-   }
+    if (curr == 9) {
+        seL4_CPtr reply_cap = ((seL4_CPtr *)data)[0];
+        seL4_Word sosAddr = ((seL4_Word *)data)[1];
+        seL4_MessageInfo_t reply = seL4_MessageInfo_new(0, 0, 0, 1);
+
+        serialBuffer[9] = '\0';
+        memcpy((void*) sosAddr, (void *) serialBuffer, 10);
+        printf("Message: %s\n", serialBuffer);
+        seL4_SetMR(0, 10);
+        seL4_Send(reply_cap, reply);
+        printf("gg\n");
+    } else {
+        register_timer(200000, timer_callback, data);
+    }
 }
 
 void handle_syscall(seL4_Word badge, int num_args) {
@@ -168,7 +171,9 @@ void handle_syscall(seL4_Word badge, int num_args) {
             conditional_panic(err, "Fail to map the page to the application\n");
         }
 
-        seL4_Word sosAddr = tty_test_process.addrspace->page_table[index1][index2].sos_vaddr;
+        seL4_Word sosAddr = ((tty_test_process.addrspace->page_table[index1][index2].sos_vaddr) >> 12) << 12;
+        // Add offset
+        sosAddr |= (userAddr & ~PAGE_MASK);
         if (curr == 9) {
             serialBuffer[10] = '\0';
             memcpy((void*) sosAddr, (void *) serialBuffer, 10);
@@ -176,11 +181,11 @@ void handle_syscall(seL4_Word badge, int num_args) {
             seL4_Send(reply_cap, reply);
             handled = 0;
         } else {
-            seL4_Word *buffer = malloc(2*sizeof(seL4_Word));
+            seL4_Word *buffer = malloc(2 * sizeof(seL4_Word));
             buffer[0] = (seL4_Word) reply_cap;
-            printf("replaycap---%x\n", reply_cap);
+            printf("reply cap: %x\n", reply_cap);
             buffer[1] = sosAddr;
-            register_timer(2000000, timer_callback, (void*) buffer);
+            register_timer(2000000, timer_callback, (void *) buffer);
             handled = 0;
         }
         break;	
@@ -235,13 +240,13 @@ void syscall_loop(seL4_CPtr ep) {
                 map_vaddr = seL4_GetMR(1);
             }
 
-	    //Not used
-	    seL4_CPtr app_cap;
-            err = sos_map_page(map_vaddr, 
-                               tty_test_process.vroot, 
-                               tty_test_process.addrspace, 
+            //Not used
+            seL4_CPtr app_cap;
+            err = sos_map_page(map_vaddr,
+                               tty_test_process.vroot,
+                               tty_test_process.addrspace,
                                &sos_vaddr,
-			       &app_cap);
+                               &app_cap);
             conditional_panic(err, "Fail to map the page to the application\n"); 
 
             /* Save the caller */
