@@ -37,6 +37,26 @@ typedef int fmode_t;
 /* stat file types */
 #define ST_FILE 1   /* plain file */
 #define ST_SPECIAL 2    /* special (console) file */
+
+/* file err code */
+#define ERR_MAX_FILE -1
+#define ERR_MAX_SYSTEM_FILE -2
+#define EER_INVALID_FILE_NAME -3
+#define ERR_INVALID_FD -4
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 typedef int st_type_t;
 
 

@@ -27,11 +27,10 @@
 #include "network.h"
 #include "elf.h"
 #include "sos_syscall.h"
-
 #include "ut_manager/ut.h"
 #include "vmem_layout.h"
 #include "mapping.h"
-
+#include "sos.h"
 #include <autoconf.h>
 
 #define verbose 5
@@ -58,7 +57,11 @@
 #define EPIT1_PADDR 0x020D0000
 #define EPIT2_PADDR 0x020D4000
 #define EPIT_REGISTERS 5
-
+#define MAX_FILE_PER_PROCESS 16
+#define MAX_OPEN_FILE 255
+#define MAX_PROCESS 255
+#define LOWER_TWO_BYTE_MASK 0xFFFF
+#define TWO_BYTE_BITS 16
 /* The linker will link this symbol to the start address  *
  * of an archive of attached applications.                */
 extern char _cpio_archive[];
@@ -66,7 +69,7 @@ extern char _cpio_archive[];
 const seL4_BootInfo* _boot_info;
 
 
-struct {
+struct PCB{
     seL4_Word tcb_addr;
     seL4_TCB tcb_cap;
 
@@ -79,12 +82,13 @@ struct {
     cspace_t *croot;
 
     struct app_addrspace *addrspace;
-} tty_test_process;
+};
 
-/*
- * Syscall numbers
- */
-#define SOS_WRITE_DATA 0
+struct PCB tty_test_process;
+
+//struct PCB PCB_Array[MAX_PROCESS];
+char * gConsole = "console:";
+
 
 seL4_CPtr _sos_ipc_ep_cap;
 seL4_CPtr _sos_interrupt_ep_cap;
@@ -96,32 +100,59 @@ struct serial *serial_handle;
  */
 extern fhandle_t mnt_point;
 
-//10 for now
-char serialBuffer[10];
-int curr = 0;
-void serial_handler(struct serial *serial, char c) {
-    serialBuffer[curr%10] = c;
-    curr=(curr+1)%10;
-    if (curr == 10) {
 
+
+//10 for now
+char serialBuffer[4096];
+int serialIndex = 0;
+void serial_handler(struct serial *serial, char c) {
+    serialBuffer[serialIndex++] = c;
+    if (serialIndex > 4096) {
+       conditional_panic(1,"More than one page is input");
     }
 }
 
 void timer_callback(int id,void *data){
-    if (curr == 9) {
+    if (serialIndex != 0) {
         seL4_CPtr reply_cap = ((seL4_CPtr *)data)[0];
         seL4_Word sosAddr = ((seL4_Word *)data)[1];
         seL4_MessageInfo_t reply = seL4_MessageInfo_new(0, 0, 0, 1);
 
-        serialBuffer[9] = '\0';
         memcpy((void*) sosAddr, (void *) serialBuffer, 10);
         printf("Message: %s\n", serialBuffer);
         seL4_SetMR(0, 10);
         seL4_Send(reply_cap, reply);
-        printf("gg\n");
+        serialIndex = 0;
+        cspace_free_slot(cur_cspace, reply_cap);
     } else {
         register_timer(200000, timer_callback, data);
     }
+}
+
+struct oft_entry {
+   sos_stat_t file_info;
+   seL4_Word *ptr;
+};
+
+struct oft_entry of_table[MAX_OPEN_FILE];
+seL4_Word ofd_count = 0;
+seL4_Word curr_free_ofd = 0;
+
+
+seL4_Word legalUserAddr(seL4_Word user_addr){
+   struct region *curr = tty_test_process.addrspace->regions;
+   while (curr != NULL){
+      if (curr->baseaddr <= user_addr && user_addr < curr->baseaddr + curr->size){
+         break;
+      } 
+   }
+
+   if (curr != NULL){
+      if (user_addr < PROCESS_VMEM_START){
+         return 1;
+      }
+   }
+   return 0;
 }
 
 void handle_syscall(seL4_Word badge, int num_args) {
@@ -138,7 +169,7 @@ void handle_syscall(seL4_Word badge, int num_args) {
 
     /* Process system call */
     switch (syscall_number) {
-    case SOS_WRITE_DATA:
+    case SOS_WRITE_SYSCALL:
         dprintf(0, "Message received from user program\n");
 
         // Get data length
@@ -155,10 +186,18 @@ void handle_syscall(seL4_Word badge, int num_args) {
         seL4_Send(reply_cap, reply);
         break;
          
-    case SOS_READ_SYSCALL: {
-        seL4_Word uBufSize = seL4_GetMR(1);
-        seL4_Word userAddr = seL4_GetMR(2);
-        printf("userAddr: %x\n",userAddr); 
+    case SOS_READ_SYSCALL:{
+	seL4_Word fd = seL4_GetMR(1);
+        seL4_Word uBufSize = seL4_GetMR(2);
+        seL4_Word userAddr = seL4_GetMR(3);
+       
+        if (!legalUserAddr(userAddr)){
+           seL4_MessageInfo_t reply = seL4_MessageInfo_new(0, 0, 0, 1);
+	   seL4_SetMR(0,-1); 
+	   seL4_Send(reply_cap, reply);
+        }
+
+        /*address is not mapped before*/	
         seL4_Word index1 = userAddr >> 22;
         seL4_Word index2 = (userAddr << 10) >> 22;
         struct page_table_entry **page_table = tty_test_process.addrspace->page_table;
@@ -173,24 +212,100 @@ void handle_syscall(seL4_Word badge, int num_args) {
             conditional_panic(err, "Fail to map the page to the application\n");
         }
 
-        seL4_Word sosAddr = ((tty_test_process.addrspace->page_table[index1][index2].sos_vaddr) >> 12) << 12;
+        seL4_Word sosAddr = tty_test_process.addrspace->page_table[index1][index2].sos_vaddr & ~PAGE_MASK_4K;
         // Add offset
         sosAddr |= (userAddr & PAGE_MASK_4K);
-        if (curr == 9) {
-            serialBuffer[10] = '\0';
-            memcpy((void*) sosAddr, (void *) serialBuffer, 10);
-            seL4_SetMR(0, 10);
-            seL4_Send(reply_cap, reply);
-            handled = 0;
-        } else {
-            seL4_Word *buffer = malloc(2 * sizeof(seL4_Word));
-            buffer[0] = (seL4_Word) reply_cap;
-            printf("reply cap: %x\n", reply_cap);
-            buffer[1] = sosAddr;
-            register_timer(2000000, timer_callback, (void *) buffer);
-            handled = 0;
-        }
+       
+        seL4_Word ofd = tty_test_process.addrspace->fd_table[fd].ofd;
+	//console
+	if (of_table[ofd].ptr = gConsole){
+	    if (serialIndex != 0) {
+	        if (uBufSize < serialIndex){	
+            	   memcpy((void*) sosAddr, (void *) serialBuffer, uBufSize);
+	        }  else{
+		   memcpy((void*) sosAddr, (void *) serialBuffer, serialIndex);
+	        }
+                seL4_MessageInfo_t reply = seL4_MessageInfo_new(0, 0, 0, 1);
+	        seL4_SetMR(0, serialIndex);
+	        seL4_Send(reply_cap, reply);
+	        serialIndex = 0;
+            } else {
+                seL4_Word *buffer = malloc(2 * sizeof(seL4_Word));
+                buffer[0] = (seL4_Word) reply_cap;
+                printf("reply cap: %x\n", reply_cap);
+                buffer[1] = sosAddr;
+                register_timer(2000000, timer_callback, (void *) buffer);
+                handled = 0;
+            }
+	}   else{
+	    /*TODO actually manipulate file*/
+	}
         break;	
+    }
+    case SOS_OPEN_SYSCALL:{
+        seL4_Word fdt_status = tty_test_process.addrspace -> fdt_status;			  
+        seL4_Word free_fd = fdt_status | LOWER_TWO_BYTE_MASK;
+	seL4_Word fd_count = fdt_status >> TWO_BYTE_BITS;
+			  
+        if (fd_count == MAX_FILE_PER_PROCESS) {
+	   seL4_MessageInfo_t reply = seL4_MessageInfo_new(0, 0, 0, 1);
+	   seL4_SetMR(0,ERR_MAX_FILE);
+           seL4_Send(reply_cap,reply);
+	}  else if (ofd_count == MAX_OPEN_FILE){
+           seL4_MessageInfo_t reply = seL4_MessageInfo_new(0, 0, 0, 1);
+	   seL4_SetMR(0,ERR_MAX_SYSTEM_FILE);
+           seL4_Send(reply_cap,reply);
+	}        
+	
+        /*address is not mapped before*/
+	seL4_Word userAddr = seL4_GetMR(1);
+	seL4_Word index1 = userAddr >> 22;
+        seL4_Word index2 = (userAddr << 10) >> 22;
+        struct page_table_entry **page_table = tty_test_process.addrspace->page_table;
+        seL4_Word sos_vaddr;
+	if (page_table == NULL || page_table[index1] == NULL) {
+            seL4_CPtr app_cap;
+            
+            int err = sos_map_page(userAddr, 
+                                   tty_test_process.vroot, 
+                                   tty_test_process.addrspace, 
+                                   &sos_vaddr,
+                                   &app_cap);
+            conditional_panic(err, "Fail to map the page to the application\n");
+        }
+        
+	
+	if (legalUserAddr(userAddr)){
+	   sos_vaddr = tty_test_process.addrspace->page_table[index1][index2].sos_vaddr & (~PAGE_MASK_4K);
+           sos_vaddr |= userAddr & PAGE_MASK_4K; 	   
+	}
+        char * path = (char *)sos_vaddr;
+	char * console = gConsole;
+	while (*console != '\0'){
+	   if (*console++ != *path++){
+              break;
+	   }	   
+	}
+
+	if (*console == *path){
+           serial_register_handler(serial_handle,serial_handler);
+	   of_table[curr_free_ofd].ptr = gConsole;
+	}  else {
+           /* TODO Acutal file maipulation*/
+	}
+
+        fd_count++;
+	tty_test_process.addrspace->fd_table[free_fd++].ofd = curr_free_ofd++;
+	while (tty_test_process.addrspace->fd_table[free_fd].ofd != -1){
+           free_fd = (free_fd+1) % MAX_FILE_PER_PROCESS;
+	}
+	tty_test_process.addrspace->fdt_status = (fd_count << TWO_BYTE_BITS)|free_fd;
+
+
+	ofd_count++;
+	while (of_table[curr_free_ofd].ptr != NULL){
+           curr_free_ofd = (curr_free_ofd + 1)% MAX_OPEN_FILE;  
+	}
     }
 
     default:
@@ -386,6 +501,7 @@ void start_first_process(char* app_name, seL4_CPtr fault_ep) {
                                   fault_ep,
                                   seL4_AllRights, 
                                   seL4_CapData_Badge_new(TTY_EP_BADGE));
+    
     /* should be the first slot in the space, hack I know */
     assert(user_ep_cap == 1);
     assert(user_ep_cap == USER_EP_CAP);
@@ -592,7 +708,8 @@ int main(void) {
     
     /* Initialise serial driver */
     serial_handle = serial_init();
-
+    
+    
     /* Start the user application */
     start_first_process(TTY_NAME, _sos_ipc_ep_cap);
 

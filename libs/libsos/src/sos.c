@@ -19,42 +19,98 @@
 /**
  * This is our system call endpoint cap, as defined by the root server
  */
-#define SYSCALL_ENDPOINT_SLOT  (1)
+#define MAX_FD 255
+
+struct fInfo {
+   //sos_stat_t stat;
+   int fd;
+};
+
+struct fInfo fd_table[MAX_FD];
+int curr = 3;
 
 int sos_sys_open(const char *path, fmode_t mode) {
-    // TODO for M4
-    assert(!"You need to implement this");
-    return -1;
-}
-
-int sos_sys_close(int file) {
-    // TODO for M4
-    printf("System call not yet implemented\n");
-    return -1;
-}
-
-int sos_sys_read(int file, char *buf, size_t nbyte) {
-    // TODO for M4
-
-    // Set up message
+    
+    int ret = -1;
     int numRegs = 3;
+    //Reach max open file for an app
+    if ( curr = -1) return ret;
+
+    //Set up message
     seL4_MessageInfo_t tag = seL4_MessageInfo_new(seL4_NoFault, 0, 0, numRegs);
     seL4_SetTag(tag);
    
-    // Set syscall number
+    //Set syscall number
+    seL4_SetMR(0, 2);
+   
+    //set file name pointer
+    seL4_SetMR(1, (seL4_Word)path);
+    
+    //Set open mode information
+    seL4_SetMR(2, mode);
+    
+    seL4_Call(SOS_IPC_EP_CAP, tag);
+    return ;
+}
+
+int sos_sys_close(int file) {
+    int numRegs = 2;
+    seL4_MessageInfo_t tag = seL4_MessageInfo_new(seL4_NoFault, 0, 0, numRegs);
+    seL4_SetTag(tag);
+
+    //Set syscall number
+    seL4_SetMR(0,3);
+   
+
+
+    //Set file descriptor
+    seL4_SetMR(1,file);
+    
+    seL4_Call(SOS_IPC_EP_CAP,tag);
+    return seL4_GetMR(0);
+}
+
+int sos_sys_read(int file, char *buf, size_t nbyte) {
+
+    //Set up message
+    int numRegs = 4;
+    seL4_MessageInfo_t tag = seL4_MessageInfo_new(seL4_NoFault, 0, 0, numRegs);
+    seL4_SetTag(tag);
+   
+    //Set syscall number
     seL4_SetMR(0, 1);
-    // Set data length
-    seL4_SetMR(1, nbyte);
-    // Set buf addr
+   
+    //set file descriptor 
+    seL4_SetMR(1, file);
+    
+    //Set buf addr
     seL4_SetMR(2, (seL4_Word) buf);
 
-    seL4_Call(SYSCALL_ENDPOINT_SLOT, tag);
+    //set nbyte
+    seL4_SetMR(3,nbyte);
+    
+    seL4_Call(SOS_IPC_EP_CAP, tag);
     return -1;
 }
 
 int sos_sys_write(int file, const char *buf, size_t nbyte) {
-    // TODO for M4
-    assert(!"You need to implement this");
+    int numRegs = 4;
+    seL4_MessageInfo_t tag = seL4_MessageInfo_new(seL4_NoFault, 0, 0, numRegs);
+    seL4_SetTag(tag);
+   
+    //Set syscall number
+    seL4_SetMR(0, 0);
+   
+    //set file descriptor 
+    seL4_SetMR(1, file);
+    
+    //Set buf addr
+    seL4_SetMR(2, (seL4_Word) buf);
+
+    //set nbyte
+    seL4_SetMR(3,nbyte);
+    
+    seL4_Call(SOS_IPC_EP_CAP, tag);    
     return -1;
 }
 
@@ -136,7 +192,7 @@ size_t sos_write(void *vData, size_t count) {
         memcpy(&seL4_GetIPCBuffer()->msg[num_args], vData + data_sent, data_length);
 
         // Send message
-        seL4_Call(SYSCALL_ENDPOINT_SLOT, tag);
+        seL4_Call(SOS_IPC_EP_CAP, tag);
 
         data_sent += seL4_GetMR(0);
     }

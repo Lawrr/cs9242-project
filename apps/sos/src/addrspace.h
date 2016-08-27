@@ -6,7 +6,9 @@
 
 struct app_addrspace {
     seL4_Word asid;
+    seL4_Word fdt_status;
     struct region *regions;
+    struct fdt_entry *fd_table;
     struct page_table_entry **page_table;
 };
 
@@ -17,6 +19,9 @@ struct region {
     struct region *next;
 };
 
+struct fdt_entry{
+    seL4_Word ofd;
+};
 
 /*
  *VFN|UNUSED|S|V|P|
