@@ -21,20 +21,13 @@
  */
 #define MAX_FD 255
 
-struct fInfo {
-   //sos_stat_t stat;
-   int fd;
-};
 
-struct fInfo fd_table[MAX_FD];
-int curr = 3;
 
 int sos_sys_open(const char *path, fmode_t mode) {
     
     int ret = -1;
     int numRegs = 3;
     //Reach max open file for an app
-    if ( curr = -1) return ret;
 
     //Set up message
     seL4_MessageInfo_t tag = seL4_MessageInfo_new(seL4_NoFault, 0, 0, numRegs);
