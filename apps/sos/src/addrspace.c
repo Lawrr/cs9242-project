@@ -21,7 +21,7 @@ struct app_addrspace *as_new() {
     as->fd_table[0].ofd = 0;
     //std output
     as->fd_table[1].ofd = 1;
-    //std errir
+    //std error
     as->fd_table[2].ofd = 1;
     return as;
 }

@@ -43,7 +43,7 @@ thread_block(void){
 #define TEST_ADDRESS 0x20000000
 
 /* called from pt_test */
-    static void
+static void
 do_pt_test(char *buf)
 {
     int i;
@@ -59,7 +59,7 @@ do_pt_test(char *buf)
     }
 }
 
-    void
+void
 pt_test( void )
 {
     /* need a decent sized stack */
@@ -91,12 +91,12 @@ int main(void){
         test2[1000] = 5;
         test2[500] = 2;
         sos_sys_usleep(1000);
-        printf("vaddr: %x\n", str); 
+        printf("vaddr: %x\n", str);
         sos_sys_usleep(1000);
         printf("Timestamp: %llu\n", sos_sys_time_stamp());
 
         printf("open new console\n");
-        int fd = sos_sys_open("console:",FM_READ); 
+        int fd = sos_sys_open("console",FM_READ); 
         printf("new console fd%d\n\n",fd);
 
         printf("read new console\n");
@@ -105,7 +105,7 @@ int main(void){
         printf("err: %d\n\n",err);
 
         printf("open new console\n");
-        fd = sos_sys_open("console:",FM_WRITE); 
+        fd = sos_sys_open("console",FM_WRITE); 
         printf("new console fd%d\n\n",fd);
 
         printf("write to new console:Hello World\n");

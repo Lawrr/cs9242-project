@@ -20,10 +20,9 @@
  * This is our system call endpoint cap, as defined by the root server
  */
 //default value. May be changed by user if they close and reopen console
-int std_input = 0;
-int std_output = 1;
-int std_err = 1;
-
+static int std_input = 0;
+static int std_output = 1;
+static int std_err = 1;
 
 int sos_sys_open(const char *path, fmode_t mode) {
     

@@ -255,11 +255,58 @@ struct command {
     int (*command)(int argc, char **argv);
 };
 
-struct command commands[] = { { "dir", dir }, { "ls", dir }, { "cat", cat }, {
-        "cp", cp }, { "ps", ps }, { "exec", exec }, {"sleep",second_sleep}, {"msleep",milli_sleep},
-        {"time", second_time}, {"mtime", micro_time}, {"kill", kill} };
+#define SMALL_BUF_SZ 2
+
+char test_str[] = "Basic test string for read/write";
+char small_buf[SMALL_BUF_SZ];
+
+void test_buffers(int console_fd) {
+    /* test a small string from the code segment */
+    int result = sos_sys_write(console_fd, test_str, strlen(test_str));
+    assert(result == strlen(test_str));
+
+    /* test reading to a small buffer */
+    result = sos_sys_read(console_fd, small_buf, SMALL_BUF_SZ);
+    /* make sure you type in at least SMALL_BUF_SZ */
+    assert(result == SMALL_BUF_SZ);
+
+    /* test a reading into a large on-stack buffer */
+    char stack_buf[BUF_SIZ];
+    /* for this test you'll need to paste a lot of data into 
+       the console, without newlines */
+    result = sos_sys_read(console_fd, &stack_buf, BUF_SIZ);
+    assert(result == BUF_SIZ);
+
+    result = sos_sys_write(console_fd, &stack_buf, BUF_SIZ);
+    assert(result == BUF_SIZ);
+
+    /* this call to malloc should trigger an sbrk */
+    char *heap_buf = malloc(BUF_SIZ);
+    assert(heap_buf != NULL);
+
+    /* for this test you'll need to paste a lot of data into 
+       the console, without newlines */
+    result = sos_sys_read(console_fd, &heap_buf, BUF_SIZ);
+    assert(result == BUF_SIZ);
+
+    result = sos_sys_write(console_fd, &heap_buf, BUF_SIZ);
+    assert(result == BUF_SIZ);
+
+    /* try sleeping */
+    for (int i = 0; i < 5; i++) {
+        time_t prev_seconds = time(NULL);
+        sleep(1);
+        time_t next_seconds = time(NULL);
+        assert(next_seconds > prev_seconds);
+        printf("Tick\n");
+    }
+}
 
 int main(void) {
+    struct command commands[] = { { "dir", dir }, { "ls", dir }, { "cat", cat }, {
+            "cp", cp }, { "ps", ps }, { "exec", exec }, {"sleep",second_sleep}, {"msleep",milli_sleep},
+            {"time", second_time}, {"mtime", micro_time}, {"kill", kill} };
+
     char buf[BUF_SIZ];
     char *argv[MAX_ARGS];
     int i, r, done, found, new, argc;
@@ -267,6 +314,9 @@ int main(void) {
 
     in = open("console", O_RDONLY);
     assert(in >= 0);
+
+    int console_fd = open("console", O_RDONLY);
+    /* test_buffers(console_fd); */
 
     bp = buf;
     done = 0;
