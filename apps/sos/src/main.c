@@ -221,9 +221,18 @@ void handle_syscall(seL4_Word badge, int num_args) {
         seL4_Word sosAddr = tty_test_process.addrspace->page_table[index1][index2].sos_vaddr & ~PAGE_MASK_4K;
         // Add offset
         sosAddr |= (userAddr & PAGE_MASK_4K);
-       
+      
+
+
         seL4_Word ofd = tty_test_process.addrspace->fd_table[fd].ofd;
-	
+        //Check fd
+	if (ofd == -1){
+	   seL4_MessageInfo_t reply = seL4_MessageInfo_new(0, 0, 0, 1);
+	   seL4_SetMR(0,ERR_INVALID_FD); 
+	   seL4_Send(reply_cap, reply);
+	}
+
+
 	//Check access right
 	if (!(of_table[ofd].file_info.st_fmode & FM_READ)){
 	   seL4_MessageInfo_t reply = seL4_MessageInfo_new(0, 0, 0, 1);
