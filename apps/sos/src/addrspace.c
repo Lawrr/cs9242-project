@@ -12,12 +12,17 @@ struct app_addrspace *as_new() {
     }
     as->regions = NULL;
     as->page_table = CSPACE_NULL;
-    as->fdt_status = 0;
+    as->fdt_status = 3 << TWO_BYTE_BITS | 3;
     as->fd_table = malloc(sizeof(struct fdt_entry)*PROCESS_MAX_FILES);
     for (int i = 0 ; i < PROCESS_MAX_FILES;i++){
         as->fd_table[i].ofd = -1;
     }
-
+    //std input
+    as->fd_table[0].ofd = 0;
+    //std output
+    as->fd_table[1].ofd = 1;
+    //std errir
+    as->fd_table[2].ofd = 1;
     return as;
 }
 

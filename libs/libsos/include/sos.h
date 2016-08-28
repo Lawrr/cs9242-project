@@ -47,8 +47,9 @@ typedef int fmode_t;
 #define ERR_ILLEGAL_ACCESS_MODE -6
 #define ERR_INVALID_ARGUMENT -7
 
-
-
+/*helper define*/
+#define LOWER_TWO_BYTE_MASK 0xFFFF
+#define TWO_BYTE_BITS 16
 
 
 

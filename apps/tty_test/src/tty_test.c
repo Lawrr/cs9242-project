@@ -83,14 +83,28 @@ int main(void){
     ttyout_init();
 
     do {
-        int fd = sos_sys_open("console:",FM_READ|FM_WRITE); 
-	printf("task:\tHello world, I'm\ttty_test!\n");
+        printf("task:\tHello world, I'm\tttty_test!\n");
+
         char str[30];
-        printf("vaddr: %x\n", str); 
-        // read(-1, str, 30);
-	int err = sos_sys_read(0,str,30);
-	printf("Output: %s\n", str);
-        //pt_test();
+        
+	printf("open new console\n");
+	int fd = sos_sys_open("console:",FM_READ); 
+        printf("new console fd%d\n\n",fd);
+
+	printf("read new console\n");
+	int err = sos_sys_read(fd,str,30);
+	printf("Output: %s\n",str);
+        printf("err: %d\n\n",err);
+
+	printf("open new console\n");
+	fd = sos_sys_open("console:",FM_WRITE); 
+        printf("new console fd%d\n\n",fd);
+        
+        printf("write to new console:Hello World\n");
+	err = sos_sys_write(fd,"Hello World\n",12);
+        printf("err: %d\n\n",err);
+	
+	//pt_test();
         thread_block();
         // sleep(1);	// Implement this as a syscall
     } while(1);

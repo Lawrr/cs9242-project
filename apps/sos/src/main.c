@@ -59,8 +59,10 @@
 #define EPIT_REGISTERS 5
 #define MAX_OPEN_FILE 255
 #define MAX_PROCESS 255
-#define LOWER_TWO_BYTE_MASK 0xFFFF
-#define TWO_BYTE_BITS 16
+#define STD_IN 0
+#define STD_OUT 1
+
+
 /* The linker will link this symbol to the start address  *
  * of an archive of attached applications.                */
 extern char _cpio_archive[];
@@ -119,12 +121,13 @@ void timer_callback(int id,void *data){
 	seL4_MessageInfo_t reply = seL4_MessageInfo_new(0, 0, 0, 1);
         
         if (uBufSize < serialIndex){	
+	    seL4_SetMR(0, uBufSize);
             memcpy((void*) sosAddr, (void *) serialBuffer, uBufSize);
 	}  else{
+	    seL4_SetMR(0, serialIndex);
 	    memcpy((void*) sosAddr, (void *) serialBuffer, serialIndex);
         }
 	
-	seL4_SetMR(0, serialIndex);
         seL4_Send(reply_cap, reply);
         serialIndex = 0;
         cspace_free_slot(cur_cspace, reply_cap);
@@ -136,12 +139,20 @@ void timer_callback(int id,void *data){
 struct oft_entry {
    sos_stat_t file_info;
    seL4_Word *ptr;
+   seL4_Word ref;
 };
 
 struct oft_entry of_table[MAX_OPEN_FILE];
 seL4_Word ofd_count = 0;
-seL4_Word curr_free_ofd = 0;
+seL4_Word curr_free_ofd = 2;
 
+
+void of_table_init(){
+   of_table[STD_IN].ptr = gConsole;
+   of_table[STD_IN].file_info.st_fmode = FM_READ;
+   of_table[STD_OUT].ptr = gConsole;
+   of_table[STD_OUT].file_info.st_fmode = FM_WRITE;
+}
 
 seL4_Word legalUserAddr(seL4_Word user_addr){
    struct region *curr = tty_test_process.addrspace->regions;
@@ -203,7 +214,6 @@ void handle_syscall(seL4_Word badge, int num_args) {
 	   seL4_Send(reply_cap, reply);
 	   break;
 	}
-	printf("1.1\n");
         /*address is not mapped before*/	
         seL4_Word index1 = userAddr >> 22;
         seL4_Word index2 = (userAddr << 10) >> 22;
@@ -218,7 +228,6 @@ void handle_syscall(seL4_Word badge, int num_args) {
                                    &app_cap);
             conditional_panic(err, "Fail to map the page to the application\n");
         }
-        printf("1.2\n");
 
         seL4_Word sosAddr = tty_test_process.addrspace->page_table[index1][index2].sos_vaddr & ~PAGE_MASK_4K;
         // Add offset
@@ -235,7 +244,7 @@ void handle_syscall(seL4_Word badge, int num_args) {
 
 
 	//Check access right
-	if (!(of_table[ofd].file_info.st_fmode & FM_READ)){
+	if (!(of_table[ofd].file_info.st_fmode & FM_WRITE)){
 	   seL4_MessageInfo_t reply = seL4_MessageInfo_new(0, 0, 0, 1);
 	   seL4_SetMR(0,ERR_ILLEGAL_ACCESS_MODE); 
 	   seL4_Send(reply_cap, reply);
@@ -243,7 +252,7 @@ void handle_syscall(seL4_Word badge, int num_args) {
 	}
 	
 	//console
-	if (of_table[ofd].ptr = gConsole){   
+	if (ofd == STD_OUT){   
            int bytes_sent = serial_send(serial_handle, sosAddr, uBufSize);
            seL4_MessageInfo_t reply = seL4_MessageInfo_new(0, 0, 0, 1);
 	   seL4_SetMR(0, bytes_sent);
@@ -323,7 +332,7 @@ void handle_syscall(seL4_Word badge, int num_args) {
 	}
 	
 	//console
-	if (of_table[ofd].ptr = gConsole){   
+	if (ofd == STD_IN){   
 	    if (serialIndex != 0) {
 	        if (uBufSize < serialIndex){	
             	   memcpy((void*) sosAddr, (void *) serialBuffer, uBufSize);
@@ -355,6 +364,7 @@ void handle_syscall(seL4_Word badge, int num_args) {
 	seL4_Word fd_count = fdt_status >> TWO_BYTE_BITS;
         fmode_t access_mode = seL4_GetMR(2); 
 
+	printf("free fd %d\n",free_fd);
         if (fd_count == PROCESS_MAX_FILES) {
 	   seL4_MessageInfo_t reply = seL4_MessageInfo_new(0, 0, 0, 1);
 	   seL4_SetMR(0,ERR_MAX_FILE);
@@ -389,7 +399,10 @@ void handle_syscall(seL4_Word badge, int num_args) {
 	   sos_vaddr = tty_test_process.addrspace->page_table[index1][index2].sos_vaddr & (~PAGE_MASK_4K);
            sos_vaddr |= (userAddr & PAGE_MASK_4K); 	   
 	}  else{
-           conditional_panic(-1,"Illegal userspace address\n");
+           seL4_MessageInfo_t reply = seL4_MessageInfo_new(0, 0, 0, 1);
+	   seL4_SetMR(0,ERR_ILLEGAL_USERADDR); 
+	   seL4_Send(reply_cap, reply);
+	   break;
 	}
         
 	//check if it's console
@@ -405,38 +418,52 @@ void handle_syscall(seL4_Word badge, int num_args) {
 	}
 
 	if (!breakInWhile && *console == *path){
-           serial_register_handler(serial_handle,serial_handler);
-	   of_table[curr_free_ofd].ptr = gConsole;	
+	   int ofd;
+           if ((access_mode & FM_WRITE) && (access_mode & FM_READ)){
+              //We don't allow a console to be both readable and writable
+	      seL4_MessageInfo_t reply = seL4_MessageInfo_new(0, 0, 0, 1);
+	      seL4_SetMR(0,ERR_INVALID_ARGUMENT);
+              seL4_Send(reply_cap,reply);
+	      break;
+	   }
+
+           if (access_mode != FM_WRITE){	   
+	      ofd  = STD_IN;
+	   }  else{
+              ofd  = STD_OUT;
+	   }
+           tty_test_process.addrspace->fd_table[free_fd].ofd = ofd;
+           of_table[ofd].ref++;	   
 	}  else {
            /* TODO Acutal file maipulation*/
-	   /*Keep it quite for now making it not NULL*/
 
-           of_table[curr_free_ofd].ptr = gConsole;
+	   tty_test_process.addrspace->fd_table[free_fd].ofd = curr_free_ofd;
+           
+	   //NEED TO CHANGE LATER!!!!!
+	   of_table[curr_free_ofd].ptr = gConsole;
+	  
+	   //set access mode and add ref count
+	   of_table[curr_free_ofd].file_info.st_fmode = access_mode;
+           of_table[curr_free_ofd].ref++;
+	
+	   ofd_count++;
+	   while (of_table[curr_free_ofd].ptr != NULL){
+              curr_free_ofd = (curr_free_ofd + 1)% MAX_OPEN_FILE;  
+	   }
 	}
-        //set access mode
-	of_table[curr_free_ofd].file_info.st_fmode = access_mode;
         
-	//Compute free_fd and free_ofd
+	//Compute free_fd
 	fd_count++;
 
-	seL4_SetMR(0,free_fd);
+        printf("free_fd later%d\n",free_fd);	
+        seL4_SetMR(0,free_fd);
 	
-	tty_test_process.addrspace->fd_table[free_fd].ofd = curr_free_ofd;
-	
-
 	while (tty_test_process.addrspace->fd_table[free_fd].ofd != -1){
            free_fd = (free_fd+1) % PROCESS_MAX_FILES;
 	}
 	
-	
 	tty_test_process.addrspace->fdt_status = (fd_count << TWO_BYTE_BITS)|free_fd;
-
-
-	ofd_count++;
-	while (of_table[curr_free_ofd].ptr != NULL){
-           curr_free_ofd = (curr_free_ofd + 1)% MAX_OPEN_FILE;  
-	}
-
+	        
         seL4_MessageInfo_t reply = seL4_MessageInfo_new(0, 0, 0, 1);
         seL4_Send(reply_cap,reply);
     }
@@ -451,8 +478,9 @@ void handle_syscall(seL4_Word badge, int num_args) {
 	   seL4_Send(reply_cap, reply);
 	   break;
 	}
-	 
-	if (ofd == -1){
+	
+        //check ofd	
+	if (ofd == -1 || of_table[ofd].ref == 0){
 	   seL4_MessageInfo_t reply = seL4_MessageInfo_new(0, 0, 0, 1);
 	   seL4_SetMR(0,ERR_INVALID_FD); 
 	   seL4_Send(reply_cap, reply);
@@ -467,11 +495,19 @@ void handle_syscall(seL4_Word badge, int num_args) {
 	 *
 	 *
 	 * */
+	
         tty_test_process.addrspace->fd_table[fd].ofd = -1;
-	of_table[curr_free_ofd].ptr = NULL;
-	of_table[curr_free_ofd].file_info.st_fmode = 0;
- 
-        seL4_MessageInfo_t reply = seL4_MessageInfo_new(0, 0, 0, 1);
+        of_table[ofd].ref--; 
+	if (ofd == STD_IN || ofd == STD_OUT){
+           //console related	
+	}  else{
+	   if (of_table[curr_free_ofd].ref == 0){
+	      of_table[curr_free_ofd].ptr = NULL;
+	      of_table[curr_free_ofd].file_info.st_fmode = 0;
+	   }
+        }
+        
+	seL4_MessageInfo_t reply = seL4_MessageInfo_new(0, 0, 0, 1);
 	seL4_SetMR(0,0); 
 	seL4_Send(reply_cap, reply);       	
     }
@@ -627,6 +663,10 @@ void start_first_process(char* app_name, seL4_CPtr fault_ep) {
     unsigned long elf_size;
 
     tty_test_process.addrspace = as_new();
+
+    /*open file table increase ref count*/
+    of_table[STD_IN].ref++;
+    of_table[STD_OUT].ref+=2;
 
     /* Create a VSpace */
     tty_test_process.vroot_addr = ut_alloc(seL4_PageDirBits);
@@ -876,7 +916,9 @@ int main(void) {
     
     /* Initialise serial driver */
     serial_handle = serial_init();
-    
+    serial_register_handler(serial_handle,serial_handler);
+   
+    of_table_init(); 
     
     /* Start the user application */
     start_first_process(TTY_NAME, _sos_ipc_ep_cap);
