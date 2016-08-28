@@ -154,40 +154,9 @@ size_t sos_write(void *vData, size_t count) {
     int data_sent = 0;
 
     // Multiple writes if it exceeds seL4_MsgMaxLength
-    while (data_sent < count) {
-        // Data length (num chars)
-        int data_length = count - data_sent;
-        // Args: syscall num and data length
-        int num_args = 2;
-        // args + # registers for data to write (min 1)
-        int length = num_args + 1 + ((sizeof(char) * data_length - 1) / sizeof(seL4_Word));
+    sos_sys_write(0,vData,count);
 
-        // Check max length
-        if (length > seL4_MsgMaxLength) {
-            length = seL4_MsgMaxLength;
-            // Calculate message length minus syscall num and data length registers
-            data_length = (length - num_args) * sizeof(seL4_Word);
-        }
-
-        // Set up message
-        seL4_MessageInfo_t tag = seL4_MessageInfo_new(0, 0, 0, length);
-        seL4_SetTag(tag);
-
-        // Set syscall number
-        seL4_SetMR(0, 0);
-        // Set data length
-        seL4_SetMR(1, data_length);
-
-        // Copy the data to write to message registers
-        memcpy(&seL4_GetIPCBuffer()->msg[num_args], vData + data_sent, data_length);
-
-        // Send message
-        seL4_Call(SOS_IPC_EP_CAP, tag);
-
-        data_sent += seL4_GetMR(0);
-    }
-
-    return data_sent;
+    return seL4_GetMR(0);;
 }
 
 size_t sos_read(void *vData, size_t count) {

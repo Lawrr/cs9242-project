@@ -83,14 +83,12 @@ int main(void){
     ttyout_init();
 
     do {
-        printf("task:\tHello world, I'm\ttty_test!\n");
+        int fd = sos_sys_open("console:",FM_READ|FM_WRITE); 
+	printf("task:\tHello world, I'm\ttty_test!\n");
         char str[30];
         printf("vaddr: %x\n", str); 
         // read(-1, str, 30);
-        int fd = sos_sys_open("console:",FM_READ); 
-        sos_sys_close(fd);
 	int err = sos_sys_read(0,str,30);
-	printf("%d\n",err);
 	printf("Output: %s\n", str);
         //pt_test();
         thread_block();

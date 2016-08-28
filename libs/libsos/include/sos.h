@@ -45,6 +45,7 @@ typedef int fmode_t;
 #define ERR_INVALID_FD -4
 #define ERR_ILLEGAL_USERADDR -5
 #define ERR_ILLEGAL_ACCESS_MODE -6
+#define ERR_INVALID_ARGUMENT -7
 
 
 
