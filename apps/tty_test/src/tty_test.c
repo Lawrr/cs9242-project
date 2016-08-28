@@ -25,7 +25,7 @@
 
 #include <sel4/sel4.h>
 
-
+#include "sos.h"
 #include "ttyout.h"
 
 // Block a thread forever
@@ -86,8 +86,10 @@ int main(void){
         printf("task:\tHello world, I'm\ttty_test!\n");
         char str[30];
         printf("vaddr: %x\n", str); 
-        read(-1, str, 30);
-        printf("Output: %s\n", str);
+        // read(-1, str, 30);
+        int fd = sos_sys_open("console:",FM_READ); 
+	sos_sys_read(fd,str,30);
+	printf("Output: %s\n", str);
         //pt_test();
         thread_block();
         // sleep(1);	// Implement this as a syscall

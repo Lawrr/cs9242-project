@@ -19,9 +19,6 @@
 /**
  * This is our system call endpoint cap, as defined by the root server
  */
-#define MAX_FD 255
-
-
 
 int sos_sys_open(const char *path, fmode_t mode) {
     
@@ -43,7 +40,7 @@ int sos_sys_open(const char *path, fmode_t mode) {
     seL4_SetMR(2, mode);
     
     seL4_Call(SOS_IPC_EP_CAP, tag);
-    return ;
+    return seL4_GetMR(0);
 }
 
 int sos_sys_close(int file) {

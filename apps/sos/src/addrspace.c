@@ -4,7 +4,7 @@
 #include "addrspace.h"
 #include "ut_manager/ut.h"
 #include "frametable.h"
-
+#include "sos.h"
 struct app_addrspace *as_new() {
     struct app_addrspace *as = malloc(sizeof(struct app_addrspace));
     if (as == NULL) {
@@ -12,6 +12,12 @@ struct app_addrspace *as_new() {
     }
     as->regions = NULL;
     as->page_table = CSPACE_NULL;
+    as->fdt_status = 0;
+    as->fd_table = malloc(sizeof(struct fdt_entry)*PROCESS_MAX_FILES);
+    for (int i = 0 ; i < PROCESS_MAX_FILES;i++){
+        as->fd_table[i].ofd = -1;
+    }
+
     return as;
 }
 

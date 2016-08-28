@@ -6,6 +6,8 @@
 
 struct app_addrspace {
     seL4_Word asid;
+    /*Higher 16 bit:fd count
+     *Lower 16 bit:free_fd*/
     seL4_Word fdt_status;
     struct region *regions;
     struct fdt_entry *fd_table;
