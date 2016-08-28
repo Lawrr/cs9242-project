@@ -17,11 +17,11 @@ struct app_addrspace *as_new() {
     for (int i = 0 ; i < PROCESS_MAX_FILES;i++){
         as->fd_table[i].ofd = -1;
     }
-    //std input
+    /* STDIN */
     as->fd_table[0].ofd = 0;
-    //std output
+    /* STDOUT */
     as->fd_table[1].ofd = 1;
-    //std error
+    /* STDERR */
     as->fd_table[2].ofd = 1;
     return as;
 }

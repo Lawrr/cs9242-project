@@ -103,10 +103,10 @@ struct serial *serial_handle;
  */
 extern fhandle_t mnt_point;
 
-char serialBuffer[MAX_IO_BUF];
+char serial_buffer[MAX_IO_BUF];
 int serial_index = 0;
 void serial_handler(struct serial *serial, char c) {
-    serialBuffer[serial_index++] = c;
+    serial_buffer[serial_index++] = c;
     if (serial_index > MAX_IO_BUF) {
         conditional_panic(1, "More than one page is input");
     }
@@ -121,15 +121,14 @@ void timer_callback(int id,void *data) {
 
         if (ubuf_size < serial_index) {
             seL4_SetMR(0, ubuf_size);
-            memcpy((void*) sos_addr, (void *) serialBuffer, ubuf_size);
+            memcpy((void*) sos_addr, (void *) serial_buffer, ubuf_size);
         } else {
             seL4_SetMR(0, serial_index);
-            memcpy((void*) sos_addr, (void *) serialBuffer, serial_index);
+            memcpy((void*) sos_addr, (void *) serial_buffer, serial_index);
         }
 
         seL4_Send(reply_cap, reply);
         serial_index = 0;
-        cspace_free_slot(cur_cspace, reply_cap);
     } else {
         register_timer(READ_DELAY, timer_callback, data);
     }
@@ -288,15 +287,17 @@ void syscall_write(seL4_CPtr reply_cap) {
         return;
     }
 
-    /* Console */
-    if (ofd == STD_OUT) {
-        int bytes_sent = serial_send(serial_handle, sos_addr, ubuf_size);
-        seL4_MessageInfo_t reply = seL4_MessageInfo_new(0, 0, 0, 1);
-        seL4_SetMR(0, bytes_sent);
-        seL4_Send(reply_cap, reply);
+    int bytes_sent = 0;
+    if (ofd == STD_OUT || ofd == STD_INOUT) {
+        /* Console */
+        bytes_sent = serial_send(serial_handle, sos_addr, ubuf_size);
     } else {
         /* TODO actually manipulate file */
     }
+
+    seL4_MessageInfo_t reply = seL4_MessageInfo_new(0, 0, 0, 1);
+    seL4_SetMR(0, bytes_sent);
+    seL4_Send(reply_cap, reply);
 }
 
 void syscall_read(seL4_CPtr reply_cap) {
@@ -356,12 +357,12 @@ void syscall_read(seL4_CPtr reply_cap) {
     }
 
     /* Console */
-    if (ofd == STD_IN) {
+    if (ofd == STD_IN || ofd == STD_INOUT) {
         if (serial_index != 0) {
             if (ubuf_size < serial_index) {	
-                memcpy((void*) sos_addr, (void *) serialBuffer, ubuf_size);
+                memcpy((void*) sos_addr, (void *) serial_buffer, ubuf_size);
             }  else{
-                memcpy((void*) sos_addr, (void *) serialBuffer, serial_index);
+                memcpy((void*) sos_addr, (void *) serial_buffer, serial_index);
             }
             seL4_MessageInfo_t reply = seL4_MessageInfo_new(0, 0, 0, 1);
             seL4_SetMR(0, serial_index);
@@ -427,7 +428,7 @@ void syscall_open(seL4_CPtr reply_cap) {
 
     if (!strcmp(path, console)) {
         int ofd;
-        if (access_mode == FM_WRITE & FM_READ) {
+        if (access_mode == (FM_WRITE | FM_READ)) {
             ofd = STD_INOUT;
         } else if (access_mode != FM_WRITE) {
             ofd = STD_IN;
@@ -441,7 +442,7 @@ void syscall_open(seL4_CPtr reply_cap) {
 
         tty_test_process.addrspace->fd_table[free_fd].ofd = curr_free_ofd;
 
-        /* TODO: NEED TO CHANGE LATER!!!!! */
+        /* TODO: NEED TO CHANGE LATER! */
         of_table[curr_free_ofd].ptr = gConsole;
 
         /* Set access mode and add ref count */

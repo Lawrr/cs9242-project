@@ -261,24 +261,28 @@ char test_str[] = "Basic test string for read/write";
 char small_buf[SMALL_BUF_SZ];
 
 void test_buffers(int console_fd) {
+    printf("Test1\n");
     /* test a small string from the code segment */
     int result = sos_sys_write(console_fd, test_str, strlen(test_str));
     assert(result == strlen(test_str));
 
+    printf("Test2\n");
     /* test reading to a small buffer */
     result = sos_sys_read(console_fd, small_buf, SMALL_BUF_SZ);
     /* make sure you type in at least SMALL_BUF_SZ */
     assert(result == SMALL_BUF_SZ);
 
+    printf("Test3\n");
     /* test a reading into a large on-stack buffer */
     char stack_buf[BUF_SIZ];
     /* for this test you'll need to paste a lot of data into 
        the console, without newlines */
-    result = sos_sys_read(console_fd, &stack_buf, BUF_SIZ);
-    assert(result == BUF_SIZ);
+    /* result = sos_sys_read(console_fd, &stack_buf, BUF_SIZ); */
+    /* assert(result == BUF_SIZ); */
 
-    result = sos_sys_write(console_fd, &stack_buf, BUF_SIZ);
-    assert(result == BUF_SIZ);
+    printf("Test4\n");
+    /* result = sos_sys_write(console_fd, &stack_buf, BUF_SIZ); */
+    /* assert(result == BUF_SIZ); */
 
     /* this call to malloc should trigger an sbrk */
     char *heap_buf = malloc(BUF_SIZ);
@@ -287,10 +291,10 @@ void test_buffers(int console_fd) {
     /* for this test you'll need to paste a lot of data into 
        the console, without newlines */
     result = sos_sys_read(console_fd, &heap_buf, BUF_SIZ);
-    assert(result == BUF_SIZ);
+    /* assert(result == BUF_SIZ); */
 
-    result = sos_sys_write(console_fd, &heap_buf, BUF_SIZ);
-    assert(result == BUF_SIZ);
+    /* result = sos_sys_write(console_fd, &heap_buf, BUF_SIZ); */
+    /* assert(result == BUF_SIZ); */
 
     /* try sleeping */
     for (int i = 0; i < 5; i++) {
@@ -315,8 +319,8 @@ int main(void) {
     in = open("console", O_RDONLY);
     assert(in >= 0);
 
-    int console_fd = open("console", O_RDONLY);
-    /* test_buffers(console_fd); */
+    int console_fd = open("console", FM_READ | FM_WRITE);
+    test_buffers(console_fd);
 
     bp = buf;
     done = 0;

@@ -21,7 +21,7 @@ struct region {
     struct region *next;
 };
 
-struct fdt_entry{
+struct fdt_entry {
     seL4_Word ofd;
 };
 
