@@ -88,7 +88,9 @@ int main(void){
         printf("vaddr: %x\n", str); 
         // read(-1, str, 30);
         int fd = sos_sys_open("console:",FM_READ); 
-	sos_sys_read(fd,str,30);
+        sos_sys_close(fd);
+	int err = sos_sys_read(0,str,30);
+	printf("%d\n",err);
 	printf("Output: %s\n", str);
         //pt_test();
         thread_block();

@@ -203,6 +203,7 @@ void handle_syscall(seL4_Word badge, int num_args) {
 	   break;
         }
 
+	printf("1.1\n");
         /*address is not mapped before*/	
         seL4_Word index1 = userAddr >> 22;
         seL4_Word index2 = (userAddr << 10) >> 22;
@@ -217,19 +218,23 @@ void handle_syscall(seL4_Word badge, int num_args) {
                                    &app_cap);
             conditional_panic(err, "Fail to map the page to the application\n");
         }
+        printf("1.2\n");
 
         seL4_Word sosAddr = tty_test_process.addrspace->page_table[index1][index2].sos_vaddr & ~PAGE_MASK_4K;
         // Add offset
         sosAddr |= (userAddr & PAGE_MASK_4K);
-      
+        printf("1.3\n");
+
 
 
         seL4_Word ofd = tty_test_process.addrspace->fd_table[fd].ofd;
-        //Check fd
+        printf("1.3\n");
+	//Check fd
 	if (ofd == -1){
 	   seL4_MessageInfo_t reply = seL4_MessageInfo_new(0, 0, 0, 1);
 	   seL4_SetMR(0,ERR_INVALID_FD); 
 	   seL4_Send(reply_cap, reply);
+	   break;
 	}
 
 
@@ -238,6 +243,7 @@ void handle_syscall(seL4_Word badge, int num_args) {
 	   seL4_MessageInfo_t reply = seL4_MessageInfo_new(0, 0, 0, 1);
 	   seL4_SetMR(0,ERR_ILLEGAL_ACCESS_MODE); 
 	   seL4_Send(reply_cap, reply);
+	   break;
 	}
 	
 	//console
@@ -277,10 +283,12 @@ void handle_syscall(seL4_Word badge, int num_args) {
 	   seL4_MessageInfo_t reply = seL4_MessageInfo_new(0, 0, 0, 1);
 	   seL4_SetMR(0,ERR_MAX_FILE);
            seL4_Send(reply_cap,reply);
+	   break;
 	}  else if (ofd_count == MAX_OPEN_FILE){
            seL4_MessageInfo_t reply = seL4_MessageInfo_new(0, 0, 0, 1);
 	   seL4_SetMR(0,ERR_MAX_SYSTEM_FILE);
            seL4_Send(reply_cap,reply);
+	   break;
 	}        
 
         /*address is not mapped before*/
@@ -350,6 +358,34 @@ void handle_syscall(seL4_Word badge, int num_args) {
 
         seL4_MessageInfo_t reply = seL4_MessageInfo_new(0, 0, 0, 1);
         seL4_Send(reply_cap,reply);
+    }
+    break;
+    case SOS_CLOSE_SYSCALL:{
+	int fd = seL4_GetMR(1);
+         seL4_Word ofd = tty_test_process.addrspace->fd_table[fd].ofd;
+        //Check fd
+	if (ofd == -1){
+	   seL4_MessageInfo_t reply = seL4_MessageInfo_new(0, 0, 0, 1);
+	   seL4_SetMR(0,ERR_INVALID_FD); 
+	   seL4_Send(reply_cap, reply);
+	   break;
+	}
+
+
+        /*Close actual file
+	 *TODO:
+	 *
+	 *
+	 *
+	 *
+	 * */
+        tty_test_process.addrspace->fd_table[fd].ofd = -1;
+	of_table[curr_free_ofd].ptr = NULL;
+	of_table[curr_free_ofd].file_info.st_fmode = 0;
+ 
+        seL4_MessageInfo_t reply = seL4_MessageInfo_new(0, 0, 0, 1);
+	seL4_SetMR(0,0); 
+	seL4_Send(reply_cap, reply);       	
     }
     break;
     default:
