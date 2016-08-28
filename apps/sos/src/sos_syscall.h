@@ -5,5 +5,8 @@
 #define SOS_READ_SYSCALL 1
 #define SOS_OPEN_SYSCALL 2
 #define SOS_CLOSE_SYSCALL 3
+#define SOS_BRK_SYSCALL 4
+#define SOS_USLEEP_SYSCALL 5
+#define SOS_TIME_STAMP_SYSCALL 6
 
 #endif

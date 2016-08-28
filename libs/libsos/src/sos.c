@@ -140,14 +140,47 @@ pid_t sos_process_wait(pid_t pid) {
 }
 
 void sos_sys_usleep(int msec) {
-    // TODO for M4
-    assert(!"You need to implement this");
+    int numRegs = 2;
+    seL4_MessageInfo_t tag = seL4_MessageInfo_new(seL4_NoFault, 0, 0, numRegs);
+    seL4_SetTag(tag);
+   
+    //Set syscall number
+    seL4_SetMR(0, 5);
+    seL4_SetMR(1, msec);
+
+    seL4_Call(SOS_IPC_EP_CAP, tag);    
+
+    // TODO check if sleep succeeded
+    int64_t timestamp = seL4_GetMR(0);
 }
 
 int64_t sos_sys_time_stamp(void) {
-    // TODO for M4
-    assert(!"You need to implement this");
-    return -1;
+    int numRegs = 1;
+    seL4_MessageInfo_t tag = seL4_MessageInfo_new(seL4_NoFault, 0, 0, numRegs);
+    seL4_SetTag(tag);
+   
+    //Set syscall number
+    seL4_SetMR(0, 6);
+
+    seL4_Call(SOS_IPC_EP_CAP, tag);    
+
+    int64_t timestamp = seL4_GetMR(0);
+    return timestamp;
+}
+
+int sos_brk(uintptr_t newbrk) {
+    int numRegs = 2;
+    seL4_MessageInfo_t tag = seL4_MessageInfo_new(seL4_NoFault, 0, 0, numRegs);
+    seL4_SetTag(tag);
+   
+    //Set syscall number
+    seL4_SetMR(0, 4);
+    seL4_SetMR(1, newbrk);
+
+    seL4_Call(SOS_IPC_EP_CAP, tag);    
+
+    int err = seL4_GetMR(0);
+    return err;
 }
 
 size_t sos_write(void *vData, size_t count) {

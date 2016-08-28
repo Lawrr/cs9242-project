@@ -160,6 +160,43 @@ seL4_Word legalUserAddr(seL4_Word user_addr){
    return 0;
 }
 
+void syscall_brk(seL4_CPtr reply_cap, uintptr_t newbrk) {
+    seL4_MessageInfo_t reply = seL4_MessageInfo_new(0, 0, 0, 1);
+
+    struct region *curr_region = tty_test_process.addrspace->regions;
+    while (curr_region != NULL &&
+           curr_region->baseaddr != PROCESS_HEAP_START) {
+        curr_region = curr_region->next;
+    }
+
+    if (curr_region == NULL || newbrk >= PROCESS_HEAP_END) {
+        seL4_SetMR(0, 1);
+        seL4_Send((seL4_CPtr) reply_cap, reply);
+    }
+
+    curr_region->size = newbrk - PROCESS_HEAP_START;
+
+    seL4_SetMR(0, 0);
+    seL4_Send(reply_cap, reply);
+}
+
+void uwakeup(uint32_t id, void *reply_cap) {
+    seL4_MessageInfo_t reply = seL4_MessageInfo_new(0, 0, 0, 0);
+    seL4_Send((seL4_CPtr) reply_cap, reply);
+}
+
+void syscall_usleep(seL4_CPtr reply_cap, int msec) {
+    register_timer(msec * 1000, &uwakeup, (void *) reply_cap);
+}
+
+void syscall_time_stamp(seL4_CPtr reply_cap) {
+    timestamp_t timestamp = time_stamp();
+
+    seL4_MessageInfo_t reply = seL4_MessageInfo_new(0, 0, 0, 1);
+    seL4_SetMR(0, timestamp); 
+    seL4_Send(reply_cap, reply);
+}
+
 void handle_syscall(seL4_Word badge, int num_args) {
     seL4_Word syscall_number;
     seL4_CPtr reply_cap;
@@ -174,6 +211,22 @@ void handle_syscall(seL4_Word badge, int num_args) {
 
     /* Process system call */
     switch (syscall_number) {
+        case SOS_BRK_SYSCALL: {
+            uintptr_t newbrk = seL4_GetMR(1);
+            syscall_brk(reply_cap, newbrk);
+            break;
+        }
+
+        case SOS_USLEEP_SYSCALL: {
+            int msec = seL4_GetMR(1);
+            syscall_usleep(reply_cap, msec);
+            break;
+        }
+
+    case SOS_TIME_STAMP_SYSCALL:
+        syscall_time_stamp(reply_cap);
+        break;
+                          
     case SOS_WRITE_SYSCALL:{
         dprintf(0, "Message received from user program\n");    
 	int fd = seL4_GetMR(1);
@@ -704,7 +757,7 @@ void start_first_process(char* app_name, seL4_CPtr fault_ep) {
     /* Heap region */
     err = as_define_region(tty_test_process.addrspace,
                            PROCESS_HEAP_START,
-                           PROCESS_HEAP_END - PROCESS_HEAP_START,
+                           0,
                            seL4_AllRights);
     conditional_panic(err, "Could not define heap region");
 

@@ -86,10 +86,17 @@ int main(void){
         int fd = sos_sys_open("console:",FM_READ|FM_WRITE); 
 	printf("task:\tHello world, I'm\ttty_test!\n");
         char str[30];
+        char *test2 = malloc(10000);
+        test2[1000] = 5;
+        test2[500] = 2;
+        sos_sys_usleep(1000);
         printf("vaddr: %x\n", str); 
+        sos_sys_usleep(1000);
+        printf("Timestamp: %llu\n", sos_sys_time_stamp());
         // read(-1, str, 30);
 	int err = sos_sys_read(0,str,30);
 	printf("Output: %s\n", str);
+        printf("Timestamp: %llu\n", sos_sys_time_stamp());
         //pt_test();
         thread_block();
         // sleep(1);	// Implement this as a syscall
