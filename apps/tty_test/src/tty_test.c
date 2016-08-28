@@ -43,23 +43,23 @@ thread_block(void){
 #define TEST_ADDRESS 0x20000000
 
 /* called from pt_test */
-static void
+    static void
 do_pt_test(char *buf)
 {
     int i;
 
     /* set */
     for (int i = 0; i < NPAGES; i++) {
-	    buf[i * PAGE_SIZE_4K] = i;
+        buf[i * PAGE_SIZE_4K] = i;
     }
 
     /* check */
     for (int i = 0; i < NPAGES; i++) {
-	    assert(buf[i * PAGE_SIZE_4K] == i);
+        assert(buf[i * PAGE_SIZE_4K] == i);
     }
 }
 
-void
+    void
 pt_test( void )
 {
     /* need a decent sized stack */
@@ -83,9 +83,10 @@ int main(void){
     ttyout_init();
 
     do {
-        int fd = sos_sys_open("console:",FM_READ|FM_WRITE); 
-	printf("task:\tHello world, I'm\ttty_test!\n");
+        printf("task:\tHello world, I'm\tttty_test!\n");
+
         char str[30];
+
         char *test2 = malloc(10000);
         test2[1000] = 5;
         test2[500] = 2;
@@ -93,10 +94,24 @@ int main(void){
         printf("vaddr: %x\n", str); 
         sos_sys_usleep(1000);
         printf("Timestamp: %llu\n", sos_sys_time_stamp());
-        // read(-1, str, 30);
-	int err = sos_sys_read(0,str,30);
-	printf("Output: %s\n", str);
-        printf("Timestamp: %llu\n", sos_sys_time_stamp());
+
+        printf("open new console\n");
+        int fd = sos_sys_open("console:",FM_READ); 
+        printf("new console fd%d\n\n",fd);
+
+        printf("read new console\n");
+        int err = sos_sys_read(fd,str,30);
+        printf("Output: %s\n",str);
+        printf("err: %d\n\n",err);
+
+        printf("open new console\n");
+        fd = sos_sys_open("console:",FM_WRITE); 
+        printf("new console fd%d\n\n",fd);
+
+        printf("write to new console:Hello World\n");
+        err = sos_sys_write(fd,"Hello World\n",12);
+        printf("err: %d\n\n",err);
+
         //pt_test();
         thread_block();
         // sleep(1);	// Implement this as a syscall

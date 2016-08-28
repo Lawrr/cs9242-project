@@ -19,6 +19,11 @@
 /**
  * This is our system call endpoint cap, as defined by the root server
  */
+//default value. May be changed by user if they close and reopen console
+int std_input = 0;
+int std_output = 1;
+int std_err = 1;
+
 
 int sos_sys_open(const char *path, fmode_t mode) {
     
@@ -60,6 +65,8 @@ int sos_sys_close(int file) {
     return seL4_GetMR(0);
 }
 
+
+//Console can not be both readable and writable
 int sos_sys_read(int file, char *buf, size_t nbyte) {
 
     //Set up message
@@ -80,7 +87,7 @@ int sos_sys_read(int file, char *buf, size_t nbyte) {
     seL4_SetMR(3,nbyte);
     
     seL4_Call(SOS_IPC_EP_CAP, tag);
-    return -1;
+    return seL4_GetMR(0);
 }
 
 int sos_sys_write(int file, const char *buf, size_t nbyte) {
@@ -101,7 +108,7 @@ int sos_sys_write(int file, const char *buf, size_t nbyte) {
     seL4_SetMR(3,nbyte);
     
     seL4_Call(SOS_IPC_EP_CAP, tag);    
-    return -1;
+    return seL4_GetMR(0);
 }
 
 int sos_getdirent(int pos, char *name, size_t nbyte) {
@@ -184,15 +191,10 @@ int sos_brk(uintptr_t newbrk) {
 }
 
 size_t sos_write(void *vData, size_t count) {
-    int data_sent = 0;
-
-    // Multiple writes if it exceeds seL4_MsgMaxLength
-    sos_sys_write(0,vData,count);
-
-    return seL4_GetMR(0);;
+    return sos_sys_write(std_output,vData,count);
 }
 
 size_t sos_read(void *vData, size_t count) {
     //implement this to use your syscall
-    return 0;
+    return sos_sys_read(std_input,vData,count);
 }
