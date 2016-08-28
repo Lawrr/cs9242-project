@@ -197,9 +197,8 @@ void handle_syscall(seL4_Word badge, int num_args) {
         seL4_Word uBufSize = seL4_GetMR(3);
        
         if (!legalUserAddr(userAddr)){
-	   conditional_panic(-1,"Illegal user address");
 	   seL4_MessageInfo_t reply = seL4_MessageInfo_new(0, 0, 0, 1);
-	   seL4_SetMR(0,-1); 
+	   seL4_SetMR(0,ERR_ILLEGAL_USERADDR); 
 	   seL4_Send(reply_cap, reply);
 	   break;
         }
@@ -224,9 +223,16 @@ void handle_syscall(seL4_Word badge, int num_args) {
         sosAddr |= (userAddr & PAGE_MASK_4K);
        
         seL4_Word ofd = tty_test_process.addrspace->fd_table[fd].ofd;
+	
+	//Check access right
+	if (!(of_table[ofd].file_info.st_fmode & FM_READ)){
+	   seL4_MessageInfo_t reply = seL4_MessageInfo_new(0, 0, 0, 1);
+	   seL4_SetMR(0,ERR_ILLEGAL_ACCESS_MODE); 
+	   seL4_Send(reply_cap, reply);
+	}
+	
 	//console
-	if (of_table[ofd].ptr = gConsole){
-	    
+	if (of_table[ofd].ptr = gConsole){   
 	    if (serialIndex != 0) {
 	        if (uBufSize < serialIndex){	
             	   memcpy((void*) sosAddr, (void *) serialBuffer, uBufSize);
@@ -256,7 +262,8 @@ void handle_syscall(seL4_Word badge, int num_args) {
         seL4_Word fdt_status = tty_test_process.addrspace -> fdt_status;			  
         seL4_Word free_fd = fdt_status & LOWER_TWO_BYTE_MASK;
 	seL4_Word fd_count = fdt_status >> TWO_BYTE_BITS;
-			  
+        fmode_t access_mode = seL4_GetMR(2); 
+
         if (fd_count == PROCESS_MAX_FILES) {
 	   seL4_MessageInfo_t reply = seL4_MessageInfo_new(0, 0, 0, 1);
 	   seL4_SetMR(0,ERR_MAX_FILE);
@@ -311,7 +318,7 @@ void handle_syscall(seL4_Word badge, int num_args) {
 
            of_table[curr_free_ofd].ptr = gConsole;
 	}
-
+        of_table[curr_free_ofd].file_info.st_fmode = access_mode;
         fd_count++;
 
 	seL4_SetMR(0,free_fd);

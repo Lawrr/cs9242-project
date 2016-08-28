@@ -43,7 +43,8 @@ typedef int fmode_t;
 #define ERR_MAX_SYSTEM_FILE -2
 #define EER_INVALID_FILE_NAME -3
 #define ERR_INVALID_FD -4
-
+#define ERR_ILLEGAL_USERADDR -5
+#define ERR_ILLEGAL_ACCESS_MODE -6
 
 
 
