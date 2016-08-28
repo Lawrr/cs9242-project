@@ -171,7 +171,9 @@ seL4_Word legalUserAddr(seL4_Word user_addr){
    return 0;
 }
 
-void syscall_brk(seL4_CPtr reply_cap, uintptr_t newbrk) {
+void syscall_brk(seL4_CPtr reply_cap) {
+    uintptr_t newbrk = seL4_GetMR(1);
+
     seL4_MessageInfo_t reply = seL4_MessageInfo_new(0, 0, 0, 1);
 
     struct region *curr_region = tty_test_process.addrspace->regions;
@@ -196,7 +198,8 @@ void uwakeup(uint32_t id, void *reply_cap) {
     seL4_Send((seL4_CPtr) reply_cap, reply);
 }
 
-void syscall_usleep(seL4_CPtr reply_cap, int msec) {
+void syscall_usleep(seL4_CPtr reply_cap) {
+    int msec = seL4_GetMR(1);
     register_timer(msec * 1000, &uwakeup, (void *) reply_cap);
 }
 
@@ -208,6 +211,336 @@ void syscall_time_stamp(seL4_CPtr reply_cap) {
     seL4_Send(reply_cap, reply);
 }
 
+void syscall_write(seL4_CPtr reply_cap) {
+    dprintf(0, "Message received from user program\n");    
+    int fd = seL4_GetMR(1);
+    seL4_Word userAddr = seL4_GetMR(2);
+    seL4_Word uBufSize = seL4_GetMR(3);
+    //Check uBufSize
+    if (uBufSize <= 0){
+        seL4_MessageInfo_t reply = seL4_MessageInfo_new(0, 0, 0, 1);
+        seL4_SetMR(0,ERR_INVALID_ARGUMENT); 
+        seL4_Send(reply_cap, reply);
+        return;
+    }      
+
+    //Check user address
+    if (!legalUserAddr(userAddr)){
+        seL4_MessageInfo_t reply = seL4_MessageInfo_new(0, 0, 0, 1);
+        seL4_SetMR(0,ERR_ILLEGAL_USERADDR); 
+        seL4_Send(reply_cap, reply);
+        return;
+    }
+
+    //check fd
+    if (fd < 0 || fd >= PROCESS_MAX_FILES){
+        seL4_MessageInfo_t reply = seL4_MessageInfo_new(0, 0, 0, 1);
+        seL4_SetMR(0,ERR_INVALID_FD); 
+        seL4_Send(reply_cap, reply);
+        return;
+    }
+    /*address is not mapped before*/	
+    seL4_Word index1 = userAddr >> 22;
+    seL4_Word index2 = (userAddr << 10) >> 22;
+    struct page_table_entry **page_table = tty_test_process.addrspace->page_table;
+    if (page_table == NULL || page_table[index1] == NULL) {
+        seL4_CPtr app_cap;
+        seL4_CPtr sos_vaddr;
+        int err = sos_map_page(userAddr, 
+                tty_test_process.vroot, 
+                tty_test_process.addrspace, 
+                &sos_vaddr,
+                &app_cap);
+        conditional_panic(err, "Fail to map the page to the application\n");
+    }
+
+    seL4_Word sosAddr = tty_test_process.addrspace->page_table[index1][index2].sos_vaddr & ~PAGE_MASK_4K;
+    // Add offset
+    sosAddr |= (userAddr & PAGE_MASK_4K);
+
+    seL4_Word ofd = tty_test_process.addrspace->fd_table[fd].ofd;
+    //Check ofd
+    if (ofd == -1){
+        seL4_MessageInfo_t reply = seL4_MessageInfo_new(0, 0, 0, 1);
+        seL4_SetMR(0,ERR_INVALID_FD); 
+        seL4_Send(reply_cap, reply);
+        return;
+    }
+
+
+    //Check access right
+    if (!(of_table[ofd].file_info.st_fmode & FM_WRITE)){
+        seL4_MessageInfo_t reply = seL4_MessageInfo_new(0, 0, 0, 1);
+        seL4_SetMR(0,ERR_ILLEGAL_ACCESS_MODE); 
+        seL4_Send(reply_cap, reply);
+        return;
+    }
+
+    //console
+    if (ofd == STD_OUT){   
+        int bytes_sent = serial_send(serial_handle, sosAddr, uBufSize);
+        seL4_MessageInfo_t reply = seL4_MessageInfo_new(0, 0, 0, 1);
+        seL4_SetMR(0, bytes_sent);
+        seL4_Send(reply_cap, reply);
+    }   else{
+        /*TODO actually manipulate file*/
+    }
+}
+
+void syscall_read(seL4_CPtr reply_cap) {
+    int fd = seL4_GetMR(1);
+    seL4_Word userAddr = seL4_GetMR(2);
+    seL4_Word uBufSize = seL4_GetMR(3);
+    
+    int handled = 1;
+
+    //check uBufSize
+    if (uBufSize <= 0){
+        seL4_MessageInfo_t reply = seL4_MessageInfo_new(0, 0, 0, 1);
+        seL4_SetMR(0,ERR_INVALID_ARGUMENT); 
+        seL4_Send(reply_cap, reply);
+        return;
+    }
+
+    //Check user address
+    if (!legalUserAddr(userAddr)){
+        seL4_MessageInfo_t reply = seL4_MessageInfo_new(0, 0, 0, 1);
+        seL4_SetMR(0,ERR_ILLEGAL_USERADDR); 
+        seL4_Send(reply_cap, reply);
+        return;
+    }
+
+    //check fd
+    if (fd < 0 || fd >= PROCESS_MAX_FILES){
+        seL4_MessageInfo_t reply = seL4_MessageInfo_new(0, 0, 0, 1);
+        seL4_SetMR(0,ERR_INVALID_FD); 
+        seL4_Send(reply_cap, reply);
+        return;
+    }
+    printf("1.1\n");
+    /*address is not mapped before*/	
+    seL4_Word index1 = userAddr >> 22;
+    seL4_Word index2 = (userAddr << 10) >> 22;
+    struct page_table_entry **page_table = tty_test_process.addrspace->page_table;
+    if (page_table == NULL || page_table[index1] == NULL) {
+        seL4_CPtr app_cap;
+        seL4_CPtr sos_vaddr;
+        int err = sos_map_page(userAddr, 
+                tty_test_process.vroot, 
+                tty_test_process.addrspace, 
+                &sos_vaddr,
+                &app_cap);
+        conditional_panic(err, "Fail to map the page to the application\n");
+    }
+    printf("1.2\n");
+
+    seL4_Word sosAddr = tty_test_process.addrspace->page_table[index1][index2].sos_vaddr & ~PAGE_MASK_4K;
+    // Add offset
+    sosAddr |= (userAddr & PAGE_MASK_4K);
+
+    seL4_Word ofd = tty_test_process.addrspace->fd_table[fd].ofd;
+    //Check ofd
+    if (ofd == -1){
+        seL4_MessageInfo_t reply = seL4_MessageInfo_new(0, 0, 0, 1);
+        seL4_SetMR(0,ERR_INVALID_FD); 
+        seL4_Send(reply_cap, reply);
+        return;
+    }
+
+
+    //Check access right
+    if (!(of_table[ofd].file_info.st_fmode & FM_READ)){
+        seL4_MessageInfo_t reply = seL4_MessageInfo_new(0, 0, 0, 1);
+        seL4_SetMR(0,ERR_ILLEGAL_ACCESS_MODE); 
+        seL4_Send(reply_cap, reply);
+        return;
+    }
+
+    //console
+    if (ofd == STD_IN){   
+        if (serialIndex != 0) {
+            if (uBufSize < serialIndex){	
+                memcpy((void*) sosAddr, (void *) serialBuffer, uBufSize);
+            }  else{
+                memcpy((void*) sosAddr, (void *) serialBuffer, serialIndex);
+            }
+            seL4_MessageInfo_t reply = seL4_MessageInfo_new(0, 0, 0, 1);
+            seL4_SetMR(0, serialIndex);
+            seL4_Send(reply_cap, reply);
+            serialIndex = 0;
+        } else {
+            seL4_Word *buffer = malloc(3 * sizeof(seL4_Word));
+            buffer[0] = (seL4_Word) reply_cap;
+            printf("reply cap: %x\n", reply_cap);
+            buffer[1] = sosAddr;
+            buffer[2] = uBufSize;
+            register_timer(2000000, timer_callback, (void *) buffer);
+            handled = 0;
+        }
+    } else {
+        /*TODO actually manipulate file*/
+    }
+
+    if (handled){
+    /* Free the saved reply cap */
+       cspace_free_slot(cur_cspace, reply_cap);
+    }
+}
+
+void syscall_open(seL4_CPtr reply_cap) {
+    seL4_Word fdt_status = tty_test_process.addrspace -> fdt_status;			  
+    seL4_Word free_fd = fdt_status & LOWER_TWO_BYTE_MASK;
+    seL4_Word fd_count = fdt_status >> TWO_BYTE_BITS;
+    fmode_t access_mode = seL4_GetMR(2); 
+
+    printf("free fd %d\n",free_fd);
+    if (fd_count == PROCESS_MAX_FILES) {
+        seL4_MessageInfo_t reply = seL4_MessageInfo_new(0, 0, 0, 1);
+        seL4_SetMR(0,ERR_MAX_FILE);
+        seL4_Send(reply_cap,reply);
+        return;
+    }  else if (ofd_count == MAX_OPEN_FILE){
+        seL4_MessageInfo_t reply = seL4_MessageInfo_new(0, 0, 0, 1);
+        seL4_SetMR(0,ERR_MAX_SYSTEM_FILE);
+        seL4_Send(reply_cap,reply);
+        return;
+    }        
+
+    /*address is not mapped before*/
+    seL4_Word userAddr = seL4_GetMR(1);
+    seL4_Word index1 = userAddr >> 22;
+    seL4_Word index2 = (userAddr << 10) >> 22;
+    struct page_table_entry **page_table = tty_test_process.addrspace->page_table;
+    seL4_Word sos_vaddr;
+    if (page_table == NULL || page_table[index1] == NULL) {
+        seL4_CPtr app_cap;
+
+        int err = sos_map_page(userAddr, 
+                tty_test_process.vroot, 
+                tty_test_process.addrspace, 
+                &sos_vaddr,
+                &app_cap);
+        conditional_panic(err, "Fail to map the page to the application\n");
+    }
+
+    //Check user address 
+    if (legalUserAddr(userAddr)){   
+        sos_vaddr = tty_test_process.addrspace->page_table[index1][index2].sos_vaddr & (~PAGE_MASK_4K);
+        sos_vaddr |= (userAddr & PAGE_MASK_4K); 	   
+    }  else{
+        seL4_MessageInfo_t reply = seL4_MessageInfo_new(0, 0, 0, 1);
+        seL4_SetMR(0,ERR_ILLEGAL_USERADDR); 
+        seL4_Send(reply_cap, reply);
+        return;
+    }
+
+    //check if it's console
+    char * path = (char *)sos_vaddr;
+    char * console = gConsole;
+    int breakInWhile = 0;
+    while (*console != '\0'){
+
+        if (*console++ != *path++){
+            breakInWhile = 1;
+            break;
+        }	   
+    }
+
+    if (!breakInWhile && *console == *path){
+        int ofd;
+        if ((access_mode & FM_WRITE) && (access_mode & FM_READ)){
+            //We don't allow a console to be both readable and writable
+            seL4_MessageInfo_t reply = seL4_MessageInfo_new(0, 0, 0, 1);
+            seL4_SetMR(0,ERR_INVALID_ARGUMENT);
+            seL4_Send(reply_cap,reply);
+            return;
+        }
+
+        if (access_mode != FM_WRITE){	   
+            ofd  = STD_IN;
+        }  else{
+            ofd  = STD_OUT;
+        }
+        tty_test_process.addrspace->fd_table[free_fd].ofd = ofd;
+        of_table[ofd].ref++;	   
+    }  else {
+        /* TODO Acutal file maipulation*/
+
+        tty_test_process.addrspace->fd_table[free_fd].ofd = curr_free_ofd;
+
+        //NEED TO CHANGE LATER!!!!!
+        of_table[curr_free_ofd].ptr = gConsole;
+
+        //set access mode and add ref count
+        of_table[curr_free_ofd].file_info.st_fmode = access_mode;
+        of_table[curr_free_ofd].ref++;
+
+        ofd_count++;
+        while (of_table[curr_free_ofd].ptr != NULL){
+            curr_free_ofd = (curr_free_ofd + 1)% MAX_OPEN_FILE;  
+        }
+    }
+
+    //Compute free_fd
+    fd_count++;
+
+    printf("free_fd later%d\n",free_fd);	
+    seL4_SetMR(0,free_fd);
+
+    while (tty_test_process.addrspace->fd_table[free_fd].ofd != -1){
+        free_fd = (free_fd+1) % PROCESS_MAX_FILES;
+    }
+
+    tty_test_process.addrspace->fdt_status = (fd_count << TWO_BYTE_BITS)|free_fd;
+
+    seL4_MessageInfo_t reply = seL4_MessageInfo_new(0, 0, 0, 1);
+    seL4_Send(reply_cap,reply);
+}
+
+void syscall_close(seL4_CPtr reply_cap) {
+    int fd = seL4_GetMR(1);
+    seL4_Word ofd = tty_test_process.addrspace->fd_table[fd].ofd;
+    //Check fd
+    if (fd < 0 || fd >= PROCESS_MAX_FILES){
+        seL4_MessageInfo_t reply = seL4_MessageInfo_new(0, 0, 0, 1);
+        seL4_SetMR(0,ERR_INVALID_FD); 
+        seL4_Send(reply_cap, reply);
+        return;
+    }
+
+    //check ofd	
+    if (ofd == -1 || of_table[ofd].ref == 0){
+        seL4_MessageInfo_t reply = seL4_MessageInfo_new(0, 0, 0, 1);
+        seL4_SetMR(0,ERR_INVALID_FD); 
+        seL4_Send(reply_cap, reply);
+        return;
+    }
+
+
+    /*Close actual file
+     *TODO:
+     *
+     *
+     *
+     *
+     * */
+
+    tty_test_process.addrspace->fd_table[fd].ofd = -1;
+    of_table[ofd].ref--; 
+    if (ofd == STD_IN || ofd == STD_OUT){
+        //console related	
+    }  else{
+        if (of_table[curr_free_ofd].ref == 0){
+            of_table[curr_free_ofd].ptr = NULL;
+            of_table[curr_free_ofd].file_info.st_fmode = 0;
+        }
+    }
+
+    seL4_MessageInfo_t reply = seL4_MessageInfo_new(0, 0, 0, 1);
+    seL4_SetMR(0,0); 
+    seL4_Send(reply_cap, reply);       	
+}
+
 void handle_syscall(seL4_Word badge, int num_args) {
     seL4_Word syscall_number;
     seL4_CPtr reply_cap;
@@ -217,363 +550,40 @@ void handle_syscall(seL4_Word badge, int num_args) {
     /* Save the caller */
     reply_cap = cspace_save_reply_cap(cur_cspace);
     assert(reply_cap != CSPACE_NULL);
-    
-    int handled = 1;
 
     /* Process system call */
     switch (syscall_number) {
-        case SOS_BRK_SYSCALL: {
-            uintptr_t newbrk = seL4_GetMR(1);
-            syscall_brk(reply_cap, newbrk);
+        case SOS_WRITE_SYSCALL:
+            syscall_write(reply_cap);
             break;
-        }
-
-        case SOS_USLEEP_SYSCALL: {
-            int msec = seL4_GetMR(1);
-            syscall_usleep(reply_cap, msec);
-            break;
-        }
-
-    case SOS_TIME_STAMP_SYSCALL:
-        syscall_time_stamp(reply_cap);
-        break;
-                          
-    case SOS_WRITE_SYSCALL:{
-        dprintf(0, "Message received from user program\n");    
-	int fd = seL4_GetMR(1);
-        seL4_Word userAddr = seL4_GetMR(2);
-        seL4_Word uBufSize = seL4_GetMR(3);
-        //Check uBufSize
-	if (uBufSize <= 0){
-	   seL4_MessageInfo_t reply = seL4_MessageInfo_new(0, 0, 0, 1);
-	   seL4_SetMR(0,ERR_INVALID_ARGUMENT); 
-	   seL4_Send(reply_cap, reply);
-	   break;
-        }      
-
-
-	//Check user address
-        if (!legalUserAddr(userAddr)){
-	   seL4_MessageInfo_t reply = seL4_MessageInfo_new(0, 0, 0, 1);
-	   seL4_SetMR(0,ERR_ILLEGAL_USERADDR); 
-	   seL4_Send(reply_cap, reply);
-	   break;
-        }
-        
-	//check fd
-	if (fd < 0 || fd >= PROCESS_MAX_FILES){
-	   seL4_MessageInfo_t reply = seL4_MessageInfo_new(0, 0, 0, 1);
-	   seL4_SetMR(0,ERR_INVALID_FD); 
-	   seL4_Send(reply_cap, reply);
-	   break;
-	}
-        /*address is not mapped before*/	
-        seL4_Word index1 = userAddr >> 22;
-        seL4_Word index2 = (userAddr << 10) >> 22;
-        struct page_table_entry **page_table = tty_test_process.addrspace->page_table;
-        if (page_table == NULL || page_table[index1] == NULL) {
-            seL4_CPtr app_cap;
-            seL4_CPtr sos_vaddr;
-            int err = sos_map_page(userAddr, 
-                                   tty_test_process.vroot, 
-                                   tty_test_process.addrspace, 
-                                   &sos_vaddr,
-                                   &app_cap);
-            conditional_panic(err, "Fail to map the page to the application\n");
-        }
-
-        seL4_Word sosAddr = tty_test_process.addrspace->page_table[index1][index2].sos_vaddr & ~PAGE_MASK_4K;
-        // Add offset
-        sosAddr |= (userAddr & PAGE_MASK_4K);
-
-        seL4_Word ofd = tty_test_process.addrspace->fd_table[fd].ofd;
-	//Check ofd
-	if (ofd == -1){
-	   seL4_MessageInfo_t reply = seL4_MessageInfo_new(0, 0, 0, 1);
-	   seL4_SetMR(0,ERR_INVALID_FD); 
-	   seL4_Send(reply_cap, reply);
-	   break;
-	}
-
-
-	//Check access right
-	if (!(of_table[ofd].file_info.st_fmode & FM_WRITE)){
-	   seL4_MessageInfo_t reply = seL4_MessageInfo_new(0, 0, 0, 1);
-	   seL4_SetMR(0,ERR_ILLEGAL_ACCESS_MODE); 
-	   seL4_Send(reply_cap, reply);
-	   break;
-	}
-	
-	//console
-	if (ofd == STD_OUT){   
-           int bytes_sent = serial_send(serial_handle, sosAddr, uBufSize);
-           seL4_MessageInfo_t reply = seL4_MessageInfo_new(0, 0, 0, 1);
-	   seL4_SetMR(0, bytes_sent);
-	   seL4_Send(reply_cap, reply);
-	}   else{
-	    /*TODO actually manipulate file*/
-	}
-    }	
-	
-	break;
          
-    case SOS_READ_SYSCALL:{
-	int fd = seL4_GetMR(1);
-        seL4_Word userAddr = seL4_GetMR(2);
-        seL4_Word uBufSize = seL4_GetMR(3);
-        
-	//check uBufSize
-	if (uBufSize <= 0){
-	   seL4_MessageInfo_t reply = seL4_MessageInfo_new(0, 0, 0, 1);
-	   seL4_SetMR(0,ERR_INVALID_ARGUMENT); 
-	   seL4_Send(reply_cap, reply);
-	   break;
-        }
+        case SOS_READ_SYSCALL:
+            syscall_read(reply_cap);
+            break;
 
-	//Check user address
-        if (!legalUserAddr(userAddr)){
-	   seL4_MessageInfo_t reply = seL4_MessageInfo_new(0, 0, 0, 1);
-	   seL4_SetMR(0,ERR_ILLEGAL_USERADDR); 
-	   seL4_Send(reply_cap, reply);
-	   break;
-        }
-        
-	//check fd
-	if (fd < 0 || fd >= PROCESS_MAX_FILES){
-	   seL4_MessageInfo_t reply = seL4_MessageInfo_new(0, 0, 0, 1);
-	   seL4_SetMR(0,ERR_INVALID_FD); 
-	   seL4_Send(reply_cap, reply);
-	   break;
-	}
-	printf("1.1\n");
-        /*address is not mapped before*/	
-        seL4_Word index1 = userAddr >> 22;
-        seL4_Word index2 = (userAddr << 10) >> 22;
-        struct page_table_entry **page_table = tty_test_process.addrspace->page_table;
-        if (page_table == NULL || page_table[index1] == NULL) {
-            seL4_CPtr app_cap;
-            seL4_CPtr sos_vaddr;
-            int err = sos_map_page(userAddr, 
-                                   tty_test_process.vroot, 
-                                   tty_test_process.addrspace, 
-                                   &sos_vaddr,
-                                   &app_cap);
-            conditional_panic(err, "Fail to map the page to the application\n");
-        }
-        printf("1.2\n");
+        case SOS_OPEN_SYSCALL:
+            syscall_open(reply_cap);
+            break;
 
-        seL4_Word sosAddr = tty_test_process.addrspace->page_table[index1][index2].sos_vaddr & ~PAGE_MASK_4K;
-        // Add offset
-        sosAddr |= (userAddr & PAGE_MASK_4K);
+        case SOS_CLOSE_SYSCALL:
+            syscall_close(reply_cap);
+            break;
 
-        seL4_Word ofd = tty_test_process.addrspace->fd_table[fd].ofd;
-	//Check ofd
-	if (ofd == -1){
-	   seL4_MessageInfo_t reply = seL4_MessageInfo_new(0, 0, 0, 1);
-	   seL4_SetMR(0,ERR_INVALID_FD); 
-	   seL4_Send(reply_cap, reply);
-	   break;
-	}
+        case SOS_BRK_SYSCALL:
+            syscall_brk(reply_cap);
+            break;
 
+        case SOS_USLEEP_SYSCALL:
+            syscall_usleep(reply_cap);
+            break;
 
-	//Check access right
-	if (!(of_table[ofd].file_info.st_fmode & FM_READ)){
-	   seL4_MessageInfo_t reply = seL4_MessageInfo_new(0, 0, 0, 1);
-	   seL4_SetMR(0,ERR_ILLEGAL_ACCESS_MODE); 
-	   seL4_Send(reply_cap, reply);
-	   break;
-	}
-	
-	//console
-	if (ofd == STD_IN){   
-	    if (serialIndex != 0) {
-	        if (uBufSize < serialIndex){	
-            	   memcpy((void*) sosAddr, (void *) serialBuffer, uBufSize);
-	        }  else{
-		   memcpy((void*) sosAddr, (void *) serialBuffer, serialIndex);
-	        }
-                seL4_MessageInfo_t reply = seL4_MessageInfo_new(0, 0, 0, 1);
-	        seL4_SetMR(0, serialIndex);
-	        seL4_Send(reply_cap, reply);
-	        serialIndex = 0;
-            } else {
-                seL4_Word *buffer = malloc(3 * sizeof(seL4_Word));
-                buffer[0] = (seL4_Word) reply_cap;
-                printf("reply cap: %x\n", reply_cap);
-                buffer[1] = sosAddr;
-		buffer[2] = uBufSize;
-                register_timer(2000000, timer_callback, (void *) buffer);
-                handled = 0;
-            }
-	}   else{
-	    /*TODO actually manipulate file*/
-	}
-    }
+        case SOS_TIME_STAMP_SYSCALL:
+            syscall_time_stamp(reply_cap);
+            break;
 
-    break;	
-    case SOS_OPEN_SYSCALL:{
-        seL4_Word fdt_status = tty_test_process.addrspace -> fdt_status;			  
-        seL4_Word free_fd = fdt_status & LOWER_TWO_BYTE_MASK;
-	seL4_Word fd_count = fdt_status >> TWO_BYTE_BITS;
-        fmode_t access_mode = seL4_GetMR(2); 
-
-	printf("free fd %d\n",free_fd);
-        if (fd_count == PROCESS_MAX_FILES) {
-	   seL4_MessageInfo_t reply = seL4_MessageInfo_new(0, 0, 0, 1);
-	   seL4_SetMR(0,ERR_MAX_FILE);
-           seL4_Send(reply_cap,reply);
-	   break;
-	}  else if (ofd_count == MAX_OPEN_FILE){
-           seL4_MessageInfo_t reply = seL4_MessageInfo_new(0, 0, 0, 1);
-	   seL4_SetMR(0,ERR_MAX_SYSTEM_FILE);
-           seL4_Send(reply_cap,reply);
-	   break;
-	}        
-
-        /*address is not mapped before*/
-	seL4_Word userAddr = seL4_GetMR(1);
-	seL4_Word index1 = userAddr >> 22;
-        seL4_Word index2 = (userAddr << 10) >> 22;
-        struct page_table_entry **page_table = tty_test_process.addrspace->page_table;
-        seL4_Word sos_vaddr;
-	if (page_table == NULL || page_table[index1] == NULL) {
-            seL4_CPtr app_cap;
-            
-            int err = sos_map_page(userAddr, 
-                                   tty_test_process.vroot, 
-                                   tty_test_process.addrspace, 
-                                   &sos_vaddr,
-                                   &app_cap);
-            conditional_panic(err, "Fail to map the page to the application\n");
-        }
-        
-	//Check user address 
-	if (legalUserAddr(userAddr)){   
-	   sos_vaddr = tty_test_process.addrspace->page_table[index1][index2].sos_vaddr & (~PAGE_MASK_4K);
-           sos_vaddr |= (userAddr & PAGE_MASK_4K); 	   
-	}  else{
-           seL4_MessageInfo_t reply = seL4_MessageInfo_new(0, 0, 0, 1);
-	   seL4_SetMR(0,ERR_ILLEGAL_USERADDR); 
-	   seL4_Send(reply_cap, reply);
-	   break;
-	}
-        
-	//check if it's console
-	char * path = (char *)sos_vaddr;
-	char * console = gConsole;
-	int breakInWhile = 0;
-	while (*console != '\0'){
-     
-	   if (*console++ != *path++){
-	      breakInWhile = 1;
-              break;
-	   }	   
-	}
-
-	if (!breakInWhile && *console == *path){
-	   int ofd;
-           if ((access_mode & FM_WRITE) && (access_mode & FM_READ)){
-              //We don't allow a console to be both readable and writable
-	      seL4_MessageInfo_t reply = seL4_MessageInfo_new(0, 0, 0, 1);
-	      seL4_SetMR(0,ERR_INVALID_ARGUMENT);
-              seL4_Send(reply_cap,reply);
-	      break;
-	   }
-
-           if (access_mode != FM_WRITE){	   
-	      ofd  = STD_IN;
-	   }  else{
-              ofd  = STD_OUT;
-	   }
-           tty_test_process.addrspace->fd_table[free_fd].ofd = ofd;
-           of_table[ofd].ref++;	   
-	}  else {
-           /* TODO Acutal file maipulation*/
-
-	   tty_test_process.addrspace->fd_table[free_fd].ofd = curr_free_ofd;
-           
-	   //NEED TO CHANGE LATER!!!!!
-	   of_table[curr_free_ofd].ptr = gConsole;
-	  
-	   //set access mode and add ref count
-	   of_table[curr_free_ofd].file_info.st_fmode = access_mode;
-           of_table[curr_free_ofd].ref++;
-	
-	   ofd_count++;
-	   while (of_table[curr_free_ofd].ptr != NULL){
-              curr_free_ofd = (curr_free_ofd + 1)% MAX_OPEN_FILE;  
-	   }
-	}
-        
-	//Compute free_fd
-	fd_count++;
-
-        printf("free_fd later%d\n",free_fd);	
-        seL4_SetMR(0,free_fd);
-	
-	while (tty_test_process.addrspace->fd_table[free_fd].ofd != -1){
-           free_fd = (free_fd+1) % PROCESS_MAX_FILES;
-	}
-	
-	tty_test_process.addrspace->fdt_status = (fd_count << TWO_BYTE_BITS)|free_fd;
-	        
-        seL4_MessageInfo_t reply = seL4_MessageInfo_new(0, 0, 0, 1);
-        seL4_Send(reply_cap,reply);
-    }
-    break;
-    case SOS_CLOSE_SYSCALL:{
-	int fd = seL4_GetMR(1);
-         seL4_Word ofd = tty_test_process.addrspace->fd_table[fd].ofd;
-        //Check fd
-	if (fd < 0 || fd >= PROCESS_MAX_FILES){
-	   seL4_MessageInfo_t reply = seL4_MessageInfo_new(0, 0, 0, 1);
-	   seL4_SetMR(0,ERR_INVALID_FD); 
-	   seL4_Send(reply_cap, reply);
-	   break;
-	}
-	
-        //check ofd	
-	if (ofd == -1 || of_table[ofd].ref == 0){
-	   seL4_MessageInfo_t reply = seL4_MessageInfo_new(0, 0, 0, 1);
-	   seL4_SetMR(0,ERR_INVALID_FD); 
-	   seL4_Send(reply_cap, reply);
-	   break;
-	}
-
-
-        /*Close actual file
-	 *TODO:
-	 *
-	 *
-	 *
-	 *
-	 * */
-	
-        tty_test_process.addrspace->fd_table[fd].ofd = -1;
-        of_table[ofd].ref--; 
-	if (ofd == STD_IN || ofd == STD_OUT){
-           //console related	
-	}  else{
-	   if (of_table[curr_free_ofd].ref == 0){
-	      of_table[curr_free_ofd].ptr = NULL;
-	      of_table[curr_free_ofd].file_info.st_fmode = 0;
-	   }
-        }
-        
-	seL4_MessageInfo_t reply = seL4_MessageInfo_new(0, 0, 0, 1);
-	seL4_SetMR(0,0); 
-	seL4_Send(reply_cap, reply);       	
-    }
-    break;
-    default:
-        printf("Unknown syscall %d\n", syscall_number);
-        ///* we don't want to reply to an unknown syscall */
-
-    }
-
-    if (handled){
-    /* Free the saved reply cap */
-       cspace_free_slot(cur_cspace, reply_cap);
+        default:
+            printf("Unknown syscall %d\n", syscall_number);
+            ///* we don't want to reply to an unknown syscall */
     }
 }
 
