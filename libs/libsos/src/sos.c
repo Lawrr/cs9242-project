@@ -145,9 +145,6 @@ void sos_sys_usleep(int msec) {
     seL4_SetMR(1, msec);
 
     seL4_Call(SOS_IPC_EP_CAP, tag);    
-
-    // TODO check if sleep succeeded
-    int64_t timestamp = seL4_GetMR(0);
 }
 
 int64_t sos_sys_time_stamp(void) {

@@ -69,7 +69,7 @@ const seL4_BootInfo* _boot_info;
 struct PCB tty_test_process;
 
 //struct PCB PCB_Array[MAX_PROCESS];
-char *gConsole = "console";
+char *console = "console";
 
 seL4_CPtr _sos_ipc_ep_cap;
 seL4_CPtr _sos_interrupt_ep_cap;
@@ -81,11 +81,11 @@ seL4_Word ofd_count = 0;
 seL4_Word curr_free_ofd = 3;
 
 void of_table_init() {
-   of_table[STD_IN].ptr = gConsole;
+   of_table[STD_IN].ptr = console;
    of_table[STD_IN].file_info.st_fmode = FM_READ;
-   of_table[STD_OUT].ptr = gConsole;
+   of_table[STD_OUT].ptr = console;
    of_table[STD_OUT].file_info.st_fmode = FM_WRITE;
-   of_table[STD_INOUT].ptr = gConsole;
+   of_table[STD_INOUT].ptr = console;
    of_table[STD_INOUT].file_info.st_fmode = FM_WRITE | FM_READ;
 }
 
@@ -104,7 +104,7 @@ void handle_syscall(seL4_Word badge, int num_args) {
     reply_cap = cspace_save_reply_cap(cur_cspace);
     assert(reply_cap != CSPACE_NULL);
 
-    printf("Syscall no. %d received from user program\n", syscall_number);
+    printf("Syscall id: %d - received from user application\n", syscall_number);
 
     /* Process system call */
     switch (syscall_number) {
@@ -143,7 +143,6 @@ void handle_syscall(seL4_Word badge, int num_args) {
 }
 
 void syscall_loop(seL4_CPtr ep) {
-
     while (1) {
         seL4_Word badge;
         seL4_Word label;

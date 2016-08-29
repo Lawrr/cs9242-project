@@ -36,55 +36,71 @@ extern struct serial *serial_handle;
 extern struct oft_entry of_table[MAX_OPEN_FILE];
 extern seL4_Word ofd_count;
 extern seL4_Word curr_free_ofd;
-extern char *gConsole;
+extern char *console;
 
 static void console_serial_handler(struct serial *serial, char c) {
     struct oft_entry *entry = &of_table[STD_IN];
 
     /* Return if we do not currently need to read */
-    if (entry->buffer_size == 0) return;
+    if (entry->buffer == NULL || entry->buffer_size == 0) return;
+
+    /* Check if we are on a new page */
+    if (((seL4_Word) entry->buffer & PAGE_MASK_4K) == 0) {
+        seL4_CPtr dummy_sos_vaddr;
+        seL4_CPtr dummy_app_cap;
+        int err = sos_map_page(entry->buffer,
+                tty_test_process.vroot,
+                tty_test_process.addrspace,
+                &dummy_sos_vaddr,
+                &dummy_app_cap);
+
+        /* if (err) { */
+        /*     entry->buffer_size = 0; */
+        /*     entry->buffer = NULL; */
+
+        /*     /1* Reply on error *1/ */
+        /*     if (entry->reply_cap != CSPACE_NULL) { */
+        /*         seL4_MessageInfo_t reply = seL4_MessageInfo_new(0, 0, 0, 1); */
+        /*         seL4_SetMR(0, entry->buffer_count); */
+        /*         seL4_Send(entry->reply_cap, reply); */
+
+        /*         entry->reply_cap = CSPACE_NULL; */
+        /*     } */
+        /* } */
+    }
 
     /* Take uaddr and turn it into sos_vaddr */
     seL4_Word index1 = ((seL4_Word) entry->buffer >> 22);
     seL4_Word index2 = ((seL4_Word) entry->buffer << 10) >> 22;
 
-    /* Check if we are on a new page */
-    if (((seL4_Word) entry->buffer & PAGE_MASK_4K) == 0) {
-        seL4_CPtr dump_app_cap;
-        seL4_CPtr dump_sos_vaddr;
-        int err = sos_map_page(entry->buffer,
-                               tty_test_process.vroot,
-                               tty_test_process.addrspace,
-                               &dump_sos_vaddr,
-                               &dump_app_cap);
-        /* TODO check error */
-    }
-
     char *sos_vaddr = PAGE_ALIGN_4K(tty_test_process.addrspace->page_table[index1][index2].sos_vaddr);
     /* Add offset */
     sos_vaddr = ((seL4_Word) sos_vaddr) | ((seL4_Word) entry->buffer & PAGE_MASK_4K);
 
+    /* Write into buffer */
     *sos_vaddr = c;
-
     entry->buffer++;
     entry->buffer_count++;
 
+    /* Check end */
     if (entry->buffer_count == entry->buffer_size || c == '\n') {
         entry->buffer_size = 0;
+        entry->buffer = NULL;
 
+        /* Reply */
         if (entry->reply_cap != CSPACE_NULL) {
             seL4_MessageInfo_t reply = seL4_MessageInfo_new(0, 0, 0, 1);
             seL4_SetMR(0, entry->buffer_count);
             seL4_Send(entry->reply_cap, reply);
 
             entry->reply_cap = CSPACE_NULL;
-            entry->buffer = NULL;
         }
     }
 }
 
 /* Checks that user pointer is a valid address in userspace */
 static int legal_uaddr(seL4_Word uaddr) {
+    /* Check valid region */
     struct region *curr = tty_test_process.addrspace->regions;
     while (curr != NULL) {
         if (uaddr >= curr->baseaddr && uaddr < curr->baseaddr + curr->size) {
@@ -93,42 +109,45 @@ static int legal_uaddr(seL4_Word uaddr) {
         curr = curr->next;
     }
 
-    if (curr != NULL) {
-        if (uaddr < PROCESS_IPC_BUFFER) {
-            return 1;
-        }
+    /* User pointers should be below IPC buffer */
+    if (curr != NULL && uaddr < PROCESS_IPC_BUFFER) {
+        return 1;
     }
-
     return 0;
 }
 
 void syscall_brk(seL4_CPtr reply_cap) {
+    seL4_MessageInfo_t reply = seL4_MessageInfo_new(0, 0, 0, 1);
     uintptr_t newbrk = seL4_GetMR(1);
 
-    seL4_MessageInfo_t reply = seL4_MessageInfo_new(0, 0, 0, 1);
-
+    /* Find heap region */
     struct region *curr_region = tty_test_process.addrspace->regions;
     while (curr_region != NULL &&
            curr_region->baseaddr != PROCESS_HEAP_START) {
         curr_region = curr_region->next;
     }
 
+    /* Check that newbrk is before HEAP_END (and that we even have a heap region...) */
     if (curr_region == NULL || newbrk >= PROCESS_HEAP_END) {
+        /* Set error */
         seL4_SetMR(0, 1);
         seL4_Send((seL4_CPtr) reply_cap, reply);
     }
 
-    printf("brk moved heap region end from %x to %x\n",
+    printf("brk moved heap region end from %p to %p\n",
            curr_region->baseaddr + curr_region->size,
            curr_region->baseaddr + (newbrk - PROCESS_HEAP_START));
 
+    /* Set new heap region */
     curr_region->size = newbrk - PROCESS_HEAP_START;
 
+    /* Reply */
     seL4_SetMR(0, 0);
     seL4_Send(reply_cap, reply);
 }
 
 static void uwakeup(uint32_t id, void *reply_cap) {
+    /* Wake up and reply back to application */
     seL4_MessageInfo_t reply = seL4_MessageInfo_new(0, 0, 0, 0);
     seL4_Send((seL4_CPtr) reply_cap, reply);
 }
@@ -173,10 +192,6 @@ void syscall_write(seL4_CPtr reply_cap) {
         return;
     }
 
-    
-    
-    
-
     seL4_Word ofd = tty_test_process.addrspace->fd_table[fd].ofd;
     /* Check ofd */
     if (ofd == -1) {
@@ -197,37 +212,38 @@ void syscall_write(seL4_CPtr reply_cap) {
     int bytes_sent = 0;
     if (ofd == STD_OUT || ofd == STD_INOUT) {
         /* Console */
-	seL4_Word end_uaddr_next = uaddr+ubuf_size;
-	while (ubuf_size > 0 ){
-	    seL4_Word uaddr_next = PAGE_ALIGN_4K(uaddr) + 0x1000;
-	    seL4_Word size;
-	    if (end_uaddr_next >= uaddr_next){
-               size = uaddr_next-uaddr;
-	    }  else{
-               size = ubuf_size;
-	    }
-            //Tough we can assume the buffer is mapped coz it's write opereation we still
-	    //use sos_map_page to find the mapping address if it's already mapped
-	    seL4_CPtr app_cap;
+        seL4_Word end_uaddr_next = uaddr + ubuf_size;
+        while (ubuf_size > 0) {
+            seL4_Word uaddr_next = PAGE_ALIGN_4K(uaddr) + 0x1000;
+            seL4_Word size;
+            if (end_uaddr_next >= uaddr_next) {
+                size = uaddr_next-uaddr;
+            } else {
+                size = ubuf_size;
+            }
+
+            /* Though we can assume the buffer is mapped because it is a write operation,
+             * we still use sos_map_page to find the mapping address if it is already mapped */
+            seL4_CPtr app_cap;
             seL4_CPtr sos_vaddr;
             int err = sos_map_page(uaddr,
                                    tty_test_process.vroot,
                                    tty_test_process.addrspace,
                                    &sos_vaddr,
                                    &app_cap);
-	    sos_vaddr = PAGE_ALIGN_4K(sos_vaddr);
+            sos_vaddr = PAGE_ALIGN_4K(sos_vaddr);
             /* Add offset */
             sos_vaddr |= (uaddr & PAGE_MASK_4K);
-		    
-            bytes_sent += serial_send(serial_handle,sos_vaddr ,size);
-	    ubuf_size -= size;
-	    printf("ubuf_size%d ------ size%d\n",ubuf_size,size);
-	    uaddr = uaddr_next;
-	}
+
+            bytes_sent += serial_send(serial_handle, sos_vaddr, size);
+            ubuf_size -= size;
+            uaddr = uaddr_next;
+        }
     } else {
         /* TODO actually manipulate file */
     }
 
+    /* Reply */
     seL4_MessageInfo_t reply = seL4_MessageInfo_new(0, 0, 0, 1);
     seL4_SetMR(0, bytes_sent);
     seL4_Send(reply_cap, reply);
@@ -248,7 +264,7 @@ void syscall_read(seL4_CPtr reply_cap) {
         return;
     }
     /* Check user address */
-    if (!legal_uaddr(uaddr)||!legal_uaddr(uaddr+ubuf_size-1)) {
+    if (!legal_uaddr(uaddr) || !legal_uaddr(uaddr+ubuf_size)) {
         seL4_MessageInfo_t reply = seL4_MessageInfo_new(0, 0, 0, 1);
         seL4_SetMR(0, ERR_ILLEGAL_USERADDR); 
         seL4_Send(reply_cap, reply);
@@ -292,8 +308,8 @@ void syscall_read(seL4_CPtr reply_cap) {
         return;
     }
 
-    /* Console */
     if (ofd == STD_IN || ofd == STD_INOUT) {
+        /* Console */
         handled = 0;
         of_table[STD_IN].buffer = uaddr;
         of_table[STD_IN].buffer_size = ubuf_size;
@@ -341,18 +357,16 @@ void syscall_open(seL4_CPtr reply_cap) {
     seL4_CPtr app_cap;
     seL4_Word sos_vaddr;
     int err = sos_map_page(uaddr,
-            tty_test_process.vroot,
-            tty_test_process.addrspace,
-            &sos_vaddr,
-            &app_cap);
+                           tty_test_process.vroot,
+                           tty_test_process.addrspace,
+                           &sos_vaddr,
+                           &app_cap);
 
     sos_vaddr = PAGE_ALIGN_4K(sos_vaddr);
     sos_vaddr |= (uaddr & PAGE_MASK_4K);
 
     /* Check if it's console */
-    char * path = (char *) sos_vaddr;
-    char *console = gConsole;
-
+    char *path = (char *) sos_vaddr;
     if (!strcmp(path, console)) {
         int ofd;
         if (access_mode == (FM_WRITE | FM_READ)) {
@@ -370,7 +384,7 @@ void syscall_open(seL4_CPtr reply_cap) {
         tty_test_process.addrspace->fd_table[free_fd].ofd = curr_free_ofd;
 
         /* TODO: NEED TO CHANGE LATER! */
-        of_table[curr_free_ofd].ptr = gConsole;
+        of_table[curr_free_ofd].ptr = console;
 
         /* Set access mode and add ref count */
         of_table[curr_free_ofd].file_info.st_fmode = access_mode;
@@ -394,6 +408,7 @@ void syscall_open(seL4_CPtr reply_cap) {
     tty_test_process.addrspace->fdt_status = (fd_count << TWO_BYTE_BITS) |
                                              free_fd;
 
+    /* Reply */
     seL4_MessageInfo_t reply = seL4_MessageInfo_new(0, 0, 0, 1);
     seL4_Send(reply_cap, reply);
 }
@@ -409,7 +424,7 @@ void syscall_close(seL4_CPtr reply_cap) {
         seL4_Send(reply_cap, reply);
         return;
     }
-    /* check ofd */	
+    /* Check ofd */	
     if (ofd == -1 || of_table[ofd].ref == 0) {
         seL4_MessageInfo_t reply = seL4_MessageInfo_new(0, 0, 0, 1);
         seL4_SetMR(0, ERR_INVALID_FD); 
@@ -417,8 +432,7 @@ void syscall_close(seL4_CPtr reply_cap) {
         return;
     }
 
-    /*Close actual file
-     *TODO:
+    /* TODO Close actual file
      *
      *
      *
@@ -437,6 +451,7 @@ void syscall_close(seL4_CPtr reply_cap) {
         }
     }
 
+    /* Reply */
     seL4_MessageInfo_t reply = seL4_MessageInfo_new(0, 0, 0, 1);
     seL4_SetMR(0, 0);
     seL4_Send(reply_cap, reply);       	
