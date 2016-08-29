@@ -9,4 +9,20 @@
 #define SOS_USLEEP_SYSCALL 5
 #define SOS_TIME_STAMP_SYSCALL 6
 
+#include <cspace/cspace.h>
+
+void syscall_brk(seL4_CPtr reply_cap);
+
+void syscall_usleep(seL4_CPtr reply_cap);
+
+void syscall_time_stamp(seL4_CPtr reply_cap);
+
+void syscall_write(seL4_CPtr reply_cap);
+
+void syscall_read(seL4_CPtr reply_cap);
+
+void syscall_open(seL4_CPtr reply_cap);
+
+void syscall_close(seL4_CPtr reply_cap);
+
 #endif
