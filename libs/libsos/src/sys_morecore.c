@@ -37,6 +37,7 @@ sys_brk(va_list ap)
     /*if the newbrk is 0, return the bottom of the heap*/
     if (!newbrk) {
         ret = morecore_base;
+        sos_brk(ret);
     } else if (newbrk > morecore_base &&
                newbrk < morecore_top) {
         ret = morecore_base = newbrk;
