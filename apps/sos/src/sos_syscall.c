@@ -53,20 +53,6 @@ static void console_serial_handler(struct serial *serial, char c) {
                 tty_test_process.addrspace,
                 &dummy_sos_vaddr,
                 &dummy_app_cap);
-
-        /* if (err) { */
-        /*     entry->buffer_size = 0; */
-        /*     entry->buffer = NULL; */
-
-        /*     /1* Reply on error *1/ */
-        /*     if (entry->reply_cap != CSPACE_NULL) { */
-        /*         seL4_MessageInfo_t reply = seL4_MessageInfo_new(0, 0, 0, 1); */
-        /*         seL4_SetMR(0, entry->buffer_count); */
-        /*         seL4_Send(entry->reply_cap, reply); */
-
-        /*         entry->reply_cap = CSPACE_NULL; */
-        /*     } */
-        /* } */
     }
 
     /* Take uaddr and turn it into sos_vaddr */
