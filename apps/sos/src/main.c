@@ -104,27 +104,13 @@ struct serial *serial_handle;
  */
 extern fhandle_t mnt_point;
 
-struct oft_entry {
-    sos_stat_t file_info;
-    seL4_Word *ptr;
-    seL4_Word ref;
-    char *buf;
-    char *curr_buf;
-    int buf_index;
-};
-
-struct oft_entry of_table[MAX_OPEN_FILE];
-seL4_Word ofd_count = 0;
-seL4_Word curr_free_ofd = 3;
-
 char serial_buffer[MAX_IO_BUF];
 int serial_index = 0;
 
 void serial_handler(struct serial *serial, char c) {
-    char *buf = of_table[STD_IN].curr_buf;
-    buf[of_table[STD_IN].buf_index++] = c;
-    if (of_table[STD_IN].buf_index > MAX_IO_BUF) {
-        of_table[STD_IN].buf_index = 0;
+    serial_buffer[serial_index++] = c;
+    if (serial_index > MAX_IO_BUF) {
+        conditional_panic(1, "More than one page is input");
     }
 }
 
@@ -150,24 +136,23 @@ void timer_callback(int id,void *data) {
     }
 }
 
+struct oft_entry {
+    sos_stat_t file_info;
+    seL4_Word *ptr;
+    seL4_Word ref;
+};
+
+struct oft_entry of_table[MAX_OPEN_FILE];
+seL4_Word ofd_count = 0;
+seL4_Word curr_free_ofd = 3;
+
 void of_table_init() {
    of_table[STD_IN].ptr = gConsole;
    of_table[STD_IN].file_info.st_fmode = FM_READ;
-   of_table[STD_IN].buf = malloc(4096);
-   of_table[STD_IN].curr_buf = of_table[STD_IN].buf;
-   of_table[STD_IN].buf_index = 0;
-
    of_table[STD_OUT].ptr = gConsole;
    of_table[STD_OUT].file_info.st_fmode = FM_WRITE;
-   of_table[STD_OUT].buf = NULL;
-   of_table[STD_OUT].curr_buf = NULL;
-   of_table[STD_OUT].buf_index = 0;
-   
    of_table[STD_INOUT].ptr = gConsole;
    of_table[STD_INOUT].file_info.st_fmode = FM_WRITE | FM_READ;
-   of_table[STD_INOUT].buf = of_table[STD_IN].buf;
-   of_table[STD_INOUT].curr_buf = of_table[STD_INOUT].buf;
-   of_table[STD_INOUT].buf_index = 0;
 }
 
 /* Checks that user pointer is a valid address in userspace */
@@ -386,10 +371,11 @@ void syscall_read(seL4_CPtr reply_cap) {
             seL4_Send(reply_cap, reply);
             serial_index = 0;
         } else {
-            seL4_Word *buffer = malloc(2 * sizeof(seL4_Word));
+            seL4_Word *buffer = malloc(3 * sizeof(seL4_Word));
             buffer[0] = (seL4_Word) reply_cap;
-            buffer[1] = ubuf_size;
-            of_table[ofd].buf = sos_addr;
+            buffer[1] = sos_addr;
+            buffer[2] = ubuf_size;
+            register_timer(READ_DELAY, timer_callback, (void *) buffer);
             handled = 0;
         }
     } else {
