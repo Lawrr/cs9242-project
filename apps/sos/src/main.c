@@ -266,7 +266,7 @@ void syscall_write(seL4_CPtr reply_cap) {
     int err = try_map_page(tty_test_process.addrspace->page_table, index1, uaddr);
     conditional_panic(err, "Failed map");
 
-    seL4_Word sos_addr = PAGE_ALIGN_4K(tty_test_process.addrspace->page_table[index1][index2].sos_vaddr);
+    seL4_Word sos_addr = tty_test_process.addrspace->page_table[index1][index2].sos_vaddr;
      /* Add offset */
     sos_addr |= (uaddr & PAGE_MASK_4K);
 
@@ -335,7 +335,7 @@ void syscall_read(seL4_CPtr reply_cap) {
     int err = try_map_page(tty_test_process.addrspace->page_table, index1, uaddr);
     conditional_panic(err, "Failed map");
 
-    seL4_Word sos_addr = PAGE_ALIGN_4K(tty_test_process.addrspace->page_table[index1][index2].sos_vaddr);
+    seL4_Word sos_addr = tty_test_process.addrspace->page_table[index1][index2].sos_vaddr;
      /* Add offset */
     sos_addr |= (uaddr & PAGE_MASK_4K);
 
@@ -419,7 +419,7 @@ void syscall_open(seL4_CPtr reply_cap) {
     int err = try_map_page(tty_test_process.addrspace->page_table, index1, uaddr);
     conditional_panic(err, "Failed map");
 
-    seL4_Word sos_vaddr = PAGE_ALIGN_4K(tty_test_process.addrspace->page_table[index1][index2].sos_vaddr);
+    seL4_Word sos_vaddr = tty_test_process.addrspace->page_table[index1][index2].sos_vaddr;
     sos_vaddr |= (uaddr & PAGE_MASK_4K);
 
     /* Check if it's console */
