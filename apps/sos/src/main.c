@@ -67,6 +67,7 @@
 #define STD_INOUT 2
 
 #define READ_DELAY 10000 /* Microseconds */
+#define PAGE_BITS 12 /* TODO #include */
 
 /* The linker will link this symbol to the start address  *
  * of an archive of attached applications.                */
@@ -111,63 +112,99 @@ struct oft_entry {
     char *buf;
     char *curr_buf;
     int buf_index;
+    int buf_limit;
+    seL4_CPtr reply_cap;
 };
 
 struct oft_entry of_table[MAX_OPEN_FILE];
 seL4_Word ofd_count = 0;
 seL4_Word curr_free_ofd = 3;
 
-char serial_buffer[MAX_IO_BUF];
-int serial_index = 0;
-
-void serial_handler(struct serial *serial, char c) {
-    char *buf = of_table[STD_IN].curr_buf;
-    buf[of_table[STD_IN].buf_index++] = c;
-    if (of_table[STD_IN].buf_index > MAX_IO_BUF) {
-        of_table[STD_IN].buf_index = 0;
-    }
-}
-
-void timer_callback(int id,void *data) {
-    if (serial_index != 0) {
-        seL4_CPtr reply_cap = ((seL4_CPtr *) data)[0];
-        seL4_Word sos_addr = ((seL4_Word *) data)[1];
-        seL4_Word ubuf_size = ((seL4_Word *) data)[2];
-        seL4_MessageInfo_t reply = seL4_MessageInfo_new(0, 0, 0, 1);
-
-        if (ubuf_size < serial_index) {
-            seL4_SetMR(0, ubuf_size);
-            memcpy((void*) sos_addr, (void *) serial_buffer, ubuf_size);
-        } else {
-            seL4_SetMR(0, serial_index);
-            memcpy((void*) sos_addr, (void *) serial_buffer, serial_index);
-        }
-
-        seL4_Send(reply_cap, reply);
-        serial_index = 0;
-    } else {
-        register_timer(READ_DELAY, timer_callback, data);
-    }
-}
-
 void of_table_init() {
    of_table[STD_IN].ptr = gConsole;
    of_table[STD_IN].file_info.st_fmode = FM_READ;
-   of_table[STD_IN].buf = malloc(4096);
+   of_table[STD_IN].buf = malloc(1 << PAGE_BITS);
    of_table[STD_IN].curr_buf = of_table[STD_IN].buf;
    of_table[STD_IN].buf_index = 0;
+   of_table[STD_IN].buf_limit = (1 << PAGE_BITS);
+   of_table[STD_IN].reply_cap = CSPACE_NULL;
 
    of_table[STD_OUT].ptr = gConsole;
    of_table[STD_OUT].file_info.st_fmode = FM_WRITE;
    of_table[STD_OUT].buf = NULL;
    of_table[STD_OUT].curr_buf = NULL;
    of_table[STD_OUT].buf_index = 0;
+   of_table[STD_OUT].buf_limit = (1 << PAGE_BITS);
+   of_table[STD_OUT].reply_cap = CSPACE_NULL;
    
    of_table[STD_INOUT].ptr = gConsole;
    of_table[STD_INOUT].file_info.st_fmode = FM_WRITE | FM_READ;
    of_table[STD_INOUT].buf = of_table[STD_IN].buf;
    of_table[STD_INOUT].curr_buf = of_table[STD_INOUT].buf;
    of_table[STD_INOUT].buf_index = 0;
+   of_table[STD_INOUT].buf_limit = (1 << PAGE_BITS);
+   of_table[STD_INOUT].reply_cap = CSPACE_NULL;
+}
+
+int try_map_page(struct page_table_entry **page_table,
+                 int index,
+                 seL4_Word uaddr) {
+    if (page_table == NULL || page_table[index] == NULL) {
+        seL4_CPtr app_cap;
+        seL4_CPtr sos_vaddr;
+        int err = sos_map_page(uaddr,
+                tty_test_process.vroot,
+                tty_test_process.addrspace,
+                &sos_vaddr,
+                &app_cap);
+
+        if (err) return 1;
+    }
+
+    return 0;
+}
+
+void serial_handler(struct serial *serial, char c) {
+    struct oft_entry entry = of_table[STD_INOUT];
+    printf("3 %x\n", entry.curr_buf);
+        printf("%d %p %d %p %p %d %d %d\n", entry.file_info, entry.ptr, entry.ref, entry.buf, entry.curr_buf, entry.buf_index, entry.buf_limit, entry.reply_cap);
+
+/*     char *sos_vaddr; */
+/*     if (entry.curr_buf == entry.buf) { */
+/*         /1* Sos address *1/ */
+/*         sos_vaddr = entry.curr_buf; */
+/*     } else { */
+/*         /1* User address need to do mapping *1/ */
+/*         seL4_Word index1 = ((seL4_Word) entry.curr_buf >> 22); */
+/*         seL4_Word index2 = ((seL4_Word) entry.curr_buf << 10) >> 22; */
+
+/*         if (((seL4_Word) (entry.curr_buf + entry.buf_index) & PAGE_MASK_4K) == 0) { */  
+/*             int err = try_map_page(tty_test_process.addrspace->page_table, */
+/*                                    index1, */
+/*                                    entry.curr_buf); */
+/*             entry.curr_buf += entry.buf_index; */
+/*             entry.buf_index = 0; */
+/*         } */
+/*         sos_vaddr = tty_test_process.addrspace->page_table[index1][index2].sos_vaddr; */
+/*          /1* Add offset *1/ */
+/*         sos_vaddr = ((seL4_Word) sos_vaddr) | ((seL4_Word) entry.curr_buf & PAGE_MASK_4K); */
+/*     } */
+/*     printf("Got %c sos_vaddr: %x, default: %x\n", c, sos_vaddr, entry.buf); */
+/*     sos_vaddr[entry.buf_index++] = c; */
+/*     entry.buf_limit--; */
+
+/*     if (entry.buf_limit == 0) { */
+/*         if (entry.reply_cap != CSPACE_NULL) { */
+/*             seL4_MessageInfo_t reply = seL4_MessageInfo_new(0, 0, 0, 1); */
+/*             seL4_SetMR(0, entry.buf_index); */
+/*             seL4_Send(entry.reply_cap, reply); */
+            
+/*             entry.reply_cap = CSPACE_NULL; */
+/*             entry.curr_buf = entry.buf; */
+/*             entry.buf_limit = (1 << PAGE_BITS); */
+/*         } */
+/*         entry.buf_index = 0; */
+/*     } */
 }
 
 /* Checks that user pointer is a valid address in userspace */
@@ -184,23 +221,6 @@ int legal_uaddr(seL4_Word uaddr) {
         if (uaddr < PROCESS_IPC_BUFFER) {
             return 1;
         }
-    }
-
-    return 0;
-}
-
-int try_map_page(struct page_table_entry **page_table,
-                 int index,
-                 seL4_Word uaddr) {
-    if (page_table == NULL || page_table[index] == NULL) {
-        seL4_CPtr app_cap;
-        seL4_CPtr sos_vaddr;
-        int err = sos_map_page(uaddr,
-                tty_test_process.vroot,
-                tty_test_process.addrspace,
-                &sos_vaddr,
-                &app_cap);
-        if (err) return 1;
     }
 
     return 0;
@@ -375,23 +395,18 @@ void syscall_read(seL4_CPtr reply_cap) {
 
     /* Console */
     if (ofd == STD_IN || ofd == STD_INOUT) {
-        if (serial_index != 0) {
-            if (ubuf_size < serial_index) {	
-                memcpy((void*) sos_addr, (void *) serial_buffer, ubuf_size);
-            } else {
-                memcpy((void*) sos_addr, (void *) serial_buffer, serial_index);
-            }
-            seL4_MessageInfo_t reply = seL4_MessageInfo_new(0, 0, 0, 1);
-            seL4_SetMR(0, serial_index);
-            seL4_Send(reply_cap, reply);
-            serial_index = 0;
-        } else {
-            seL4_Word *buffer = malloc(2 * sizeof(seL4_Word));
-            buffer[0] = (seL4_Word) reply_cap;
-            buffer[1] = ubuf_size;
-            of_table[ofd].buf = sos_addr;
-            handled = 0;
-        }
+        struct oft_entry entry = of_table[ofd];
+        printf("%p\n", entry.curr_buf);
+        printf("fileinfo:%d\nptr:%p\nref:%d\nbuf:%p\ncurr:%p\nindex:%d\nlimit:%d\nreply:%d\n", entry.file_info, entry.ptr, entry.ref, entry.buf, entry.curr_buf, entry.buf_index, entry.buf_limit, entry.reply_cap);
+
+        printf("%p\n", entry.curr_buf);
+        printf("1 %p\n", entry.curr_buf);
+        entry.curr_buf = uaddr;
+        printf("2 %p\n", entry.curr_buf);
+        printf("fileinfo:%d\nptr:%p\nref:%d\nbuf:%p\ncurr:%p\nindex:%d\nlimit:%d\nreply:%d\n", entry.file_info, entry.ptr, entry.ref, entry.buf, entry.curr_buf, entry.buf_index, entry.buf_limit, entry.reply_cap);
+        entry.buf_limit = ubuf_size;
+        entry.reply_cap = reply_cap;
+        handled = 0;
     } else {
         /* TODO actually manipulate file */
     }
@@ -883,6 +898,9 @@ static void _sos_init(seL4_CPtr* ipc_ep, seL4_CPtr* async_ep){
 
     /* Initialise frame table */
     frame_init(high,low);
+   
+    /* Initialise open file table */
+    of_table_init(); 
 
     /* Initialiase other system compenents here */
 
@@ -971,8 +989,6 @@ int main(void) {
     /* Initialise serial driver */
     serial_handle = serial_init();
     serial_register_handler(serial_handle,serial_handler);
-   
-    of_table_init(); 
     
     /* Start the user application */
     start_first_process(TTY_NAME, _sos_ipc_ep_cap);
