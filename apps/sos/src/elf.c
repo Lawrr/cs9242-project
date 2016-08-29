@@ -96,21 +96,15 @@ static int load_segment_into_vspace(seL4_ARM_PageDirectory dest_pd,
     /* We work a page at a time in the destination vspace. */
     pos = 0;
     while(pos < segment_size) {
-        seL4_Word vaddr, sos_vaddr;
+        seL4_Word sos_vaddr;
         seL4_CPtr sos_cap, tty_cap;
-        seL4_Word vpage, kvpage;
-        unsigned long kdst;
         int nbytes;
         int err;
 
-        kdst   = dst + PROCESS_SCRATCH;
-        vpage  = PAGE_ALIGN(dst);
-        kvpage = PAGE_ALIGN(kdst);
-        
-	//(Not used)
-	seL4_CPtr app_cap;
+        /* Unused cap */
+        seL4_CPtr app_cap;
         /* Map the frame into tty_test address spaces */
-        err = sos_map_page(dst, dest_pd, dest_as, &sos_vaddr,&app_cap);
+        err = sos_map_page(dst, dest_pd, dest_as, &sos_vaddr, &app_cap);
         if (err) {
             return err;
         }
@@ -118,7 +112,7 @@ static int load_segment_into_vspace(seL4_ARM_PageDirectory dest_pd,
         /* Now copy our data into the destination vspace. */
         nbytes = PAGESIZE - (dst & PAGEMASK);
         if (pos < file_size){
-            memcpy((void*) (sos_vaddr | ((vaddr << LOWER_BITS_SHIFT) >> LOWER_BITS_SHIFT)),
+            memcpy((void*) (sos_vaddr | ((dst << LOWER_BITS_SHIFT) >> LOWER_BITS_SHIFT)),
                    (void*)src, MIN(nbytes, file_size - pos));
         }
         sos_cap = get_cap(sos_vaddr);

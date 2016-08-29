@@ -302,11 +302,11 @@ void test_buffers(int console_fd) {
     }
 }
 
-int main(void) {
-    struct command commands[] = { { "dir", dir }, { "ls", dir }, { "cat", cat }, {
-            "cp", cp }, { "ps", ps }, { "exec", exec }, {"sleep",second_sleep}, {"msleep",milli_sleep},
-            {"time", second_time}, {"mtime", micro_time}, {"kill", kill} };
+struct command commands[] = { { "dir", dir }, { "ls", dir }, { "cat", cat }, {
+        "cp", cp }, { "ps", ps }, { "exec", exec }, {"sleep",second_sleep}, {"msleep",milli_sleep},
+        {"time", second_time}, {"mtime", micro_time}, {"kill", kill} };
 
+int main(void) {
     char buf[BUF_SIZ];
     char *argv[MAX_ARGS];
     int i, r, done, found, new, argc;
