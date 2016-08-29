@@ -78,6 +78,7 @@ static void console_serial_handler(struct serial *serial, char c) {
             seL4_MessageInfo_t reply = seL4_MessageInfo_new(0, 0, 0, 1);
             seL4_SetMR(0, entry->buffer_count);
             seL4_Send(entry->reply_cap, reply);
+            cspace_free_slot(cur_cspace, entry->reply_cap);
 
             entry->reply_cap = CSPACE_NULL;
         }
@@ -137,6 +138,7 @@ void syscall_brk(seL4_CPtr reply_cap) {
         /* Set error */
         seL4_SetMR(0, 1);
         seL4_Send((seL4_CPtr) reply_cap, reply);
+        cspace_free_slot(cur_cspace, reply_cap);
     }
 
     printf("brk moved heap region end from %p to %p\n",
@@ -155,6 +157,7 @@ static void uwakeup(uint32_t id, void *reply_cap) {
     /* Wake up and reply back to application */
     seL4_MessageInfo_t reply = seL4_MessageInfo_new(0, 0, 0, 0);
     seL4_Send((seL4_CPtr) reply_cap, reply);
+    cspace_free_slot(cur_cspace, reply_cap);
 }
 
 void syscall_usleep(seL4_CPtr reply_cap) {
@@ -168,6 +171,7 @@ void syscall_time_stamp(seL4_CPtr reply_cap) {
     seL4_MessageInfo_t reply = seL4_MessageInfo_new(0, 0, 0, 1);
     seL4_SetMR(0, timestamp); 
     seL4_Send(reply_cap, reply);
+    cspace_free_slot(cur_cspace, reply_cap);
 }
 
 void syscall_write(seL4_CPtr reply_cap) {
@@ -180,6 +184,7 @@ void syscall_write(seL4_CPtr reply_cap) {
         seL4_MessageInfo_t reply = seL4_MessageInfo_new(0, 0, 0, 1);
         seL4_SetMR(0, ERR_INVALID_ARGUMENT); 
         seL4_Send(reply_cap, reply);
+        cspace_free_slot(cur_cspace, reply_cap);
         return;
     }
     /* Check user address */
@@ -187,6 +192,7 @@ void syscall_write(seL4_CPtr reply_cap) {
         seL4_MessageInfo_t reply = seL4_MessageInfo_new(0, 0, 0, 1);
         seL4_SetMR(0, ERR_ILLEGAL_USERADDR); 
         seL4_Send(reply_cap, reply);
+        cspace_free_slot(cur_cspace, reply_cap);
         return;
     }
     /* Check fd */
@@ -194,6 +200,7 @@ void syscall_write(seL4_CPtr reply_cap) {
         seL4_MessageInfo_t reply = seL4_MessageInfo_new(0, 0, 0, 1);
         seL4_SetMR(0, ERR_INVALID_FD);
         seL4_Send(reply_cap, reply);
+        cspace_free_slot(cur_cspace, reply_cap);
         return;
     }
 
@@ -203,6 +210,7 @@ void syscall_write(seL4_CPtr reply_cap) {
         seL4_MessageInfo_t reply = seL4_MessageInfo_new(0, 0, 0, 1);
         seL4_SetMR(0, ERR_INVALID_FD);
         seL4_Send(reply_cap, reply);
+        cspace_free_slot(cur_cspace, reply_cap);
         return;
     }
 
@@ -211,6 +219,7 @@ void syscall_write(seL4_CPtr reply_cap) {
         seL4_MessageInfo_t reply = seL4_MessageInfo_new(0, 0, 0, 1);
         seL4_SetMR(0, ERR_ILLEGAL_ACCESS_MODE); 
         seL4_Send(reply_cap, reply);
+        cspace_free_slot(cur_cspace, reply_cap);
         return;
     }
 
@@ -252,6 +261,7 @@ void syscall_write(seL4_CPtr reply_cap) {
     seL4_MessageInfo_t reply = seL4_MessageInfo_new(0, 0, 0, 1);
     seL4_SetMR(0, bytes_sent);
     seL4_Send(reply_cap, reply);
+    cspace_free_slot(cur_cspace, reply_cap);
 }
 
 void syscall_read(seL4_CPtr reply_cap) {
@@ -259,13 +269,12 @@ void syscall_read(seL4_CPtr reply_cap) {
     seL4_Word uaddr = seL4_GetMR(2);
     seL4_Word ubuf_size = seL4_GetMR(3);
     
-    int handled = 1;
-
     /* Check ubuf_size */
     if (ubuf_size <= 0) {
         seL4_MessageInfo_t reply = seL4_MessageInfo_new(0, 0, 0, 1);
         seL4_SetMR(0, ERR_INVALID_ARGUMENT); 
         seL4_Send(reply_cap, reply);
+        cspace_free_slot(cur_cspace, reply_cap);
         return;
     }
     /* Check user address */
@@ -273,6 +282,7 @@ void syscall_read(seL4_CPtr reply_cap) {
         seL4_MessageInfo_t reply = seL4_MessageInfo_new(0, 0, 0, 1);
         seL4_SetMR(0, ERR_ILLEGAL_USERADDR); 
         seL4_Send(reply_cap, reply);
+        cspace_free_slot(cur_cspace, reply_cap);
         return;
     }
     /* Check fd */
@@ -280,6 +290,7 @@ void syscall_read(seL4_CPtr reply_cap) {
         seL4_MessageInfo_t reply = seL4_MessageInfo_new(0, 0, 0, 1);
         seL4_SetMR(0,ERR_INVALID_FD); 
         seL4_Send(reply_cap, reply);
+        cspace_free_slot(cur_cspace, reply_cap);
         return;
     }
 
@@ -302,6 +313,7 @@ void syscall_read(seL4_CPtr reply_cap) {
         seL4_MessageInfo_t reply = seL4_MessageInfo_new(0, 0, 0, 1);
         seL4_SetMR(0, ERR_INVALID_FD); 
         seL4_Send(reply_cap, reply);
+        cspace_free_slot(cur_cspace, reply_cap);
         return;
     }
 
@@ -310,12 +322,12 @@ void syscall_read(seL4_CPtr reply_cap) {
         seL4_MessageInfo_t reply = seL4_MessageInfo_new(0, 0, 0, 1);
         seL4_SetMR(0, ERR_ILLEGAL_ACCESS_MODE);
         seL4_Send(reply_cap, reply);
+        cspace_free_slot(cur_cspace, reply_cap);
         return;
     }
 
     if (ofd == STD_IN || ofd == STD_INOUT) {
         /* Console */
-        handled = 0;
         of_table[STD_IN].buffer = uaddr;
         of_table[STD_IN].buffer_size = ubuf_size;
         of_table[STD_IN].buffer_count = 0;
@@ -323,10 +335,8 @@ void syscall_read(seL4_CPtr reply_cap) {
         serial_register_handler(serial_handle, console_serial_handler);
     } else {
         /* TODO actually manipulate file */
-    }
 
-    if (handled) {
-        /* Free the saved reply cap */
+        /* Free slot only if reply is handled */
         cspace_free_slot(cur_cspace, reply_cap);
     }
 }
@@ -343,11 +353,13 @@ void syscall_open(seL4_CPtr reply_cap) {
         seL4_MessageInfo_t reply = seL4_MessageInfo_new(0, 0, 0, 1);
         seL4_SetMR(0, ERR_MAX_FILE);
         seL4_Send(reply_cap, reply);
+        cspace_free_slot(cur_cspace, reply_cap);
         return;
     } else if (ofd_count == MAX_OPEN_FILE) {
         seL4_MessageInfo_t reply = seL4_MessageInfo_new(0, 0, 0, 1);
         seL4_SetMR(0, ERR_MAX_SYSTEM_FILE);
         seL4_Send(reply_cap, reply);
+        cspace_free_slot(cur_cspace, reply_cap);
         return;
     }
     /* Check user address */
@@ -355,6 +367,7 @@ void syscall_open(seL4_CPtr reply_cap) {
         seL4_MessageInfo_t reply = seL4_MessageInfo_new(0, 0, 0, 1);
         seL4_SetMR(0, ERR_ILLEGAL_USERADDR); 
         seL4_Send(reply_cap, reply);
+        cspace_free_slot(cur_cspace, reply_cap);
         return;
     }
 
@@ -416,6 +429,7 @@ void syscall_open(seL4_CPtr reply_cap) {
     /* Reply */
     seL4_MessageInfo_t reply = seL4_MessageInfo_new(0, 0, 0, 1);
     seL4_Send(reply_cap, reply);
+    cspace_free_slot(cur_cspace, reply_cap);
 }
 
 void syscall_close(seL4_CPtr reply_cap) {
@@ -427,6 +441,7 @@ void syscall_close(seL4_CPtr reply_cap) {
         seL4_MessageInfo_t reply = seL4_MessageInfo_new(0, 0, 0, 1);
         seL4_SetMR(0, ERR_INVALID_FD); 
         seL4_Send(reply_cap, reply);
+        cspace_free_slot(cur_cspace, reply_cap);
         return;
     }
     /* Check ofd */	
@@ -434,6 +449,7 @@ void syscall_close(seL4_CPtr reply_cap) {
         seL4_MessageInfo_t reply = seL4_MessageInfo_new(0, 0, 0, 1);
         seL4_SetMR(0, ERR_INVALID_FD); 
         seL4_Send(reply_cap, reply);
+        cspace_free_slot(cur_cspace, reply_cap);
         return;
     }
 
@@ -460,4 +476,5 @@ void syscall_close(seL4_CPtr reply_cap) {
     seL4_MessageInfo_t reply = seL4_MessageInfo_new(0, 0, 0, 1);
     seL4_SetMR(0, 0);
     seL4_Send(reply_cap, reply);       	
+    cspace_free_slot(cur_cspace, reply_cap);
 }
