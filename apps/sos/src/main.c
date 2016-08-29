@@ -12,6 +12,7 @@
 #include <stdlib.h>
 #include <assert.h>
 #include <string.h>
+#include <fcntl.h>
 
 #include <cspace/cspace.h>
 
@@ -105,6 +106,7 @@ extern fhandle_t mnt_point;
 
 char serial_buffer[MAX_IO_BUF];
 int serial_index = 0;
+
 void serial_handler(struct serial *serial, char c) {
     serial_buffer[serial_index++] = c;
     if (serial_index > MAX_IO_BUF) {
@@ -361,7 +363,7 @@ void syscall_read(seL4_CPtr reply_cap) {
         if (serial_index != 0) {
             if (ubuf_size < serial_index) {	
                 memcpy((void*) sos_addr, (void *) serial_buffer, ubuf_size);
-            }  else{
+            } else {
                 memcpy((void*) sos_addr, (void *) serial_buffer, serial_index);
             }
             seL4_MessageInfo_t reply = seL4_MessageInfo_new(0, 0, 0, 1);
@@ -428,9 +430,9 @@ void syscall_open(seL4_CPtr reply_cap) {
 
     if (!strcmp(path, console)) {
         int ofd;
-        if (access_mode == (FM_WRITE | FM_READ)) {
+        if (access_mode == O_RDWR) {
             ofd = STD_INOUT;
-        } else if (access_mode != FM_WRITE) {
+        } else if (access_mode == O_RDONLY) {
             ofd = STD_IN;
         } else {
             ofd = STD_OUT;
