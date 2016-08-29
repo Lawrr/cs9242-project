@@ -277,25 +277,28 @@ void test_buffers(int console_fd) {
     char stack_buf[BUF_SIZ];
     /* for this test you'll need to paste a lot of data into 
        the console, without newlines */
-    /* result = sos_sys_read(console_fd, &stack_buf, BUF_SIZ); */
-    /* assert(result == BUF_SIZ); */
+    result = sos_sys_read(console_fd, &stack_buf, BUF_SIZ);
+    assert(result == BUF_SIZ);
 
     printf("Test4\n");
-    /* result = sos_sys_write(console_fd, &stack_buf, BUF_SIZ); */
-    /* assert(result == BUF_SIZ); */
+    result = sos_sys_write(console_fd, &stack_buf, BUF_SIZ);
+    assert(result == BUF_SIZ);
 
     /* this call to malloc should trigger an sbrk */
     char *heap_buf = malloc(BUF_SIZ);
     assert(heap_buf != NULL);
 
+    printf("Test5\n");
     /* for this test you'll need to paste a lot of data into 
        the console, without newlines */
     result = sos_sys_read(console_fd, &heap_buf, BUF_SIZ);
-    /* assert(result == BUF_SIZ); */
+    assert(result == BUF_SIZ);
 
-    /* result = sos_sys_write(console_fd, &heap_buf, BUF_SIZ); */
-    /* assert(result == BUF_SIZ); */
+    printf("Test6\n");
+    result = sos_sys_write(console_fd, &heap_buf, BUF_SIZ);
+    assert(result == BUF_SIZ);
 
+    printf("Test7\n");
     /* try sleeping */
     for (int i = 0; i < 5; i++) {
         time_t prev_seconds = time(NULL);

@@ -98,46 +98,14 @@ seL4_CPtr _sos_interrupt_ep_cap;
 
 struct serial *serial_handle;
 
-/**
- * NFS mount point
- */
-extern fhandle_t mnt_point;
-
-char serial_buffer[MAX_IO_BUF];
-int serial_index = 0;
-void serial_handler(struct serial *serial, char c) {
-    serial_buffer[serial_index++] = c;
-    if (serial_index > MAX_IO_BUF) {
-        conditional_panic(1, "More than one page is input");
-    }
-}
-
-void timer_callback(int id,void *data) {
-    if (serial_index != 0) {
-        seL4_CPtr reply_cap = ((seL4_CPtr *) data)[0];
-        seL4_Word sos_addr = ((seL4_Word *) data)[1];
-        seL4_Word ubuf_size = ((seL4_Word *) data)[2];
-        seL4_MessageInfo_t reply = seL4_MessageInfo_new(0, 0, 0, 1);
-
-        if (ubuf_size < serial_index) {
-            seL4_SetMR(0, ubuf_size);
-            memcpy((void*) sos_addr, (void *) serial_buffer, ubuf_size);
-        } else {
-            seL4_SetMR(0, serial_index);
-            memcpy((void*) sos_addr, (void *) serial_buffer, serial_index);
-        }
-
-        seL4_Send(reply_cap, reply);
-        serial_index = 0;
-    } else {
-        register_timer(READ_DELAY, timer_callback, data);
-    }
-}
-
 struct oft_entry {
     sos_stat_t file_info;
     seL4_Word *ptr;
     seL4_Word ref;
+    char *buffer;
+    int buffer_index;
+    int buffer_size;
+    seL4_CPtr reply_cap;
 };
 
 struct oft_entry of_table[MAX_OPEN_FILE];
@@ -151,6 +119,59 @@ void of_table_init() {
    of_table[STD_OUT].file_info.st_fmode = FM_WRITE;
    of_table[STD_INOUT].ptr = gConsole;
    of_table[STD_INOUT].file_info.st_fmode = FM_WRITE | FM_READ;
+}
+
+/**
+ * NFS mount point
+ */
+extern fhandle_t mnt_point;
+
+void stdinout_serial_handler(struct serial *serial, char c) {
+    struct oft_entry *entry = &of_table[STD_INOUT];
+    if (entry->buffer_size == 0) return;
+
+    /* Check user address */
+    if (!legal_uaddr(entry->buffer + entry->buffer_index)) {
+        seL4_MessageInfo_t reply = seL4_MessageInfo_new(0, 0, 0, 1);
+        seL4_SetMR(0, ERR_ILLEGAL_USERADDR); 
+        seL4_Send(entry->reply_cap, reply);
+        return;
+    }
+
+    /* Take uaddr and turn it into sos_vaddr */
+    seL4_Word index1 = ((seL4_Word) entry->buffer >> 22);
+    seL4_Word index2 = ((seL4_Word) entry->buffer << 10) >> 22;
+
+    /* Check if we are on a new page */
+    if (((seL4_Word) (entry->buffer + entry->buffer_index) & PAGE_MASK_4K) == 0) {
+        entry->buffer += entry->buffer_index;
+        index1 = ((seL4_Word) entry->buffer >> 22);
+        index2 = ((seL4_Word) entry->buffer << 10) >> 22;
+        int err = try_map_page(tty_test_process.addrspace->page_table,
+                               entry->buffer);
+        entry->buffer_index = 0;
+    }
+
+    char *sos_vaddr = PAGE_ALIGN_4K(tty_test_process.addrspace->page_table[index1][index2].sos_vaddr);
+    /* Add offset */
+    sos_vaddr = ((seL4_Word) sos_vaddr) | ((seL4_Word) entry->buffer & PAGE_MASK_4K);
+
+    sos_vaddr[entry->buffer_index++] = c;
+    entry->buffer_size = entry->buffer_size - 1;
+
+    if (entry->buffer_size == 0) {
+        /* serial_register_handler(serial_handle, NULL); */
+        entry->buffer_index = 0;
+
+        if (entry->reply_cap != CSPACE_NULL) {
+            seL4_MessageInfo_t reply = seL4_MessageInfo_new(0, 0, 0, 1);
+            seL4_SetMR(0, 0);
+            seL4_Send(entry->reply_cap, reply);
+
+            entry->reply_cap = CSPACE_NULL;
+            entry->buffer = NULL;
+        }
+    }
 }
 
 /* Checks that user pointer is a valid address in userspace */
@@ -173,19 +194,15 @@ int legal_uaddr(seL4_Word uaddr) {
 }
 
 int try_map_page(struct page_table_entry **page_table,
-                 int index,
                  seL4_Word uaddr) {
-    if (page_table == NULL || page_table[index] == NULL) {
-        seL4_CPtr app_cap;
-        seL4_CPtr sos_vaddr;
-        int err = sos_map_page(uaddr,
-                tty_test_process.vroot,
-                tty_test_process.addrspace,
-                &sos_vaddr,
-                &app_cap);
-        if (err) return 1;
-    }
-
+    seL4_CPtr app_cap;
+    seL4_CPtr sos_vaddr;
+    int err = sos_map_page(uaddr,
+            tty_test_process.vroot,
+            tty_test_process.addrspace,
+            &sos_vaddr,
+            &app_cap);
+    if (err) return 1;
     return 0;
 }
 
@@ -263,8 +280,7 @@ void syscall_write(seL4_CPtr reply_cap) {
     /* Make sure address is mapped */
     seL4_Word index1 = uaddr >> 22;
     seL4_Word index2 = (uaddr << 10) >> 22;
-    int err = try_map_page(tty_test_process.addrspace->page_table, index1, uaddr);
-    conditional_panic(err, "Failed map");
+    int err = try_map_page(tty_test_process.addrspace->page_table, uaddr);
 
     seL4_Word sos_addr = PAGE_ALIGN_4K(tty_test_process.addrspace->page_table[index1][index2].sos_vaddr);
      /* Add offset */
@@ -332,8 +348,7 @@ void syscall_read(seL4_CPtr reply_cap) {
     /* Make sure address is mapped */
     seL4_Word index1 = uaddr >> 22;
     seL4_Word index2 = (uaddr << 10) >> 22;
-    int err = try_map_page(tty_test_process.addrspace->page_table, index1, uaddr);
-    conditional_panic(err, "Failed map");
+    int err = try_map_page(tty_test_process.addrspace->page_table, uaddr);
 
     seL4_Word sos_addr = PAGE_ALIGN_4K(tty_test_process.addrspace->page_table[index1][index2].sos_vaddr);
      /* Add offset */
@@ -358,24 +373,12 @@ void syscall_read(seL4_CPtr reply_cap) {
 
     /* Console */
     if (ofd == STD_IN || ofd == STD_INOUT) {
-        if (serial_index != 0) {
-            if (ubuf_size < serial_index) {	
-                memcpy((void*) sos_addr, (void *) serial_buffer, ubuf_size);
-            }  else{
-                memcpy((void*) sos_addr, (void *) serial_buffer, serial_index);
-            }
-            seL4_MessageInfo_t reply = seL4_MessageInfo_new(0, 0, 0, 1);
-            seL4_SetMR(0, serial_index);
-            seL4_Send(reply_cap, reply);
-            serial_index = 0;
-        } else {
-            seL4_Word *buffer = malloc(3 * sizeof(seL4_Word));
-            buffer[0] = (seL4_Word) reply_cap;
-            buffer[1] = sos_addr;
-            buffer[2] = ubuf_size;
-            register_timer(READ_DELAY, timer_callback, (void *) buffer);
-            handled = 0;
-        }
+        handled = 0;
+        of_table[ofd].buffer = uaddr;
+        of_table[ofd].buffer_size = ubuf_size;
+        of_table[ofd].buffer_index = 0;
+        of_table[ofd].reply_cap = reply_cap;
+        serial_register_handler(serial_handle, stdinout_serial_handler);
     } else {
         /* TODO actually manipulate file */
     }
@@ -416,8 +419,7 @@ void syscall_open(seL4_CPtr reply_cap) {
     /* Make sure address is mapped */
     seL4_Word index1 = uaddr >> 22;
     seL4_Word index2 = (uaddr << 10) >> 22;
-    int err = try_map_page(tty_test_process.addrspace->page_table, index1, uaddr);
-    conditional_panic(err, "Failed map");
+    int err = try_map_page(tty_test_process.addrspace->page_table, uaddr);
 
     seL4_Word sos_vaddr = PAGE_ALIGN_4K(tty_test_process.addrspace->page_table[index1][index2].sos_vaddr);
     sos_vaddr |= (uaddr & PAGE_MASK_4K);
@@ -954,7 +956,6 @@ int main(void) {
     
     /* Initialise serial driver */
     serial_handle = serial_init();
-    serial_register_handler(serial_handle,serial_handler);
    
     of_table_init(); 
     
