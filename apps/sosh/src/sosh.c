@@ -24,7 +24,7 @@
 /* Your OS header file */
 #include <sos.h>
 
-#define BUF_SIZ    4096//6144
+#define BUF_SIZ    6144
 #define MAX_ARGS   32
 
 static int in;
