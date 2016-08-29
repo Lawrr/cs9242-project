@@ -102,6 +102,25 @@ static int legal_uaddr(seL4_Word uaddr) {
     return 0;
 }
 
+/* Checks that user pointer range is a valid in userspace */
+static int legal_uaddr_range(seL4_Word base, uint32_t size) {
+    /* Check valid region */
+    struct region *curr = tty_test_process.addrspace->regions;
+    while (curr != NULL) {
+        if (base >= curr->baseaddr &&
+            base + size < curr->baseaddr + curr->size) {
+            break;
+        }
+        curr = curr->next;
+    }
+
+    /* User pointers should be below IPC buffer */
+    if (curr != NULL && base + size < PROCESS_IPC_BUFFER) {
+        return 1;
+    }
+    return 0;
+}
+
 void syscall_brk(seL4_CPtr reply_cap) {
     seL4_MessageInfo_t reply = seL4_MessageInfo_new(0, 0, 0, 1);
     uintptr_t newbrk = seL4_GetMR(1);
@@ -164,7 +183,7 @@ void syscall_write(seL4_CPtr reply_cap) {
         return;
     }
     /* Check user address */
-    if (!legal_uaddr(uaddr)||!legal_uaddr(uaddr+ubuf_size-1)) {
+    if (!legal_uaddr_range(uaddr, ubuf_size)) {
         seL4_MessageInfo_t reply = seL4_MessageInfo_new(0, 0, 0, 1);
         seL4_SetMR(0, ERR_ILLEGAL_USERADDR); 
         seL4_Send(reply_cap, reply);
@@ -250,7 +269,7 @@ void syscall_read(seL4_CPtr reply_cap) {
         return;
     }
     /* Check user address */
-    if (!legal_uaddr(uaddr) || !legal_uaddr(uaddr+ubuf_size)) {
+    if (!legal_uaddr_range(uaddr, ubuf_size)) {
         seL4_MessageInfo_t reply = seL4_MessageInfo_new(0, 0, 0, 1);
         seL4_SetMR(0, ERR_ILLEGAL_USERADDR); 
         seL4_Send(reply_cap, reply);
