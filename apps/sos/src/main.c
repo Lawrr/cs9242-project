@@ -127,7 +127,7 @@ void of_table_init() {
 extern fhandle_t mnt_point;
 
 void stdinout_serial_handler(struct serial *serial, char c) {
-    struct oft_entry *entry = &of_table[STD_INOUT];
+    struct oft_entry *entry = &of_table[STD_IN];
     if (entry->buffer_size == 0) return;
 
     /* Check user address */
@@ -374,10 +374,10 @@ void syscall_read(seL4_CPtr reply_cap) {
     /* Console */
     if (ofd == STD_IN || ofd == STD_INOUT) {
         handled = 0;
-        of_table[ofd].buffer = uaddr;
-        of_table[ofd].buffer_size = ubuf_size;
-        of_table[ofd].buffer_index = 0;
-        of_table[ofd].reply_cap = reply_cap;
+        of_table[STD_IN].buffer = uaddr;
+        of_table[STD_IN].buffer_size = ubuf_size;
+        of_table[STD_IN].buffer_index = 0;
+        of_table[STD_IN].reply_cap = reply_cap;
         serial_register_handler(serial_handle, stdinout_serial_handler);
     } else {
         /* TODO actually manipulate file */
