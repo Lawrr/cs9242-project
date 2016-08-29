@@ -139,6 +139,9 @@ void handle_syscall(seL4_Word badge, int num_args) {
         default:
             printf("Unknown syscall %d\n", syscall_number);
             /* we don't want to reply to an unknown syscall */
+
+            /* Free the saved reply cap */
+            cspace_free_slot(cur_cspace, reply_cap);
     }
 }
 
