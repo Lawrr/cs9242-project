@@ -149,7 +149,6 @@ sos_map_page(seL4_Word vaddr_unaligned, seL4_ARM_PageDirectory pd, struct app_ad
 
     /* Can't find the region that contains thisvaddr */
     if (curr_region == NULL) {
-        printf("%x\n", vaddr);
         return -1;
     }
 

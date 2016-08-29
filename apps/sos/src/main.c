@@ -129,15 +129,6 @@ extern fhandle_t mnt_point;
 void stdinout_serial_handler(struct serial *serial, char c) {
     struct oft_entry *entry = &of_table[STD_IN];
     if (entry->buffer_size == 0) return;
-
-    /* Check user address */
-    if (!legal_uaddr(entry->buffer + entry->buffer_index)) {
-        seL4_MessageInfo_t reply = seL4_MessageInfo_new(0, 0, 0, 1);
-        seL4_SetMR(0, ERR_ILLEGAL_USERADDR); 
-        seL4_Send(entry->reply_cap, reply);
-        return;
-    }
-
     /* Take uaddr and turn it into sos_vaddr */
     seL4_Word index1 = ((seL4_Word) entry->buffer >> 22);
     seL4_Word index2 = ((seL4_Word) entry->buffer << 10) >> 22;
@@ -167,7 +158,7 @@ void stdinout_serial_handler(struct serial *serial, char c) {
     sos_vaddr[entry->buffer_index++] = c;
     entry->buffer_size = entry->buffer_size - 1;
 
-    if (entry->buffer_size == 0) {
+    if (entry->buffer_size == 0 || c=='\n') {
         /* serial_register_handler(serial_handle, NULL); */
         entry->buffer_index = 0;
 
@@ -258,7 +249,7 @@ void syscall_write(seL4_CPtr reply_cap) {
         return;
     }
     /* Check user address */
-    if (!legal_uaddr(uaddr)) {
+    if (!legal_uaddr(uaddr)||!legal_uaddr(uaddr+ubuf_size-1)) {
         seL4_MessageInfo_t reply = seL4_MessageInfo_new(0, 0, 0, 1);
         seL4_SetMR(0, ERR_ILLEGAL_USERADDR); 
         seL4_Send(reply_cap, reply);
@@ -272,20 +263,9 @@ void syscall_write(seL4_CPtr reply_cap) {
         return;
     }
 
-    /* Make sure address is mapped */
-    seL4_Word index1 = uaddr >> 22;
-    seL4_Word index2 = (uaddr << 10) >> 22;
-    seL4_CPtr app_cap;
-    seL4_Word sos_vaddr;
-    int err = sos_map_page(uaddr,
-            tty_test_process.vroot,
-            tty_test_process.addrspace,
-            &sos_vaddr,
-            &app_cap);
     
-    sos_vaddr = PAGE_ALIGN_4K(sos_vaddr);
-    /* Add offset */
-    sos_vaddr |= (uaddr & PAGE_MASK_4K);
+    
+    
 
     seL4_Word ofd = tty_test_process.addrspace->fd_table[fd].ofd;
     /* Check ofd */
@@ -307,7 +287,33 @@ void syscall_write(seL4_CPtr reply_cap) {
     int bytes_sent = 0;
     if (ofd == STD_OUT || ofd == STD_INOUT) {
         /* Console */
-        bytes_sent = serial_send(serial_handle, sos_vaddr, ubuf_size);
+	seL4_Word end_uaddr_next = uaddr+ubuf_size;
+	while (ubuf_size > 0 ){
+	    seL4_Word uaddr_next = PAGE_ALIGN_4K(uaddr) + 0x1000;
+	    seL4_Word size;
+	    if (end_uaddr_next >= uaddr_next){
+               size = uaddr_next-uaddr;
+	    }  else{
+               size = ubuf_size;
+	    }
+            //Tough we can assume the buffer is mapped coz it's write opereation we still
+	    //use sos_map_page to find the mapping address if it's already mapped
+	    seL4_CPtr app_cap;
+            seL4_CPtr sos_vaddr;
+            int err = sos_map_page(uaddr,
+                                   tty_test_process.vroot,
+                                   tty_test_process.addrspace,
+                                   &sos_vaddr,
+                                   &app_cap);
+	    sos_vaddr = PAGE_ALIGN_4K(sos_vaddr);
+            /* Add offset */
+            sos_vaddr |= (uaddr & PAGE_MASK_4K);
+		    
+            bytes_sent += serial_send(serial_handle,sos_vaddr ,size);
+	    ubuf_size -= size;
+	    printf("ubuf_size%d ------ size%d\n",ubuf_size,size);
+	    uaddr = uaddr_next;
+	}
     } else {
         /* TODO actually manipulate file */
     }
@@ -332,7 +338,7 @@ void syscall_read(seL4_CPtr reply_cap) {
         return;
     }
     /* Check user address */
-    if (!legal_uaddr(uaddr)) {
+    if (!legal_uaddr(uaddr)||!legal_uaddr(uaddr+ubuf_size-1)) {
         seL4_MessageInfo_t reply = seL4_MessageInfo_new(0, 0, 0, 1);
         seL4_SetMR(0, ERR_ILLEGAL_USERADDR); 
         seL4_Send(reply_cap, reply);
