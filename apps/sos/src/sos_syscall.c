@@ -40,43 +40,41 @@ extern char *gConsole;
 
 static void console_serial_handler(struct serial *serial, char c) {
     struct oft_entry *entry = &of_table[STD_IN];
+
+    /* Return if we do not currently need to read */
     if (entry->buffer_size == 0) return;
+
     /* Take uaddr and turn it into sos_vaddr */
     seL4_Word index1 = ((seL4_Word) entry->buffer >> 22);
     seL4_Word index2 = ((seL4_Word) entry->buffer << 10) >> 22;
 
     /* Check if we are on a new page */
-    /* Suggestion:Changing it*/
-    if (((seL4_Word) (entry->buffer + entry->buffer_index) & PAGE_MASK_4K) == 0) {
-        entry->buffer += entry->buffer_index;
-        index1 = ((seL4_Word) entry->buffer >> 22);
-        index2 = ((seL4_Word) entry->buffer << 10) >> 22;
-        
-	seL4_CPtr dump_app_cap;
+    if (((seL4_Word) entry->buffer & PAGE_MASK_4K) == 0) {
+        seL4_CPtr dump_app_cap;
         seL4_CPtr dump_sos_vaddr;
         int err = sos_map_page(entry->buffer,
-                              tty_test_process.vroot,
-                              tty_test_process.addrspace,
-                              &dump_sos_vaddr,
-                              &dump_app_cap);
-	/*TODO check error*/
-	entry->buffer_index = 0;
+                               tty_test_process.vroot,
+                               tty_test_process.addrspace,
+                               &dump_sos_vaddr,
+                               &dump_app_cap);
+        /* TODO check error */
     }
 
     char *sos_vaddr = PAGE_ALIGN_4K(tty_test_process.addrspace->page_table[index1][index2].sos_vaddr);
     /* Add offset */
     sos_vaddr = ((seL4_Word) sos_vaddr) | ((seL4_Word) entry->buffer & PAGE_MASK_4K);
 
-    sos_vaddr[entry->buffer_index++] = c;
-    entry->buffer_size = entry->buffer_size - 1;
+    *sos_vaddr = c;
 
-    if (entry->buffer_size == 0 || c=='\n') {
-        /* serial_register_handler(serial_handle, NULL); */
-        entry->buffer_index = 0;
+    entry->buffer++;
+    entry->buffer_count++;
+
+    if (entry->buffer_count == entry->buffer_size || c == '\n') {
+        entry->buffer_size = 0;
 
         if (entry->reply_cap != CSPACE_NULL) {
             seL4_MessageInfo_t reply = seL4_MessageInfo_new(0, 0, 0, 1);
-            seL4_SetMR(0, 0);
+            seL4_SetMR(0, entry->buffer_count);
             seL4_Send(entry->reply_cap, reply);
 
             entry->reply_cap = CSPACE_NULL;
@@ -299,7 +297,7 @@ void syscall_read(seL4_CPtr reply_cap) {
         handled = 0;
         of_table[STD_IN].buffer = uaddr;
         of_table[STD_IN].buffer_size = ubuf_size;
-        of_table[STD_IN].buffer_index = 0;
+        of_table[STD_IN].buffer_count = 0;
         of_table[STD_IN].reply_cap = reply_cap;
         serial_register_handler(serial_handle, console_serial_handler);
     } else {
@@ -429,6 +427,7 @@ void syscall_close(seL4_CPtr reply_cap) {
 
     tty_test_process.addrspace->fd_table[fd].ofd = -1;
     of_table[ofd].ref--;
+
     if (ofd == STD_IN || ofd == STD_OUT || ofd == STD_INOUT) {
         /* Console related */
     } else {

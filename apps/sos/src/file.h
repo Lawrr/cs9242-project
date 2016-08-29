@@ -15,7 +15,7 @@ struct oft_entry {
     seL4_Word *ptr;
     seL4_Word ref;
     char *buffer;
-    int buffer_index;
+    int buffer_count;
     int buffer_size;
     seL4_CPtr reply_cap;
 };
