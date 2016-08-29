@@ -176,7 +176,9 @@ sos_map_page(seL4_Word vaddr_unaligned, seL4_ARM_PageDirectory pd, struct app_ad
     }
 
     if ((*page_table_vaddr)[index1][index2].sos_vaddr != NULL) {
-        return -1;
+       //Already mapped
+       *sos_vaddr_ret = (*page_table_vaddr)[index1][index2].sos_vaddr;
+       return -2;
     }
 
     /* Call the internal kernel page mapping */

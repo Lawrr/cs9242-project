@@ -143,13 +143,21 @@ void stdinout_serial_handler(struct serial *serial, char c) {
     seL4_Word index2 = ((seL4_Word) entry->buffer << 10) >> 22;
 
     /* Check if we are on a new page */
+    /* Suggestion:Changing it*/
     if (((seL4_Word) (entry->buffer + entry->buffer_index) & PAGE_MASK_4K) == 0) {
         entry->buffer += entry->buffer_index;
         index1 = ((seL4_Word) entry->buffer >> 22);
         index2 = ((seL4_Word) entry->buffer << 10) >> 22;
-        int err = try_map_page(tty_test_process.addrspace->page_table,
-                               entry->buffer);
-        entry->buffer_index = 0;
+        
+	seL4_CPtr dump_app_cap;
+        seL4_CPtr dump_sos_vaddr;
+        int err = sos_map_page(entry->buffer,
+                              tty_test_process.vroot,
+                              tty_test_process.addrspace,
+                              &dump_sos_vaddr,
+                              &dump_app_cap);
+	/*TODO check error*/
+	entry->buffer_index = 0;
     }
 
     char *sos_vaddr = PAGE_ALIGN_4K(tty_test_process.addrspace->page_table[index1][index2].sos_vaddr);
@@ -190,19 +198,6 @@ int legal_uaddr(seL4_Word uaddr) {
         }
     }
 
-    return 0;
-}
-
-int try_map_page(struct page_table_entry **page_table,
-                 seL4_Word uaddr) {
-    seL4_CPtr app_cap;
-    seL4_CPtr sos_vaddr;
-    int err = sos_map_page(uaddr,
-            tty_test_process.vroot,
-            tty_test_process.addrspace,
-            &sos_vaddr,
-            &app_cap);
-    if (err) return 1;
     return 0;
 }
 
@@ -280,11 +275,17 @@ void syscall_write(seL4_CPtr reply_cap) {
     /* Make sure address is mapped */
     seL4_Word index1 = uaddr >> 22;
     seL4_Word index2 = (uaddr << 10) >> 22;
-    int err = try_map_page(tty_test_process.addrspace->page_table, uaddr);
-
-    seL4_Word sos_addr = PAGE_ALIGN_4K(tty_test_process.addrspace->page_table[index1][index2].sos_vaddr);
-     /* Add offset */
-    sos_addr |= (uaddr & PAGE_MASK_4K);
+    seL4_CPtr app_cap;
+    seL4_Word sos_vaddr;
+    int err = sos_map_page(uaddr,
+            tty_test_process.vroot,
+            tty_test_process.addrspace,
+            &sos_vaddr,
+            &app_cap);
+    
+    sos_vaddr = PAGE_ALIGN_4K(sos_vaddr);
+    /* Add offset */
+    sos_vaddr |= (uaddr & PAGE_MASK_4K);
 
     seL4_Word ofd = tty_test_process.addrspace->fd_table[fd].ofd;
     /* Check ofd */
@@ -306,7 +307,7 @@ void syscall_write(seL4_CPtr reply_cap) {
     int bytes_sent = 0;
     if (ofd == STD_OUT || ofd == STD_INOUT) {
         /* Console */
-        bytes_sent = serial_send(serial_handle, sos_addr, ubuf_size);
+        bytes_sent = serial_send(serial_handle, sos_vaddr, ubuf_size);
     } else {
         /* TODO actually manipulate file */
     }
@@ -346,13 +347,17 @@ void syscall_read(seL4_CPtr reply_cap) {
     }
 
     /* Make sure address is mapped */
-    seL4_Word index1 = uaddr >> 22;
-    seL4_Word index2 = (uaddr << 10) >> 22;
-    int err = try_map_page(tty_test_process.addrspace->page_table, uaddr);
+    seL4_CPtr app_cap;
+    seL4_CPtr sos_vaddr;
+    int err = sos_map_page(uaddr,
+            tty_test_process.vroot,
+            tty_test_process.addrspace,
+            &sos_vaddr,
+            &app_cap);
 
-    seL4_Word sos_addr = PAGE_ALIGN_4K(tty_test_process.addrspace->page_table[index1][index2].sos_vaddr);
+    sos_vaddr = PAGE_ALIGN_4K(sos_vaddr);
      /* Add offset */
-    sos_addr |= (uaddr & PAGE_MASK_4K);
+    sos_vaddr |= (uaddr & PAGE_MASK_4K);
 
     seL4_Word ofd = tty_test_process.addrspace->fd_table[fd].ofd;
     /* Check ofd */
@@ -417,11 +422,15 @@ void syscall_open(seL4_CPtr reply_cap) {
     }
 
     /* Make sure address is mapped */
-    seL4_Word index1 = uaddr >> 22;
-    seL4_Word index2 = (uaddr << 10) >> 22;
-    int err = try_map_page(tty_test_process.addrspace->page_table, uaddr);
+    seL4_CPtr app_cap;
+    seL4_Word sos_vaddr;
+    int err = sos_map_page(uaddr,
+            tty_test_process.vroot,
+            tty_test_process.addrspace,
+            &sos_vaddr,
+            &app_cap);
 
-    seL4_Word sos_vaddr = PAGE_ALIGN_4K(tty_test_process.addrspace->page_table[index1][index2].sos_vaddr);
+    sos_vaddr = PAGE_ALIGN_4K(sos_vaddr);
     sos_vaddr |= (uaddr & PAGE_MASK_4K);
 
     /* Check if it's console */
