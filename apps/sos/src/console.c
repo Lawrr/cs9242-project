@@ -44,7 +44,6 @@ static void console_serial_handler(struct serial *serial, char c) {
     /* Take uaddr and turn it into sos_vaddr */
     seL4_Word index1 = ((seL4_Word) console_uio.bufAddr >> 22);
     seL4_Word index2 = ((seL4_Word) console_uio.bufAddr << 10) >> 22;
-    // TODO fix []
     struct page_table_entry **page_table = ((seL4_Word *) (console_vn->vn_data))[1];
 
     char *sos_vaddr = PAGE_ALIGN_4K(page_table[index1][index2].sos_vaddr);
