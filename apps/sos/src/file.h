@@ -12,7 +12,7 @@
 
 struct oft_entry {
     sos_stat_t file_info;
-    seL4_Word *ptr;
+    struct vnode *vnode;
     seL4_Word ref;
     char *buffer;
     int buffer_count;

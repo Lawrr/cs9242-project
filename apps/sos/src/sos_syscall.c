@@ -33,58 +33,9 @@
 #define READ_DELAY 10000 /* Microseconds */
 
 extern struct PCB tty_test_process;
-extern struct serial *serial_handle;
 extern struct oft_entry of_table[MAX_OPEN_FILE];
 extern seL4_Word ofd_count;
 extern seL4_Word curr_free_ofd;
-extern char *console;
-
-static void console_serial_handler(struct serial *serial, char c) {
-    struct oft_entry *entry = &of_table[STD_IN];
-
-    /* Return if we do not currently need to read */
-    if (entry->buffer == NULL || entry->buffer_size == 0) return;
-
-    /* Check if we are on a new page */
-    if (((seL4_Word) entry->buffer & PAGE_MASK_4K) == 0) {
-        seL4_CPtr dummy_sos_vaddr;
-        seL4_CPtr dummy_app_cap;
-        int err = sos_map_page(entry->buffer,
-                tty_test_process.vroot,
-                tty_test_process.addrspace,
-                &dummy_sos_vaddr,
-                &dummy_app_cap);
-    }
-
-    /* Take uaddr and turn it into sos_vaddr */
-    seL4_Word index1 = ((seL4_Word) entry->buffer >> 22);
-    seL4_Word index2 = ((seL4_Word) entry->buffer << 10) >> 22;
-
-    char *sos_vaddr = PAGE_ALIGN_4K(tty_test_process.addrspace->page_table[index1][index2].sos_vaddr);
-    /* Add offset */
-    sos_vaddr = ((seL4_Word) sos_vaddr) | ((seL4_Word) entry->buffer & PAGE_MASK_4K);
-
-    /* Write into buffer */
-    *sos_vaddr = c;
-    entry->buffer++;
-    entry->buffer_count++;
-
-    /* Check end */
-    if (entry->buffer_count == entry->buffer_size || c == '\n') {
-        entry->buffer_size = 0;
-        entry->buffer = NULL;
-
-        /* Reply */
-        if (entry->reply_cap != CSPACE_NULL) {
-            seL4_MessageInfo_t reply = seL4_MessageInfo_new(0, 0, 0, 1);
-            seL4_SetMR(0, entry->buffer_count);
-            seL4_Send(entry->reply_cap, reply);
-            cspace_free_slot(cur_cspace, entry->reply_cap);
-
-            entry->reply_cap = CSPACE_NULL;
-        }
-    }
-}
 
 /* Checks that user pointer is a valid address in userspace */
 static int legal_uaddr(seL4_Word uaddr) {
@@ -227,37 +178,42 @@ void syscall_write(seL4_CPtr reply_cap) {
     }
 
     int bytes_sent = 0;
-    if (ofd == STD_OUT || ofd == STD_INOUT) {
-        /* Console */
-        seL4_Word end_uaddr = uaddr + ubuf_size;
-        while (ubuf_size > 0) {
-            seL4_Word uaddr_next = PAGE_ALIGN_4K(uaddr) + 0x1000;
-            seL4_Word size;
-            if (end_uaddr >= uaddr_next) {
-                size = uaddr_next-uaddr;
-            } else {
-                size = ubuf_size;
-            }
 
-            /* Though we can assume the buffer is mapped because it is a write operation,
-             * we still use sos_map_page to find the mapping address if it is already mapped */
-            seL4_CPtr app_cap;
-            seL4_CPtr sos_vaddr;
-            int err = sos_map_page(uaddr,
-                                   tty_test_process.vroot,
-                                   tty_test_process.addrspace,
-                                   &sos_vaddr,
-                                   &app_cap);
-            sos_vaddr = PAGE_ALIGN_4K(sos_vaddr);
-            /* Add offset */
-            sos_vaddr |= (uaddr & PAGE_MASK_4K);
+    // TODO page by page
+    struct uio uio = {
+        .bufAddr = sos_vaddr,
+        .bufSize = size,
+        .fileOffset = offset
+    };
 
-            bytes_sent += serial_send(serial_handle, sos_vaddr, size);
-            ubuf_size -= size;
-            uaddr = uaddr_next;
+    // TODO finish
+    seL4_Word end_uaddr = uaddr + ubuf_size;
+    while (ubuf_size > 0) {
+        seL4_Word uaddr_next = PAGE_ALIGN_4K(uaddr) + 0x1000;
+        seL4_Word size;
+        if (end_uaddr >= uaddr_next) {
+            size = uaddr_next-uaddr;
+        } else {
+            size = ubuf_size;
         }
-    } else {
-        /* TODO actually manipulate file */
+
+        /* Though we can assume the buffer is mapped because it is a write operation,
+         * we still use sos_map_page to find the mapping address if it is already mapped */
+        seL4_CPtr app_cap;
+        seL4_CPtr sos_vaddr;
+        int err = sos_map_page(uaddr,
+                tty_test_process.vroot,
+                tty_test_process.addrspace,
+                &sos_vaddr,
+                &app_cap);
+        sos_vaddr = PAGE_ALIGN_4K(sos_vaddr);
+        /* Add offset */
+        sos_vaddr |= (uaddr & PAGE_MASK_4K);
+
+        of_table[ofd].vnode->vn_ops->vop_write(of_table[ofd].vnode, &uio);
+
+        ubuf_size -= size;
+        uaddr = uaddr_next;
     }
 
     /* Reply */
@@ -329,19 +285,14 @@ void syscall_read(seL4_CPtr reply_cap) {
         return;
     }
 
-    if (ofd == STD_IN || ofd == STD_INOUT) {
-        /* Console */
-        of_table[STD_IN].buffer = uaddr;
-        of_table[STD_IN].buffer_size = ubuf_size;
-        of_table[STD_IN].buffer_count = 0;
-        of_table[STD_IN].reply_cap = reply_cap;
-        serial_register_handler(serial_handle, console_serial_handler);
-    } else {
-        /* TODO actually manipulate file */
+    // TODO page by page
+    struct uio uio = {
+        .bufAddr = sos_vaddr,
+        .bufSize = size,
+        .fileOffset = offset
+    };
 
-        /* Free slot only if reply is handled */
-        cspace_free_slot(cur_cspace, reply_cap);
-    }
+    of_table[ofd].vnode->vn_ops->vop_read(of_table[ofd].vnode, &uio);
 }
 
 void syscall_open(seL4_CPtr reply_cap) {
@@ -386,35 +337,21 @@ void syscall_open(seL4_CPtr reply_cap) {
     sos_vaddr = PAGE_ALIGN_4K(sos_vaddr);
     sos_vaddr |= (uaddr & PAGE_MASK_4K);
 
-    /* Check if it's console */
-    char *path = (char *) sos_vaddr;
-    if (!strcmp(path, console)) {
-        int ofd;
-        if (access_mode == O_RDWR) {
-            ofd = STD_INOUT;
-        } else if (access_mode != O_WRONLY) {
-            ofd = STD_IN;
-        } else {
-            ofd = STD_OUT;
-        }
-        tty_test_process.addrspace->fd_table[free_fd].ofd = ofd;
-        of_table[ofd].ref++;
-    } else {
-        /* TODO Actual file manipulation */
+    // TODO path length stuff?!?!
+    struct vnode *ret_vn;
+    int err = vfs_open(path, &ret_vn);
 
-        tty_test_process.addrspace->fd_table[free_fd].ofd = curr_free_ofd;
+    of_table[curr_free_ofd].vnode = ret_vn;
 
-        /* TODO: NEED TO CHANGE LATER! */
-        of_table[curr_free_ofd].ptr = console;
+    /* Set access mode and add ref count */
+    of_table[curr_free_ofd].file_info.st_fmode = access_mode;
+    of_table[curr_free_ofd].ref++;
+    
+    tty_test_process.addrspace->fd_table[free_fd].ofd = curr_free_ofd;
 
-        /* Set access mode and add ref count */
-        of_table[curr_free_ofd].file_info.st_fmode = access_mode;
-        of_table[curr_free_ofd].ref++;
-
-        ofd_count++;
-        while (of_table[curr_free_ofd].ptr != NULL) {
-            curr_free_ofd = (curr_free_ofd + 1) % MAX_OPEN_FILE;  
-        }
+    ofd_count++;
+    while (of_table[curr_free_ofd].vnode != NULL) {
+        curr_free_ofd = (curr_free_ofd + 1) % MAX_OPEN_FILE;  
     }
 
     /* Compute free_fd */

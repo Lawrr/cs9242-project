@@ -33,6 +33,8 @@
 #include "sos.h"
 #include "file.h"
 #include "process.h"
+#include "vnode.h"
+#include "console.h"
 #include <autoconf.h>
 
 #define verbose 5
@@ -69,7 +71,6 @@ const seL4_BootInfo* _boot_info;
 struct PCB tty_test_process;
 
 //struct PCB PCB_Array[MAX_PROCESS];
-char *console = "console";
 
 seL4_CPtr _sos_ipc_ep_cap;
 seL4_CPtr _sos_interrupt_ep_cap;
@@ -452,6 +453,9 @@ static void _sos_init(seL4_CPtr* ipc_ep, seL4_CPtr* async_ep){
 
     /* Initialise open file table */
     of_table_init(); 
+
+    /* Add console device */
+    console_init();
 
     /* Initialiase other system compenents here */
 
