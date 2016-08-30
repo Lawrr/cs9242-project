@@ -57,7 +57,10 @@ static struct vnode *vnode_new() {
 
 int vfs_open(char*path, struct vnode **ret_vn){
     *ret_vn = vnode_new();
+    printf("Enter1\n");
+    printf("Enter Addr: %p\n", &(*ret_vn)->vn_ops->vop_open);
     (*ret_vn)->vn_ops->vop_open(ret_vn, path);
+    printf("Enter2\n");
     (*ret_vn)->vn_ref++;
     return 0;
 }

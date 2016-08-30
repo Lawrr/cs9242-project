@@ -453,9 +453,6 @@ static void _sos_init(seL4_CPtr* ipc_ep, seL4_CPtr* async_ep){
     /* Initialise frame table */
     frame_init(high,low);
 
-    /* Initialise open file table */
-    of_table_init(); 
-
     /* Initialiase other system compenents here */
 
     _sos_ipc_init(ipc_ep, async_ep);
@@ -532,6 +529,9 @@ int main(void) {
 
     /* Initialise the network hardware */
     network_init(badge_irq_ep(_sos_interrupt_ep_cap, IRQ_BADGE_NETWORK));
+
+    /* Initialise open file table */
+    of_table_init(); 
 
     /* Initialise the timer */
     void *epit1_vaddr = map_device(EPIT1_PADDR, EPIT_REGISTERS * sizeof(uint32_t));
