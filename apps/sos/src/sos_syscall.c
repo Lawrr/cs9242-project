@@ -140,6 +140,17 @@ int validate_buffer_size(seL4_CPtr reply_cap, int32_t size) {
     return 0;
 }
 
+int validate_uaddr(seL4_CPtr reply_cap, char *uaddr) {
+    if (!legal_uaddr(uaddr)) {
+        seL4_MessageInfo_t reply = seL4_MessageInfo_new(0, 0, 0, 1);
+        seL4_SetMR(0, ERR_ILLEGAL_USERADDR); 
+        seL4_Send(reply_cap, reply);
+        cspace_free_slot(cur_cspace, reply_cap);
+        return 1;
+    }
+    return 0;
+}
+
 int validate_uaddr_range(seL4_CPtr reply_cap, char *uaddr, int32_t size) {
     if (!legal_uaddr_range(uaddr, size)) {
         seL4_MessageInfo_t reply = seL4_MessageInfo_new(0, 0, 0, 1);
@@ -176,6 +187,28 @@ int validate_ofd_mode(seL4_CPtr reply_cap, int ofd, int mode) {
     if (!(of_table[ofd].file_info.st_fmode & mode)) {
         seL4_MessageInfo_t reply = seL4_MessageInfo_new(0, 0, 0, 1);
         seL4_SetMR(0, ERR_ILLEGAL_ACCESS_MODE); 
+        seL4_Send(reply_cap, reply);
+        cspace_free_slot(cur_cspace, reply_cap);
+        return 1;
+    }
+    return 0;
+}
+
+int validate_max_fd(seL4_CPtr reply_cap, int fd_count) {
+    if (fd_count == PROCESS_MAX_FILES) {
+        seL4_MessageInfo_t reply = seL4_MessageInfo_new(0, 0, 0, 1);
+        seL4_SetMR(0, ERR_MAX_FILE);
+        seL4_Send(reply_cap, reply);
+        cspace_free_slot(cur_cspace, reply_cap);
+        return 1;
+    }
+    return 0;
+}
+
+int validate_max_ofd(seL4_CPtr reply_cap, int ofd_count) {
+    if (ofd_count == MAX_OPEN_FILE) {
+        seL4_MessageInfo_t reply = seL4_MessageInfo_new(0, 0, 0, 1);
+        seL4_SetMR(0, ERR_MAX_SYSTEM_FILE);
         seL4_Send(reply_cap, reply);
         cspace_free_slot(cur_cspace, reply_cap);
         return 1;
@@ -306,84 +339,66 @@ void syscall_open(seL4_CPtr reply_cap) {
     seL4_Word uaddr = seL4_GetMR(1);
     fmode_t access_mode = seL4_GetMR(2); 
     
-    if (fd_count == PROCESS_MAX_FILES) {
-        seL4_MessageInfo_t reply = seL4_MessageInfo_new(0, 0, 0, 1);
-        seL4_SetMR(0, ERR_MAX_FILE);
-        seL4_Send(reply_cap, reply);
-        cspace_free_slot(cur_cspace, reply_cap);
-        return;
-    } else if (ofd_count == MAX_OPEN_FILE) {
-        seL4_MessageInfo_t reply = seL4_MessageInfo_new(0, 0, 0, 1);
-        seL4_SetMR(0, ERR_MAX_SYSTEM_FILE);
-        seL4_Send(reply_cap, reply);
-        cspace_free_slot(cur_cspace, reply_cap);
-        return;
-    }
-    /* Check user address */
-    if (!legal_uaddr(uaddr)) {
-        seL4_MessageInfo_t reply = seL4_MessageInfo_new(0, 0, 0, 1);
-        seL4_SetMR(0, ERR_ILLEGAL_USERADDR); 
-        seL4_Send(reply_cap, reply);
-        cspace_free_slot(cur_cspace, reply_cap);
-        return;
-    }
-   
+    if (validate_max_fd(reply_cap, fd_count)) return;
+    if (validate_max_ofd(reply_cap, ofd_count)) return;
+    if (validate_uaddr(reply_cap, uaddr)) return;
+
     char path_sos_vaddr[MAX_PATH_LEN];
     /* Make sure address is mapped */
     seL4_CPtr app_cap;
     seL4_Word sos_vaddr;
     int err = sos_map_page(uaddr,
-                           tty_test_process.vroot,
-			   tty_test_process.addrspace,
-			   &sos_vaddr,
-			   &app_cap);
+            tty_test_process.vroot,
+            tty_test_process.addrspace,
+            &sos_vaddr,
+            &app_cap);
 
     sos_vaddr = PAGE_ALIGN_4K(sos_vaddr);
     sos_vaddr |= (uaddr & PAGE_MASK_4K); 
-   
+
     seL4_Word uaddr_next_page = PAGE_ALIGN_4K(uaddr)+0x1000;
     seL4_Word safe_len = uaddr_next_page - uaddr;
     if (safe_len < MAX_PATH_LEN){
-       int len = strnlen(sos_vaddr,safe_len);
-       if (len == safe_len){
-          /* Make sure address is mapped */
-          seL4_CPtr app_cap_next;
-          seL4_Word sos_vaddr_next;
-          int err = sos_map_page(uaddr_next_page,
-                                 tty_test_process.vroot,
-		         	 tty_test_process.addrspace,
-			         &sos_vaddr_next,
-			         &app_cap_next);
+        int len = strnlen(sos_vaddr,safe_len);
+        if (len == safe_len){
+            /* Make sure address is mapped */
+            seL4_CPtr app_cap_next;
+            seL4_Word sos_vaddr_next;
+            int err = sos_map_page(uaddr_next_page,
+                    tty_test_process.vroot,
+                    tty_test_process.addrspace,
+                    &sos_vaddr_next,
+                    &app_cap_next);
 
-          sos_vaddr_next = PAGE_ALIGN_4K(sos_vaddr_next);
-          sos_vaddr_next |= (uaddr_next_page & PAGE_MASK_4K);
-	  len = strnlen(sos_vaddr_next,MAX_PATH_LEN - safe_len);
-	  if (len == MAX_PATH_LEN - safe_len){
-             //Doesn't have terminator
-             seL4_MessageInfo_t reply = seL4_MessageInfo_new(0, 0, 0, 1);
-             seL4_SetMR(0, ERR_ILLEGAL_USERADDR); 
-             seL4_Send(reply_cap, reply);
-             cspace_free_slot(cur_cspace, reply_cap);
-	     return;
-          }  else{
-             strncpy(path_sos_vaddr,sos_vaddr,safe_len);
-             strcpy(path_sos_vaddr+safe_len,sos_vaddr_next);    
-	  }
-       }  else{
-          strcpy(path_sos_vaddr,sos_vaddr);
-       }
+            sos_vaddr_next = PAGE_ALIGN_4K(sos_vaddr_next);
+            sos_vaddr_next |= (uaddr_next_page & PAGE_MASK_4K);
+            len = strnlen(sos_vaddr_next,MAX_PATH_LEN - safe_len);
+            if (len == MAX_PATH_LEN - safe_len){
+                //Doesn't have terminator
+                seL4_MessageInfo_t reply = seL4_MessageInfo_new(0, 0, 0, 1);
+                seL4_SetMR(0, ERR_ILLEGAL_USERADDR); 
+                seL4_Send(reply_cap, reply);
+                cspace_free_slot(cur_cspace, reply_cap);
+                return;
+            }  else{
+                strncpy(path_sos_vaddr,sos_vaddr,safe_len);
+                strcpy(path_sos_vaddr+safe_len,sos_vaddr_next);    
+            }
+        }  else{
+            strcpy(path_sos_vaddr,sos_vaddr);
+        }
     }  else{
-       int len = strnlen(sos_vaddr,MAX_PATH_LEN);
-       if (len == MAX_PATH_LEN){
-          //Doesn't have terminator
-          seL4_MessageInfo_t reply = seL4_MessageInfo_new(0, 0, 0, 1);
-          seL4_SetMR(0, ERR_ILLEGAL_USERADDR); 
-          seL4_Send(reply_cap, reply);
-          cspace_free_slot(cur_cspace, reply_cap);
-          return;
-       }  else{
-          strcpy(path_sos_vaddr,sos_vaddr);
-       }
+        int len = strnlen(sos_vaddr,MAX_PATH_LEN);
+        if (len == MAX_PATH_LEN){
+            //Doesn't have terminator
+            seL4_MessageInfo_t reply = seL4_MessageInfo_new(0, 0, 0, 1);
+            seL4_SetMR(0, ERR_ILLEGAL_USERADDR); 
+            seL4_Send(reply_cap, reply);
+            cspace_free_slot(cur_cspace, reply_cap);
+            return;
+        }  else{
+            strcpy(path_sos_vaddr,sos_vaddr);
+        }
     }    
     struct vnode *ret_vn;
     err = vfs_open((char*)path_sos_vaddr, &ret_vn);
