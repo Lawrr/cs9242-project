@@ -163,6 +163,12 @@ static void uwakeup(uint32_t id, void *reply_cap) {
 
 void syscall_usleep(seL4_CPtr reply_cap) {
     int msec = seL4_GetMR(1);
+
+    /* Make sure sec is positive */
+    if (msec < 0) {
+        msec = 0;
+    }
+
     register_timer(msec * 1000, &uwakeup, (void *) reply_cap);
 }
 
