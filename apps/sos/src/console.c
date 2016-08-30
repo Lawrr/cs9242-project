@@ -40,7 +40,6 @@ static void console_serial_handler(struct serial *serial, char c) {
     /* Return if we do not currently need to read */
     if (console_uio.bufAddr == NULL || console_uio.remaining == 0) return;
 
-
     /* Take uaddr and turn it into sos_vaddr */
     seL4_Word index1 = ((seL4_Word) console_uio.bufAddr >> 22);
     seL4_Word index2 = ((seL4_Word) console_uio.bufAddr << 10) >> 22;

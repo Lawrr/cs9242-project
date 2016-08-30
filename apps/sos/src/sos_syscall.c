@@ -279,24 +279,25 @@ void syscall_read(seL4_CPtr reply_cap) {
     /* Make sure address is mapped */
     seL4_Word end_uaddr = uaddr + ubuf_size;
     seL4_Word curr_uaddr = uaddr;
-    while (ubuf_size > 0) {
+    seL4_Word curr_size = ubuf_size;
+    while (curr_size > 0) {
         seL4_Word uaddr_next = PAGE_ALIGN_4K(curr_uaddr) + 0x1000;
         seL4_Word size;
         if (end_uaddr >= uaddr_next) {
             size = uaddr_next-curr_uaddr;
         } else {
-            size = ubuf_size;
+            size = curr_size;
         }
 
         seL4_CPtr app_cap;
         seL4_CPtr sos_vaddr;
         int err = sos_map_page(curr_uaddr,
-                tty_test_process.vroot,
-                tty_test_process.addrspace,
-                &sos_vaddr,
-                &app_cap);
+                               tty_test_process.vroot,
+                               tty_test_process.addrspace,
+                               &sos_vaddr,
+                               &app_cap);
 
-        ubuf_size -= size;
+        curr_size -= size;
         curr_uaddr = uaddr_next;
     }
 
@@ -306,8 +307,9 @@ void syscall_read(seL4_CPtr reply_cap) {
         .remaining = ubuf_size,
         .fileOffset = 0
     };
+
     struct page_table_entry **page_table = tty_test_process.addrspace->page_table;
-    /* Page table pointer and reply cap p*/
+    /* Page table pointer and reply cap */
     seL4_Word *data = malloc(2 * sizeof(seL4_Word));
     data[0] = (seL4_Word) reply_cap;
     data[1] = (seL4_Word) page_table;

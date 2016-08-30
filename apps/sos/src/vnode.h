@@ -17,7 +17,7 @@ struct vnode{
 };
 
 struct uio{
-    seL4_Word bufAddr;
+    char *bufAddr;
     seL4_Word bufSize;
     seL4_Word remaining;
     seL4_Word fileOffset;
