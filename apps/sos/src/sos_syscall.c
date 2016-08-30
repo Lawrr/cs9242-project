@@ -360,7 +360,7 @@ void syscall_open(seL4_CPtr reply_cap) {
     sos_vaddr |= (uaddr & PAGE_MASK_4K);
 
     struct vnode *ret_vn;
-    err = vfs_open((char*)uaddr, &ret_vn);
+    err = vfs_open((char*)sos_vaddr, &ret_vn);
 
     of_table[curr_free_ofd].vnode = ret_vn;
 

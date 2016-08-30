@@ -46,7 +46,7 @@ static int isDev(char *dev){
         printf("cmp:\nDevice name: '%s'\n", dev);
         printf("Device list: '%s'\n", dev_list[i].dev_name);
         //TODO fix
-        if (!strcmp(dev_list[i].dev_name, "console")) {
+        if (!strncmp(dev_list[i].dev_name, dev,MAX_DEV_NAME)) {
         printf("ret\n");
             return i;
         }
