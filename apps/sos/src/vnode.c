@@ -13,7 +13,7 @@ static const struct vnode_ops default_vops ={
     &vnode_write
 };
 
-struct dev dev_list[MAX_DEV_NUM];
+static struct dev dev_list[MAX_DEV_NUM];
 
 void dev_list_init(){
     for (int i = 0 ; i < MAX_DEV_NUM; i++){
@@ -58,8 +58,9 @@ static struct vnode *vnode_new() {
 int vfs_open(char*path, struct vnode **ret_vn){
     *ret_vn = vnode_new();
     printf("Enter1\n");
+    vnode_open(*ret_vn, path);
     printf("Enter Addr: %p\n", &(*ret_vn)->vn_ops->vop_open);
-    (*ret_vn)->vn_ops->vop_open(ret_vn, path);
+    (*ret_vn)->vn_ops->vop_open(*ret_vn, path);
     printf("Enter2\n");
     (*ret_vn)->vn_ref++;
     return 0;
