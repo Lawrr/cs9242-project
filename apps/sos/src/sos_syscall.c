@@ -11,6 +11,7 @@
 #include <serial/serial.h>
 #include <clock/clock.h>
 #include <utils/page.h>
+#include <fcntl.h>
 
 #include "addrspace.h"
 #include "frametable.h"
@@ -387,9 +388,9 @@ void syscall_open(seL4_CPtr reply_cap) {
     char *path = (char *) sos_vaddr;
     if (!strcmp(path, console)) {
         int ofd;
-        if (access_mode == (FM_WRITE | FM_READ)) {
+        if (access_mode == O_RDWR) {
             ofd = STD_INOUT;
-        } else if (access_mode != FM_WRITE) {
+        } else if (access_mode != O_WRONLY) {
             ofd = STD_IN;
         } else {
             ofd = STD_OUT;
