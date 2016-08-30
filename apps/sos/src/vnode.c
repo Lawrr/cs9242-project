@@ -30,7 +30,9 @@ int  dev_add(char *dev_name,struct vnode_ops* dev_ops){
     for (int i = 0; i < MAX_DEV_NUM; i++){
         if (dev_list[i].dev_name == NULL){
             dev_list[i].dev_name = malloc(len+1);
-            strcpy(dev_list[i].dev_name,dev_name);
+            strcpy(dev_list[i].dev_name, dev_name);
+            printf("Device name: '%s'\n", dev_name);
+            printf("Device list: '%s'\n", dev_list[i].dev_name);
             dev_list[i].dev_ops = dev_ops;
             return 0;
         }
@@ -41,10 +43,15 @@ int  dev_add(char *dev_name,struct vnode_ops* dev_ops){
 /*Assume the name has '\0'*/
 static int isDev(char *dev){
     for (int i = 0; i < MAX_DEV_NUM;i++){
-        if (strncmp(dev_list[i].dev_name,dev,MAX_DEV_NAME)){
+        printf("cmp:\nDevice name: '%s'\n", dev);
+        printf("Device list: '%s'\n", dev_list[i].dev_name);
+        //TODO fix
+        if (!strcmp(dev_list[i].dev_name, "console")) {
+        printf("ret\n");
             return i;
         }
     }
+    printf("exit1\n");
     return -1;
 }
 

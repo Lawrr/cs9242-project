@@ -212,10 +212,13 @@ void syscall_write(seL4_CPtr reply_cap) {
 
         of_table[ofd].vnode->vn_ops->vop_write(of_table[ofd].vnode, &uio);
 
+        bytes_sent += size - uio.remaining;
+
         ubuf_size -= size;
         uaddr = uaddr_next;
         uio.fileOffset += size;
     }
+    printf("Bytes sent: %d\n", bytes_sent);
 
     /* Reply */
     seL4_MessageInfo_t reply = seL4_MessageInfo_new(0, 0, 0, 1);
@@ -320,7 +323,6 @@ void syscall_open(seL4_CPtr reply_cap) {
     seL4_Word uaddr = seL4_GetMR(1);
     fmode_t access_mode = seL4_GetMR(2); 
     
-
     if (fd_count == PROCESS_MAX_FILES) {
         seL4_MessageInfo_t reply = seL4_MessageInfo_new(0, 0, 0, 1);
         seL4_SetMR(0, ERR_MAX_FILE);
@@ -361,7 +363,16 @@ void syscall_open(seL4_CPtr reply_cap) {
     of_table[curr_free_ofd].vnode = ret_vn;
 
     /* Set access mode and add ref count */
-    of_table[curr_free_ofd].file_info.st_fmode = access_mode;
+    int sos_access_mode;
+    if (access_mode == O_RDWR) {
+        sos_access_mode = FM_READ | FM_WRITE;
+    } else if (sos_access_mode == O_RDONLY) {
+        sos_access_mode = FM_READ;
+    } else {
+        sos_access_mode = FM_WRITE;
+    }
+
+    of_table[curr_free_ofd].file_info.st_fmode = sos_access_mode;
     of_table[curr_free_ofd].ref++;
     
     tty_test_process.addrspace->fd_table[free_fd].ofd = curr_free_ofd;

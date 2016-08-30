@@ -81,17 +81,18 @@ int console_write(struct vnode *vn, struct uio *uio) {
 }
 
 int console_read(struct vnode *vn, struct uio *uio) {
+    printf("CONSOLE READ\n");
     console_vn = vn;
     console_uio = *uio;
     return 0;
 }
 
 int console_open(struct vnode *vnode, char *path) {
-
+    return 0;
 }
 
 int console_close(struct vnode *vnode) {
-
+    return 0;
 }
 
 void console_init(struct vnode **vnode) {
