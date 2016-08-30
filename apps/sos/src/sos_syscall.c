@@ -129,54 +129,72 @@ void syscall_time_stamp(seL4_CPtr reply_cap) {
     cspace_free_slot(cur_cspace, reply_cap);
 }
 
-void syscall_write(seL4_CPtr reply_cap) {
-    int fd = seL4_GetMR(1);
-    seL4_Word uaddr = seL4_GetMR(2);
-    seL4_Word ubuf_size = seL4_GetMR(3);
-
-    /* Check ubuf_size */
-    if (ubuf_size <= 0) {
+int validate_buffer_size(seL4_CPtr reply_cap, int32_t size) {
+    if (size <= 0) {
         seL4_MessageInfo_t reply = seL4_MessageInfo_new(0, 0, 0, 1);
         seL4_SetMR(0, ERR_INVALID_ARGUMENT); 
         seL4_Send(reply_cap, reply);
         cspace_free_slot(cur_cspace, reply_cap);
-        return;
+        return 1;
     }
-    /* Check user address */
-    if (!legal_uaddr_range(uaddr, ubuf_size)) {
+    return 0;
+}
+
+int validate_uaddr_range(seL4_CPtr reply_cap, char *uaddr, int32_t size) {
+    if (!legal_uaddr_range(uaddr, size)) {
         seL4_MessageInfo_t reply = seL4_MessageInfo_new(0, 0, 0, 1);
         seL4_SetMR(0, ERR_ILLEGAL_USERADDR); 
         seL4_Send(reply_cap, reply);
         cspace_free_slot(cur_cspace, reply_cap);
-        return;
+        return 1;
     }
-    /* Check fd */
+    return 0;
+}
+
+int validate_fd(seL4_CPtr reply_cap, int fd) {
     if (fd < 0 || fd >= PROCESS_MAX_FILES) {
         seL4_MessageInfo_t reply = seL4_MessageInfo_new(0, 0, 0, 1);
         seL4_SetMR(0, ERR_INVALID_FD);
         seL4_Send(reply_cap, reply);
         cspace_free_slot(cur_cspace, reply_cap);
-        return;
+        return 1;
     }
+    return 0;
+}
 
-    seL4_Word ofd = tty_test_process.addrspace->fd_table[fd].ofd;
-    /* Check ofd */
+int validate_ofd(seL4_CPtr reply_cap, int ofd) {
     if (ofd == -1) {
         seL4_MessageInfo_t reply = seL4_MessageInfo_new(0, 0, 0, 1);
-        seL4_SetMR(0, ERR_INVALID_FD);
+        seL4_SetMR(0, ERR_INVALID_FD); 
         seL4_Send(reply_cap, reply);
         cspace_free_slot(cur_cspace, reply_cap);
         return;
     }
+}
 
-    /* Check access right */
-    if (!(of_table[ofd].file_info.st_fmode & FM_WRITE)) {
+int validate_ofd_mode(seL4_CPtr reply_cap, int ofd, int mode) {
+    if (!(of_table[ofd].file_info.st_fmode & mode)) {
         seL4_MessageInfo_t reply = seL4_MessageInfo_new(0, 0, 0, 1);
         seL4_SetMR(0, ERR_ILLEGAL_ACCESS_MODE); 
         seL4_Send(reply_cap, reply);
         cspace_free_slot(cur_cspace, reply_cap);
-        return;
+        return 1;
     }
+    return 0;
+}
+
+void syscall_write(seL4_CPtr reply_cap) {
+    int fd = seL4_GetMR(1);
+    seL4_Word uaddr = seL4_GetMR(2);
+    seL4_Word ubuf_size = seL4_GetMR(3);
+
+    if (validate_buffer_size(reply_cap, ubuf_size)) return;
+    if (validate_uaddr_range(reply_cap, uaddr, ubuf_size)) return;
+    if (validate_fd(reply_cap, fd)) return;
+
+    seL4_Word ofd = tty_test_process.addrspace->fd_table[fd].ofd;
+    if (validate_ofd(reply_cap, ofd)) return;
+    if (validate_ofd_mode(reply_cap, ofd, FM_WRITE)) return;
 
     int bytes_sent = 0;
 
@@ -231,49 +249,13 @@ void syscall_read(seL4_CPtr reply_cap) {
     seL4_Word uaddr = seL4_GetMR(2);
     seL4_Word ubuf_size = seL4_GetMR(3);
     
-    /* Check ubuf_size */
-    if (ubuf_size <= 0) {
-        seL4_MessageInfo_t reply = seL4_MessageInfo_new(0, 0, 0, 1);
-        seL4_SetMR(0, ERR_INVALID_ARGUMENT); 
-        seL4_Send(reply_cap, reply);
-        cspace_free_slot(cur_cspace, reply_cap);
-        return;
-    }
-    /* Check user address */
-    if (!legal_uaddr_range(uaddr, ubuf_size)) {
-        seL4_MessageInfo_t reply = seL4_MessageInfo_new(0, 0, 0, 1);
-        seL4_SetMR(0, ERR_ILLEGAL_USERADDR); 
-        seL4_Send(reply_cap, reply);
-        cspace_free_slot(cur_cspace, reply_cap);
-        return;
-    }
-    /* Check fd */
-    if (fd < 0 || fd >= PROCESS_MAX_FILES) {
-        seL4_MessageInfo_t reply = seL4_MessageInfo_new(0, 0, 0, 1);
-        seL4_SetMR(0,ERR_INVALID_FD); 
-        seL4_Send(reply_cap, reply);
-        cspace_free_slot(cur_cspace, reply_cap);
-        return;
-    }
-    
-    seL4_Word ofd = tty_test_process.addrspace->fd_table[fd].ofd;
-    /* Check ofd */
-    if (ofd == -1) {
-        seL4_MessageInfo_t reply = seL4_MessageInfo_new(0, 0, 0, 1);
-        seL4_SetMR(0, ERR_INVALID_FD); 
-        seL4_Send(reply_cap, reply);
-        cspace_free_slot(cur_cspace, reply_cap);
-        return;
-    }
+    if (validate_buffer_size(reply_cap, ubuf_size)) return;
+    if (validate_uaddr_range(reply_cap, uaddr, ubuf_size)) return;
+    if (validate_fd(reply_cap, fd)) return;
 
-    /* Check access right */
-    if (!(of_table[ofd].file_info.st_fmode & FM_READ)) {
-        seL4_MessageInfo_t reply = seL4_MessageInfo_new(0, 0, 0, 1);
-        seL4_SetMR(0, ERR_ILLEGAL_ACCESS_MODE);
-        seL4_Send(reply_cap, reply);
-        cspace_free_slot(cur_cspace, reply_cap);
-        return;
-    }
+    seL4_Word ofd = tty_test_process.addrspace->fd_table[fd].ofd;
+    if (validate_ofd(reply_cap, ofd)) return;
+    if (validate_ofd_mode(reply_cap, ofd, FM_READ)) return;
 
     /* Make sure address is mapped */
     seL4_Word end_uaddr = uaddr + ubuf_size;
@@ -405,22 +387,8 @@ void syscall_close(seL4_CPtr reply_cap) {
     int fd = seL4_GetMR(1);
     seL4_Word ofd = tty_test_process.addrspace->fd_table[fd].ofd;
 
-    /* Check fd */
-    if (fd < 0 || fd >= PROCESS_MAX_FILES) {
-        seL4_MessageInfo_t reply = seL4_MessageInfo_new(0, 0, 0, 1);
-        seL4_SetMR(0, ERR_INVALID_FD); 
-        seL4_Send(reply_cap, reply);
-        cspace_free_slot(cur_cspace, reply_cap);
-        return;
-    }
-    /* Check ofd */	
-    if (ofd == -1 || of_table[ofd].ref == 0) {
-        seL4_MessageInfo_t reply = seL4_MessageInfo_new(0, 0, 0, 1);
-        seL4_SetMR(0, ERR_INVALID_FD); 
-        seL4_Send(reply_cap, reply);
-        cspace_free_slot(cur_cspace, reply_cap);
-        return;
-    }
+    if (validate_fd(reply_cap, fd)) return;
+    if (validate_ofd(reply_cap, ofd)) return;
 
     tty_test_process.addrspace->fd_table[fd].ofd = -1;
     of_table[ofd].ref--;
