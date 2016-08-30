@@ -42,7 +42,7 @@ int  dev_add(char *dev_name,struct vnode_ops* dev_ops){
 
 static int isDev(char *dev){
     for (int i = 0; i < MAX_DEV_NUM;i++){
-        if (!strncmp(dev_list[i].dev_name, dev,MAX_DEV_NAME)) {
+        if (!strcmp(dev_list[i].dev_name,dev)) {
             return i;
         }
     }
@@ -66,8 +66,6 @@ int vfs_open(char*path, struct vnode **ret_vn){
 
 static int vnode_open(struct vnode *vn, char *path) {
     int dev_id = isDev(path);
-    char safePath[MAX_PATH_LEN+1];
-    strncpy(safePath,path,MAX_PATH_LEN);
     if (dev_id != -1) {
         vn->vn_ops = dev_list[dev_id].dev_ops;
         /* Handle console here */

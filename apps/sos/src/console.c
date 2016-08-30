@@ -61,7 +61,8 @@ static void console_serial_handler(struct serial *serial, char c) {
 
         /* Reply */
         if (reply_cap != CSPACE_NULL) {
-            seL4_MessageInfo_t reply = seL4_MessageInfo_new(0, 0, 0, 1);
+            printf("replay%d\n---",console_uio.bufSize - console_uio.remaining);
+	    seL4_MessageInfo_t reply = seL4_MessageInfo_new(0, 0, 0, 1);
             seL4_SetMR(0, console_uio.bufSize - console_uio.remaining);
             seL4_Send(reply_cap, reply);
             cspace_free_slot(cur_cspace, reply_cap);
