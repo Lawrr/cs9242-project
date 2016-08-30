@@ -227,11 +227,11 @@ void syscall_write(seL4_CPtr reply_cap) {
     int bytes_sent = 0;
     if (ofd == STD_OUT || ofd == STD_INOUT) {
         /* Console */
-        seL4_Word end_uaddr_next = uaddr + ubuf_size;
+        seL4_Word end_uaddr = uaddr + ubuf_size;
         while (ubuf_size > 0) {
             seL4_Word uaddr_next = PAGE_ALIGN_4K(uaddr) + 0x1000;
             seL4_Word size;
-            if (end_uaddr_next >= uaddr_next) {
+            if (end_uaddr >= uaddr_next) {
                 size = uaddr_next-uaddr;
             } else {
                 size = ubuf_size;
