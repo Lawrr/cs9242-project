@@ -75,19 +75,21 @@ struct PCB tty_test_process;
 seL4_CPtr _sos_ipc_ep_cap;
 seL4_CPtr _sos_interrupt_ep_cap;
 
-struct serial *serial_handle;
-
 struct oft_entry of_table[MAX_OPEN_FILE];
 seL4_Word ofd_count = 0;
 seL4_Word curr_free_ofd = 3;
 
 void of_table_init() {
-   of_table[STD_IN].ptr = console;
-   of_table[STD_IN].file_info.st_fmode = FM_READ;
-   of_table[STD_OUT].ptr = console;
-   of_table[STD_OUT].file_info.st_fmode = FM_WRITE;
-   of_table[STD_INOUT].ptr = console;
-   of_table[STD_INOUT].file_info.st_fmode = FM_WRITE | FM_READ;
+    /* Add console device */
+    struct vnode *console_vnode;
+    console_init(&console_vnode);
+
+    of_table[STD_IN].vnode = console_vnode;
+    of_table[STD_IN].file_info.st_fmode = FM_READ;
+    of_table[STD_OUT].vnode = console_vnode;
+    of_table[STD_OUT].file_info.st_fmode = FM_WRITE;
+    of_table[STD_INOUT].vnode = console_vnode;
+    of_table[STD_INOUT].file_info.st_fmode = FM_WRITE | FM_READ;
 }
 
 /**
@@ -454,9 +456,6 @@ static void _sos_init(seL4_CPtr* ipc_ep, seL4_CPtr* async_ep){
     /* Initialise open file table */
     of_table_init(); 
 
-    /* Add console device */
-    console_init();
-
     /* Initialiase other system compenents here */
 
     _sos_ipc_init(ipc_ep, async_ep);
@@ -540,9 +539,6 @@ int main(void) {
     timer_init(epit1_vaddr, epit2_vaddr);
     seL4_CPtr timer_badge = badge_irq_ep(_sos_interrupt_ep_cap, IRQ_BADGE_TIMER);
     start_timer(timer_badge);
-    
-    /* Initialise serial driver */
-    serial_handle = serial_init();
     
     /* Start the user application */
     start_first_process(TTY_NAME, _sos_ipc_ep_cap);

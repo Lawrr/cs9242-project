@@ -24,6 +24,7 @@
 #include "sos.h"
 #include "file.h"
 #include "process.h"
+#include "vnode.h"
 #include <autoconf.h>
 
 #define verbose 5
@@ -179,14 +180,9 @@ void syscall_write(seL4_CPtr reply_cap) {
 
     int bytes_sent = 0;
 
-    // TODO page by page
-    struct uio uio = {
-        .bufAddr = sos_vaddr,
-        .bufSize = size,
-        .fileOffset = offset
-    };
+    struct uio uio;
+    uio.fileOffset = 0;
 
-    // TODO finish
     seL4_Word end_uaddr = uaddr + ubuf_size;
     while (ubuf_size > 0) {
         seL4_Word uaddr_next = PAGE_ALIGN_4K(uaddr) + 0x1000;
@@ -210,10 +206,15 @@ void syscall_write(seL4_CPtr reply_cap) {
         /* Add offset */
         sos_vaddr |= (uaddr & PAGE_MASK_4K);
 
+        uio.bufAddr = sos_vaddr;
+        uio.bufSize = size;
+        uio.remaining = size;
+
         of_table[ofd].vnode->vn_ops->vop_write(of_table[ofd].vnode, &uio);
 
         ubuf_size -= size;
         uaddr = uaddr_next;
+        uio.fileOffset += size;
     }
 
     /* Reply */
@@ -252,20 +253,7 @@ void syscall_read(seL4_CPtr reply_cap) {
         cspace_free_slot(cur_cspace, reply_cap);
         return;
     }
-
-    /* Make sure address is mapped */
-    seL4_CPtr app_cap;
-    seL4_CPtr sos_vaddr;
-    int err = sos_map_page(uaddr,
-            tty_test_process.vroot,
-            tty_test_process.addrspace,
-            &sos_vaddr,
-            &app_cap);
-
-    sos_vaddr = PAGE_ALIGN_4K(sos_vaddr);
-     /* Add offset */
-    sos_vaddr |= (uaddr & PAGE_MASK_4K);
-
+    
     seL4_Word ofd = tty_test_process.addrspace->fd_table[fd].ofd;
     /* Check ofd */
     if (ofd == -1) {
@@ -285,13 +273,42 @@ void syscall_read(seL4_CPtr reply_cap) {
         return;
     }
 
-    // TODO page by page
-    struct uio uio = {
-        .bufAddr = sos_vaddr,
-        .bufSize = size,
-        .fileOffset = offset
-    };
+    /* Make sure address is mapped */
+    seL4_Word end_uaddr = uaddr + ubuf_size;
+    seL4_Word curr_uaddr = uaddr;
+    while (ubuf_size > 0) {
+        seL4_Word uaddr_next = PAGE_ALIGN_4K(curr_uaddr) + 0x1000;
+        seL4_Word size;
+        if (end_uaddr >= uaddr_next) {
+            size = uaddr_next-curr_uaddr;
+        } else {
+            size = ubuf_size;
+        }
 
+        seL4_CPtr app_cap;
+        seL4_CPtr sos_vaddr;
+        int err = sos_map_page(curr_uaddr,
+                tty_test_process.vroot,
+                tty_test_process.addrspace,
+                &sos_vaddr,
+                &app_cap);
+
+        ubuf_size -= size;
+        curr_uaddr = uaddr_next;
+    }
+
+    struct uio uio = {
+        .bufAddr = uaddr,
+        .bufSize = ubuf_size,
+        .remaining = ubuf_size,
+        .fileOffset = 0
+    };
+    struct page_table_entry **page_table = tty_test_process.addrspace->page_table;
+    /* Page table pointer and reply cap p*/
+    seL4_Word *data = malloc(2 * sizeof(seL4_Word));
+    data[0] = (seL4_Word) reply_cap;
+    data[1] = (seL4_Word) page_table;
+    of_table[ofd].vnode->vn_data = (void *) data; 
     of_table[ofd].vnode->vn_ops->vop_read(of_table[ofd].vnode, &uio);
 }
 
@@ -302,6 +319,7 @@ void syscall_open(seL4_CPtr reply_cap) {
 
     seL4_Word uaddr = seL4_GetMR(1);
     fmode_t access_mode = seL4_GetMR(2); 
+    
 
     if (fd_count == PROCESS_MAX_FILES) {
         seL4_MessageInfo_t reply = seL4_MessageInfo_new(0, 0, 0, 1);
@@ -337,9 +355,8 @@ void syscall_open(seL4_CPtr reply_cap) {
     sos_vaddr = PAGE_ALIGN_4K(sos_vaddr);
     sos_vaddr |= (uaddr & PAGE_MASK_4K);
 
-    // TODO path length stuff?!?!
     struct vnode *ret_vn;
-    int err = vfs_open(path, &ret_vn);
+    err = vfs_open((char*)uaddr, &ret_vn);
 
     of_table[curr_free_ofd].vnode = ret_vn;
 
@@ -407,7 +424,7 @@ void syscall_close(seL4_CPtr reply_cap) {
         /* Console related */
     } else {
         if (of_table[curr_free_ofd].ref == 0) {
-            of_table[curr_free_ofd].ptr = NULL;
+            of_table[curr_free_ofd].vnode = NULL;
             of_table[curr_free_ofd].file_info.st_fmode = 0;
         }
     }
