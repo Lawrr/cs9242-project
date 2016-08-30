@@ -135,16 +135,12 @@ void syscall_brk(seL4_CPtr reply_cap) {
     }
 
     /* Check that newbrk is before HEAP_END (and that we even have a heap region...) */
-    if (curr_region == NULL || newbrk >= PROCESS_HEAP_END) {
+    if (curr_region == NULL || newbrk >= PROCESS_HEAP_END || newbrk < PROCESS_HEAP_START) {
         /* Set error */
         seL4_SetMR(0, 1);
         seL4_Send((seL4_CPtr) reply_cap, reply);
         cspace_free_slot(cur_cspace, reply_cap);
     }
-
-    printf("brk moved heap region end from %p to %p\n",
-           curr_region->baseaddr + curr_region->size,
-           curr_region->baseaddr + (newbrk - PROCESS_HEAP_START));
 
     /* Set new heap region */
     curr_region->size = newbrk - PROCESS_HEAP_START;
