@@ -40,18 +40,12 @@ int  dev_add(char *dev_name,struct vnode_ops* dev_ops){
     return ERR_MAX_DEV;
 }
 
-/*Assume the name has '\0'*/
 static int isDev(char *dev){
     for (int i = 0; i < MAX_DEV_NUM;i++){
-        printf("cmp:\nDevice name: '%s'\n", dev);
-        printf("Device list: '%s'\n", dev_list[i].dev_name);
-        //TODO fix
         if (!strncmp(dev_list[i].dev_name, dev,MAX_DEV_NAME)) {
-        printf("ret\n");
             return i;
         }
     }
-    printf("exit1\n");
     return -1;
 }
 
@@ -64,25 +58,21 @@ static struct vnode *vnode_new() {
 
 int vfs_open(char*path, struct vnode **ret_vn){
     *ret_vn = vnode_new();
-    printf("Enter1\n");
     vnode_open(*ret_vn, path);
-    printf("Enter Addr: %p\n", &(*ret_vn)->vn_ops->vop_open);
     (*ret_vn)->vn_ops->vop_open(*ret_vn, path);
-    printf("Enter2\n");
     (*ret_vn)->vn_ref++;
     return 0;
 }
 
-/*The buf should be in the same address region*/
 static int vnode_open(struct vnode *vn, char *path) {
     int dev_id = isDev(path);
     char safePath[MAX_PATH_LEN+1];
     strncpy(safePath,path,MAX_PATH_LEN);
     if (dev_id != -1) {
         vn->vn_ops = dev_list[dev_id].dev_ops;
-        //handle console here
+        /* Handle console here */
     } else {
-        //Not a dev, try doing with file
+        /* Not a dev, try doing with file */
     }
     return 0;
 }

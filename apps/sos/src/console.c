@@ -56,19 +56,19 @@ static void console_serial_handler(struct serial *serial, char c) {
 
     /* Check end */
     if (console_uio.remaining == 0 || c == '\n') {
-        console_uio.bufAddr = NULL;
-        console_uio.remaining = 0;
-
         seL4_CPtr reply_cap = ((seL4_Word *) (console_vn->vn_data))[0];
         free(console_vn->vn_data);
 
         /* Reply */
         if (reply_cap != CSPACE_NULL) {
             seL4_MessageInfo_t reply = seL4_MessageInfo_new(0, 0, 0, 1);
-            seL4_SetMR(0, console_uio.bufSize);
+            seL4_SetMR(0, console_uio.bufSize - console_uio.remaining);
             seL4_Send(reply_cap, reply);
             cspace_free_slot(cur_cspace, reply_cap);
         }
+
+        console_uio.bufAddr = NULL;
+        console_uio.remaining = 0;
     }
 }
 
@@ -80,7 +80,6 @@ int console_write(struct vnode *vn, struct uio *uio) {
 }
 
 int console_read(struct vnode *vn, struct uio *uio) {
-    printf("CONSOLE READ\n");
     console_vn = vn;
     console_uio = *uio;
     return 0;

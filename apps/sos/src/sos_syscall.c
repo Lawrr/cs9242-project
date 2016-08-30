@@ -218,7 +218,6 @@ void syscall_write(seL4_CPtr reply_cap) {
         uaddr = uaddr_next;
         uio.fileOffset += size;
     }
-    printf("Bytes sent: %d\n", bytes_sent);
 
     /* Reply */
     seL4_MessageInfo_t reply = seL4_MessageInfo_new(0, 0, 0, 1);
