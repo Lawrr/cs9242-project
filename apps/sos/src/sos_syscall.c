@@ -422,23 +422,13 @@ void syscall_close(seL4_CPtr reply_cap) {
         return;
     }
 
-    /* TODO Close actual file
-     *
-     *
-     *
-     *
-     * */
-
     tty_test_process.addrspace->fd_table[fd].ofd = -1;
     of_table[ofd].ref--;
 
-    if (ofd == STD_IN || ofd == STD_OUT || ofd == STD_INOUT) {
-        /* Console related */
-    } else {
-        if (of_table[curr_free_ofd].ref == 0) {
-            of_table[curr_free_ofd].vnode = NULL;
-            of_table[curr_free_ofd].file_info.st_fmode = 0;
-        }
+    if (of_table[ofd].ref == 0) {
+        of_table[ofd].vnode->vn_ops->vop_close(of_table[ofd].vnode);
+        of_table[ofd].vnode = NULL;
+        of_table[ofd].file_info.st_fmode = 0;
     }
 
     /* Reply */
