@@ -144,9 +144,9 @@ void syscall_usleep(seL4_CPtr reply_cap) {
         seL4_MessageInfo_t reply = seL4_MessageInfo_new(0, 0, 0, 0);
         seL4_Send(reply_cap, reply);
         cspace_free_slot(cur_cspace, reply_cap);
+    } else {
+        register_timer(msec * 1000, &uwakeup, (void *) reply_cap);
     }
-
-    register_timer(msec * 1000, &uwakeup, (void *) reply_cap);
 }
 
 void syscall_time_stamp(seL4_CPtr reply_cap) {
