@@ -77,19 +77,18 @@ seL4_CPtr _sos_interrupt_ep_cap;
 
 struct oft_entry of_table[MAX_OPEN_FILE];
 seL4_Word ofd_count = 0;
-seL4_Word curr_free_ofd = 3;
+seL4_Word curr_free_ofd = 2;
 
-void of_table_init() {
+static void of_table_init() {
     /* Add console device */
     struct vnode *console_vnode;
     console_init(&console_vnode);
 
+    /* Set up of table */
     of_table[STD_IN].vnode = console_vnode;
     of_table[STD_IN].file_info.st_fmode = FM_READ;
     of_table[STD_OUT].vnode = console_vnode;
     of_table[STD_OUT].file_info.st_fmode = FM_WRITE;
-    of_table[STD_INOUT].vnode = console_vnode;
-    of_table[STD_INOUT].file_info.st_fmode = FM_WRITE | FM_READ;
 }
 
 /**
@@ -288,8 +287,8 @@ void start_first_process(char* app_name, seL4_CPtr fault_ep) {
     tty_test_process.addrspace = as_new();
 
     /*open file table increase ref count*/
-    of_table[STD_IN].ref++;
-    of_table[STD_OUT].ref+=2;
+    of_table[STD_IN].ref_count++;
+    of_table[STD_OUT].ref_count += 2;
 
     /* Create a VSpace */
     tty_test_process.vroot_addr = ut_alloc(seL4_PageDirBits);

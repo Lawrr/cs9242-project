@@ -1,5 +1,5 @@
-#ifndef _PROCESS_H
-#define _PROCESS_H
+#ifndef _PROCESS_H_
+#define _PROCESS_H_
 
 #include <cspace/cspace.h>
 

@@ -23,6 +23,7 @@
 #include <sys/panic.h>
 #include <sys/debug.h>
 #include <cspace/cspace.h>
+
 #define INDEX1_SHIFT 22 
 #define INDEX2_MASK (1023 << PAGE_BITS_4K)
 
@@ -122,8 +123,21 @@ int sos_ummap_page(seL4_Word vaddr, seL4_Word asid) {
     return err;
 }*/
 
+int
+get_uaddr(seL4_Word sos_vaddr,
+          seL4_ARM_PageDirectory pd,
+          struct app_addrspace *as,
+          seL4_Word *ret_uaddr) {
+    // TODO
+    return 0;
+}
+
 int 
-sos_map_page(seL4_Word vaddr_unaligned, seL4_ARM_PageDirectory pd, struct app_addrspace *as, seL4_Word *sos_vaddr_ret,seL4_CPtr*app_cap) {
+sos_map_page(seL4_Word vaddr_unaligned,
+             seL4_ARM_PageDirectory pd,
+             struct app_addrspace *as,
+             seL4_Word *sos_vaddr_ret,
+             seL4_CPtr *app_cap) {
     int err;
     seL4_Word vaddr = PAGE_ALIGN_4K(vaddr_unaligned);
     /* Get the addr to simplify later implementation */
@@ -131,7 +145,7 @@ sos_map_page(seL4_Word vaddr_unaligned, seL4_ARM_PageDirectory pd, struct app_ad
     
     /* Invalid mapping NULL */
     if (((void *) vaddr) == NULL) {
-        return -1;
+        return ERR_INVALID_ADDR;
     }
 
     seL4_Word index1 = vaddr >> INDEX1_SHIFT;
@@ -149,42 +163,42 @@ sos_map_page(seL4_Word vaddr_unaligned, seL4_ARM_PageDirectory pd, struct app_ad
 
     /* Can't find the region that contains thisvaddr */
     if (curr_region == NULL) {
-        return -1;
+        return ERR_INVALID_REGION;
     }
 
     /* No page table yet */
     if (*page_table_vaddr == NULL) {
         /* First level */
-        err = frame_alloc(page_table_vaddr);
+        err = frame_alloc((seL4_Word *) page_table_vaddr);
         if (err) {
-            return err;
+            return ERR_NO_MEMORY;
         }
 
         /* Second level */
-        err = frame_alloc(&(*page_table_vaddr)[index1]);
+        err = frame_alloc((seL4_Word *) &(*page_table_vaddr)[index1]);
         if (err) {
-            return err;
+            return ERR_NO_MEMORY;
         }
 
     } else if ((*page_table_vaddr)[index1] == NULL) {
         /* Second level */
-        err = frame_alloc(&(*page_table_vaddr)[index1]);
+        err = frame_alloc((seL4_Word *) &(*page_table_vaddr)[index1]);
         if (err) {
-            return err;
+            return ERR_NO_MEMORY;
         }
     }
 
-    if ((*page_table_vaddr)[index1][index2].sos_vaddr != NULL) {
-       //Already mapped
+    if ((seL4_Word *) (*page_table_vaddr)[index1][index2].sos_vaddr != NULL) {
+       /* Already mapped */
        *sos_vaddr_ret = (*page_table_vaddr)[index1][index2].sos_vaddr;
-       return -2;
+       return ERR_ALREADY_MAPPED;
     }
 
     /* Call the internal kernel page mapping */
     seL4_Word sos_vaddr;
     err = frame_alloc(&sos_vaddr);	
     if (err) {
-        return err;
+        return ERR_NO_MEMORY;
     }
 
     seL4_Word cap = get_cap(sos_vaddr);
@@ -202,7 +216,7 @@ sos_map_page(seL4_Word vaddr_unaligned, seL4_ARM_PageDirectory pd, struct app_ad
     if (err) {
         cspace_delete_cap(cur_cspace, copied_cap);
         frame_free(sos_vaddr);
-        return err;
+        return ERR_INTERNAL_MAP_ERROR;
     }
     
     /* Book keeping the copied caps */
@@ -214,5 +228,6 @@ sos_map_page(seL4_Word vaddr_unaligned, seL4_ARM_PageDirectory pd, struct app_ad
     (*page_table_vaddr)[index1][index2] = pte;
     *app_cap = copied_cap;
     *sos_vaddr_ret = sos_vaddr;
+
     return 0;
 }

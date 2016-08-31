@@ -1,5 +1,5 @@
-#ifndef _FILE_H
-#define _FILE_H
+#ifndef _FILE_H_
+#define _FILE_H_
 
 #include <cspace/cspace.h>
 
@@ -8,16 +8,11 @@
 
 #define STD_IN 0
 #define STD_OUT 1
-#define STD_INOUT 2
 
 struct oft_entry {
     sos_stat_t file_info;
     struct vnode *vnode;
-    seL4_Word ref;
-    char *buffer;
-    int buffer_count;
-    int buffer_size;
-    seL4_CPtr reply_cap;
+    int ref_count;
 };
 
 #endif
