@@ -2,6 +2,7 @@
 
 #include <serial/serial.h>
 #include <utils/page.h>
+#include <fcntl.h>
 
 #include "mapping.h"
 #include "sos.h"
@@ -67,7 +68,11 @@ int console_read(struct vnode *vnode, struct uio *uio) {
     return 0;
 }
 
-int console_open(struct vnode *vnode, char *path) {
+int console_open(struct vnode *vnode, int mode) {
+    /* Only allow one read */
+    if (vnode->read_count == 1 && (mode & FM_READ) != 0) {
+        return 1;
+    }
     return 0;
 }
 
@@ -91,6 +96,7 @@ void console_init(struct vnode **ret_vnode) {
     conditional_panic(err, "Could not add console serial device");
 
     /* Set return console vnode */
-    err = vfs_open("console", ret_vnode);
+    /* FM_WRITE for STDOUT */
+    err = vfs_open("console", FM_WRITE, ret_vnode);
     conditional_panic(err, "Registered console dev not found");
 }

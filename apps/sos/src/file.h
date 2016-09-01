@@ -6,8 +6,8 @@
 #define MAX_OPEN_FILE 255
 #define MAX_PROCESS 255
 
-#define STD_IN 0
-#define STD_OUT 1
+//#define STDIN 0
+#define STDOUT 0
 
 struct oft_entry {
     sos_stat_t file_info;

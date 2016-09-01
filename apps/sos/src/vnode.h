@@ -11,7 +11,9 @@
 #define ERR_MAX_DEV -2
 
 struct vnode {
-    int ref_count;
+    char *path;
+    int read_count;
+    int write_count;
     void *data;
     struct vnode_ops *ops;
 };
@@ -35,10 +37,12 @@ struct dev {
     struct vnode_ops *ops;
 };
 
-void dev_list_init();
+int vfs_init();
+
+int vfs_open(char *path, int mode, struct vnode **ret_vnode);
+
+int vfs_close(struct vnode *vnode, int mode);
 
 int dev_add(char *dev_name, struct vnode_ops *dev_ops);
-
-int vfs_open(char *path, struct vnode **ret_vnode);
 
 #endif

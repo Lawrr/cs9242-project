@@ -341,42 +341,45 @@ void syscall_open(seL4_CPtr reply_cap) {
         }
     }
 
-    struct vnode *ret_vnode;
-    err = vfs_open((char *) path_sos_vaddr, &ret_vnode);
-
-    of_table[curr_free_ofd].vnode = ret_vnode;
-
-    /* Set access mode and add ref count */
+    /* Access mode */
     int sos_access_mode = 0;
     if (access_mode == O_RDWR) {
         sos_access_mode = FM_READ | FM_WRITE;
-    } else if (sos_access_mode == O_RDONLY) {
+    } else if (access_mode == O_RDONLY) {
         sos_access_mode = FM_READ;
     } else {
         sos_access_mode = FM_WRITE;
     }
 
-    of_table[curr_free_ofd].file_info.st_fmode = sos_access_mode;
-    of_table[curr_free_ofd].ref_count++;
-    
-    tty_test_process.addrspace->fd_table[free_fd].ofd = curr_free_ofd;
+    struct vnode *ret_vnode;
+    err = vfs_open((char *) path_sos_vaddr, sos_access_mode, &ret_vnode);
+    if (err) {
+        seL4_SetMR(0, -1);
+    } else {
+        of_table[curr_free_ofd].vnode = ret_vnode;
 
-    ofd_count++;
-    while (of_table[curr_free_ofd].vnode != NULL) {
-        curr_free_ofd = (curr_free_ofd + 1) % MAX_OPEN_FILE;  
+        of_table[curr_free_ofd].file_info.st_fmode = sos_access_mode;
+        of_table[curr_free_ofd].ref_count++;
+        
+        tty_test_process.addrspace->fd_table[free_fd].ofd = curr_free_ofd;
+
+        ofd_count++;
+        while (of_table[curr_free_ofd].vnode != NULL) {
+            curr_free_ofd = (curr_free_ofd + 1) % MAX_OPEN_FILE;  
+        }
+
+        /* Compute free_fd */
+        fd_count++;
+
+        seL4_SetMR(0, free_fd);
+
+        while (tty_test_process.addrspace->fd_table[free_fd].ofd != -1) {
+            free_fd = (free_fd + 1) % PROCESS_MAX_FILES;
+        }
+
+        tty_test_process.addrspace->fdt_status = (fd_count << TWO_BYTE_BITS) |
+                                                 free_fd;
     }
-
-    /* Compute free_fd */
-    fd_count++;
-
-    seL4_SetMR(0, free_fd);
-
-    while (tty_test_process.addrspace->fd_table[free_fd].ofd != -1) {
-        free_fd = (free_fd + 1) % PROCESS_MAX_FILES;
-    }
-
-    tty_test_process.addrspace->fdt_status = (fd_count << TWO_BYTE_BITS) |
-                                             free_fd;
 
     /* Reply */
     seL4_MessageInfo_t reply = seL4_MessageInfo_new(0, 0, 0, 1);
@@ -395,10 +398,8 @@ void syscall_close(seL4_CPtr reply_cap) {
     of_table[ofd].ref_count--;
 
     if (of_table[ofd].ref_count == 0) {
+        vfs_close(of_table[ofd].vnode, of_table[ofd].file_info.st_fmode);
         of_table[ofd].file_info.st_fmode = 0;
-
-        of_table[ofd].vnode->ops->vop_close(of_table[ofd].vnode);
-        free(of_table[ofd].vnode);
         of_table[ofd].vnode = NULL;
     }
 

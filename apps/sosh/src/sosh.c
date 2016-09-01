@@ -26,7 +26,7 @@
 
 #include "benchmark.h"
 
-#define BUF_SIZ    6144
+#define BUF_SIZ    4000
 #define MAX_ARGS   32
 
 static int in;

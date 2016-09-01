@@ -1,10 +1,27 @@
 #include <string.h>
-#include <vnode.h>
+#include "sos.h"
+#include "vnode.h"
+#include "hashtable.h"
+
+#define VNODE_TABLE_SLOTS 64
 
 static int vnode_open(struct vnode *vnode, char *path);
 static int vnode_close(struct vnode *vnode);
 static int vnode_read(struct vnode *vnode, struct uio *uio);
 static int vnode_write(struct vnode *vnode, struct uio *uio);
+static void dev_list_init();
+
+static struct dev dev_list[MAX_DEV_NUM];
+static struct hashtable *vnode_table;
+
+int vfs_init() {
+    vnode_table = hashtable_new(VNODE_TABLE_SLOTS);
+    if (vnode_table == NULL) {
+        return 1;
+    }
+    dev_list_init();
+    return 0;
+}
 
 static const struct vnode_ops default_ops = {
     &vnode_open,
@@ -13,9 +30,7 @@ static const struct vnode_ops default_ops = {
     &vnode_write
 };
 
-static struct dev dev_list[MAX_DEV_NUM];
-
-void dev_list_init() {
+static void dev_list_init() {
     for (int i = 0 ; i < MAX_DEV_NUM; i++) {
         dev_list[i].name = NULL;
         dev_list[i].ops = NULL;
@@ -55,29 +70,18 @@ static int is_dev(char *dev) {
     return -1;
 }
 
-static struct vnode *vnode_new() {
+static struct vnode *vnode_new(char *path) {
     struct vnode *vnode = malloc(sizeof(struct vnode));
-    vnode->ref_count = 0;
-    vnode->ops = &default_ops;
+    if (vnode == NULL) {
+        return NULL;
+    }
 
-    return vnode;
-}
+    vnode->path = malloc(strlen(path + 1));
+    strcpy(vnode->path, path);
+    vnode->read_count = 0;
+    vnode->write_count = 0;
 
-int vfs_open(char *path, struct vnode **ret_vnode) {
-    *ret_vnode = vnode_new();
-
-    vnode_open(*ret_vnode, path);
-
-    (*ret_vnode)->ops->vop_open(*ret_vnode, path);
-
-    (*ret_vnode)->ref_count++;
-
-    return 0;
-}
-
-static int vnode_open(struct vnode *vnode, char *path) {
     int dev_id = is_dev(path);
-
     if (dev_id != -1) {
         /* Handle device */
 
@@ -85,8 +89,63 @@ static int vnode_open(struct vnode *vnode, char *path) {
         vnode->ops = dev_list[dev_id].ops;
     } else {
         /* Handle file */
+        vnode->ops = &default_ops;
     }
 
+    return vnode;
+}
+
+int vfs_open(char *path, int mode, struct vnode **ret_vnode) {
+    struct vnode *vnode;
+    /* Check if vnode for path already exists */
+    struct hashtable_entry *entry = hashtable_get(vnode_table, path);
+    if (entry == NULL) {
+        vnode = vnode_new(path);
+        hashtable_insert(vnode_table, path, vnode);
+    } else {
+        vnode = (struct vnode *) entry->value;
+    }
+
+    /* Open the vnode */
+    int err = vnode->ops->vop_open(vnode, mode);
+    /* Check for errors, include single read */
+    if (err) {
+        return err;
+    }
+
+    /* Inc ref counts */
+    if ((mode & FM_READ) != 0) {
+        vnode->read_count++;
+    }
+    if ((mode & FM_WRITE) != 0) {
+        vnode->write_count++;
+    }
+
+    *ret_vnode = vnode;
+    return 0;
+}
+
+int vfs_close(struct vnode *vnode, int mode) {
+    /* Dec ref counts */
+    if ((mode & FM_READ) != 0) {
+        vnode->read_count--;
+    }
+    if ((mode & FM_WRITE) != 0) {
+        vnode->write_count--;
+    }
+
+    vnode->ops->vop_close(vnode);
+
+    if (vnode->read_count + vnode->write_count == 0) {
+        hashtable_remove(vnode_table, vnode->path);
+        free(vnode->path);
+        free(vnode);
+    }
+
+    return 0;
+}
+
+static int vnode_open(struct vnode *vnode, char *path) {
     return 0;
 }
 

@@ -21,9 +21,9 @@
  */
 
 /* Default value. May be changed by user if they close and reopen console */
-static int std_input = 0;
-static int std_output = 1;
-static int std_err = 1;
+//static int std_input = 0;
+static int std_output = 0;
+//static int std_err = 1;
 
 int sos_sys_open(const char *path, fmode_t mode) {
     int numRegs = 3;
@@ -182,5 +182,5 @@ size_t sos_write(void *vData, size_t count) {
 }
 
 size_t sos_read(void *vData, size_t count) {
-    return sos_sys_read(std_input, vData, count);
+    //return sos_sys_read(std_input, vData, count);
 }

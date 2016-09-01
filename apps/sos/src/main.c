@@ -79,7 +79,7 @@ seL4_CPtr _sos_interrupt_ep_cap;
 
 struct oft_entry of_table[MAX_OPEN_FILE];
 seL4_Word ofd_count = 0;
-seL4_Word curr_free_ofd = 2;
+seL4_Word curr_free_ofd = 1;
 
 static void of_table_init() {
     /* Add console device */
@@ -87,10 +87,10 @@ static void of_table_init() {
     console_init(&console_vnode);
 
     /* Set up of table */
-    of_table[STD_IN].vnode = console_vnode;
-    of_table[STD_IN].file_info.st_fmode = FM_READ;
-    of_table[STD_OUT].vnode = console_vnode;
-    of_table[STD_OUT].file_info.st_fmode = FM_WRITE;
+    //of_table[STDIN].vnode = console_vnode;
+    //of_table[STDIN].file_info.st_fmode = FM_READ;
+    of_table[STDOUT].vnode = console_vnode;
+    of_table[STDOUT].file_info.st_fmode = FM_WRITE;
 }
 
 /**
@@ -289,8 +289,8 @@ void start_first_process(char* app_name, seL4_CPtr fault_ep) {
     tty_test_process.addrspace = as_new();
 
     /*open file table increase ref count*/
-    of_table[STD_IN].ref_count++;
-    of_table[STD_OUT].ref_count += 2;
+    //of_table[STDIN].ref_count++;
+    of_table[STDOUT].ref_count += 1;
 
     /* Create a VSpace */
     tty_test_process.vroot_addr = ut_alloc(seL4_PageDirBits);
@@ -453,6 +453,9 @@ static void _sos_init(seL4_CPtr* ipc_ep, seL4_CPtr* async_ep){
 
     /* Initialise frame table */
     frame_init(high,low);
+
+    /* Initialise vfs */
+    vfs_init();
 
     /* Initialiase other system compenents here */
 
