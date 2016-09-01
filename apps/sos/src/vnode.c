@@ -5,7 +5,7 @@
 
 #define VNODE_TABLE_SLOTS 64
 
-static int vnode_open(struct vnode *vnode, char *path);
+static int vnode_open(struct vnode *vnode, int mode);
 static int vnode_close(struct vnode *vnode);
 static int vnode_read(struct vnode *vnode, struct uio *uio);
 static int vnode_write(struct vnode *vnode, struct uio *uio);
@@ -145,7 +145,7 @@ int vfs_close(struct vnode *vnode, int mode) {
     return 0;
 }
 
-static int vnode_open(struct vnode *vnode, char *path) {
+static int vnode_open(struct vnode *vnode, int mode) {
     return 0;
 }
 

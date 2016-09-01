@@ -26,7 +26,7 @@ struct uio {
 };
 
 struct vnode_ops {
-    int (*vop_open)(struct vnode *vnode, char *path);
+    int (*vop_open)(struct vnode *vnode, int mode);
     int (*vop_close)(struct vnode *vnode);
     int (*vop_read)(struct vnode *vnode, struct uio *uio);
     int (*vop_write)(struct vnode *vnode, struct uio *uio);

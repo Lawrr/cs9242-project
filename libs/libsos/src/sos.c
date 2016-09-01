@@ -183,4 +183,5 @@ size_t sos_write(void *vData, size_t count) {
 
 size_t sos_read(void *vData, size_t count) {
     //return sos_sys_read(std_input, vData, count);
+    return 0;
 }
