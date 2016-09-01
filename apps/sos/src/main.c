@@ -62,6 +62,8 @@
 #define EPIT2_PADDR 0x020D4000
 #define EPIT_REGISTERS 5
 
+#define NFS_TIMEOUT_INTERVAL 100000 /* Microseconds */
+
 /* The linker will link this symbol to the start address  *
  * of an archive of attached applications.                */
 extern char _cpio_archive[];
@@ -463,58 +465,9 @@ static inline seL4_CPtr badge_irq_ep(seL4_CPtr ep, seL4_Word badge) {
     return badged_cap;
 }
 
-void frame_table_test() {
-    /* Allocate 10 pages and make sure you can touch them all */
-    printf("Test 1\n");
-    for (int i = 0; i < 10; i++) {
-        /* Allocate a page */
-        seL4_Word *vaddr;
-        frame_alloc(&vaddr);
-        assert(vaddr);
-
-        /* Test you can touch the page */
-        *vaddr = 0x37;
-        assert(*vaddr == 0x37);
-
-        printf("Page #%d allocated at %p\n",  i, (void *) vaddr);
-    }
-
-    /* Test that you never run out of memory if you always free frames. */
-    printf("Test 2\n");
-    for (int i = 0; i < 10000; i++) {
-        /* Allocate a page */
-        seL4_Word *vaddr;
-        int page = frame_alloc(&vaddr);
-        assert(vaddr != 0);
-
-        /* Test you can touch the page */
-        *vaddr = 0x37;
-        assert(*vaddr == 0x37);
-
-        /* print every 1000 iterations */
-        if (i % 1000 == 0) {
-            printf("Page #%d allocated at %p\n",  i, vaddr);
-        }
-
-        frame_free(vaddr);
-    }
-
-    /* Test that you eventually run out of memory gracefully,
-       and doesn't crash */
-    printf("Test 3\n");
-    while (1) {
-        /* Allocate a page */
-        seL4_Word *vaddr;
-        frame_alloc(&vaddr);
-        if (!vaddr) {
-            printf("Out of memory!\n");
-            break;
-        }
-
-        /* Test you can touch the page */
-        *vaddr = 0x37;
-        assert(*vaddr == 0x37);
-    }
+static void nfs_timeout_callback(uint32_t id, void *data) {
+    register_timer(NFS_TIMEOUT_INTERVAL, nfs_timeout_callback, NULL);
+    nfs_timeout();
 }
 
 /*
@@ -538,11 +491,12 @@ int main(void) {
     timer_init(epit1_vaddr, epit2_vaddr);
     seL4_CPtr timer_badge = badge_irq_ep(_sos_interrupt_ep_cap, IRQ_BADGE_TIMER);
     start_timer(timer_badge);
+
+    /* NFS timeout every 100ms */
+    register_timer(NFS_TIMEOUT_INTERVAL, nfs_timeout_callback, NULL);
     
     /* Start the user application */
     start_first_process(TTY_NAME, _sos_ipc_ep_cap);
-
-    //frame_table_test();
 
     /* Wait on synchronous endpoint for IPC */
     dprintf(0, "\nSOS entering syscall loop\n");
