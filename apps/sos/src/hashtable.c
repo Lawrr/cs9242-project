@@ -4,11 +4,11 @@
 #include "hashtable.h"
 
 static uint32_t hash(char *key, uint32_t slots) {
-	/* fnv32 hash */
-	unsigned hash = 2166136261U;
-	for (; *key; key++)
-		hash = (hash ^ *key) * 0x01000193;
-	return hash % slots;
+    /* fnv32 hash */
+    unsigned hash = 2166136261U;
+    for (; *key; key++)
+        hash = (hash ^ *key) * 0x01000193;
+    return hash % slots;
 }
 
 //TODO just insert into head
