@@ -473,6 +473,23 @@ static void nfs_timeout_callback(uint32_t id, void *data) {
     nfs_timeout();
 }
 
+void nfs_setup(){
+    /*Init nfs*/
+    struct ip_addr server = {(192 << 24) | (168<<16) | (168<<8) | 2};
+    int err = nfs_init(&server);
+    conditional_panic(err,"fail to initialize nfs");
+    /**change path name**/
+    err = nfs_mount("/var/tftpboot/alan",&mnt_point);
+    conditional_panic(err,"fail to mount nfs");
+    return;
+}
+
+
+
+
+
+
+
 /*
  * Main entry point - called by crt.
  */
@@ -481,6 +498,9 @@ int main(void) {
     dprintf(0, "\nSOS Starting...\n");
 
     _sos_init(&_sos_ipc_ep_cap, &_sos_interrupt_ep_cap);
+   
+    /*Init  nfs*/
+    nfs_setup();
 
     /* Initialise the network hardware */
     network_init(badge_irq_ep(_sos_interrupt_ep_cap, IRQ_BADGE_NETWORK));
