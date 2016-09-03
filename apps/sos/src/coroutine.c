@@ -2,6 +2,7 @@
 #include <setjmp.h>
 #include <cspace/cspace.h>
 #include <alloca.h>
+#include "frametable.h"
 #define CO_STACK_SIZE 512
 #define ROUTINE_NUM 7
 
@@ -42,6 +43,7 @@ void yield(){
 
 //used by main routine to call subroutine --syscall_loop is the main routine
 void resume(){
+   if (num == 0) return;
    uint32_t tar = next_to_yield;
    while (routine_list[next_to_yield].free) next_to_yield = (next_to_yield+1)%ROUTINE_NUM; 
    longjmp(routine_list[tar].env,tar==0?-1:tar);
@@ -49,14 +51,24 @@ void resume(){
 }
 
 int start_coroutine(void (*function)(seL4_Word badge,int numargs),void* data){
-   
-   alloca((current+1)*CO_STACK_SIZE);
    if (num==ROUTINE_NUM) {
       return 0; 
    }
    num++;
+   me = current;
+   seL4_Word sptr;
+   int err = frame_alloc(&sptr);
    
+   asm volatile ("mov sp, %[sptr]" : [sptr] "=r" (sptr) : :);
+   seL4_Word stack = sptr;
+   while (!routine_list[current].free){
+      current = (current+1)%ROUTINE_NUM;
+   }
+
+
+   //conditional_panic(err,"fail frame alloc in start_coroutine");
    function(((seL4_Word*)data)[0],((seL4_Word*)data)[1]);
+   frame_free(stack);
    longjmp(entry,1);
    //never reach
 }

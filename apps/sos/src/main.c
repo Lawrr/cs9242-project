@@ -36,6 +36,7 @@
 #include "vnode.h"
 #include "console.h"
 #include <autoconf.h>
+#include "coroutine.h"
 
 #define verbose 5
 #include <sys/debug.h>
@@ -153,6 +154,10 @@ void handle_syscall(seL4_Word badge, int num_args) {
 static seL4_Word oldsptr = 0xDEADBEEF;
 static jmp_buf buf;
 
+static void routine_callback(uint32_t id, void*data){
+    resume();
+}
+
 void test_stack() {
     int a = 5;
     printf("Moved stack\n");
@@ -162,29 +167,12 @@ void test_stack() {
 }
 
 void syscall_loop(seL4_CPtr ep) {
-    seL4_Word sptr;
-    int err = frame_alloc(&sptr);
-    conditional_panic(err, "Fail stack test\n");
-    int a = 5;
-    printf("Variable at %p\n", &a);
-    printf("a: Old sp: %p, new sp %p\n", oldsptr, sptr);
-    if (!setjmp(buf)) {
-        asm volatile("mov %[oldsp], sp" : [oldsp] "=r" (oldsptr) : : );
-        printf("ASM1\n:");
-        printf("b: Old sp: %p, new sp %p\n", oldsptr, sptr);
-        asm volatile("mov sp, %[newsp]" : : [newsp] "r" (sptr) : "sp");
-        printf("c: Old sp: %p, new sp %p\n", oldsptr, sptr);
-        test_stack();
-    }
-    int b = 5;
-    printf("Back in old stack %p\n", &b);
-    printf("End of test\n");
-
+    yield();//ignore it must be here, just like an initialization 
     while (1) {
         seL4_Word badge;
         seL4_Word label;
         seL4_MessageInfo_t message;
-
+        register_timer(2000,routine_callback,NULL);
         message = seL4_Wait(ep, &badge);
         label = seL4_MessageInfo_get_label(message);
         if(badge & IRQ_EP_BADGE){
@@ -502,6 +490,8 @@ static void nfs_timeout_callback(uint32_t id, void *data) {
     register_timer(NFS_TIMEOUT_INTERVAL, nfs_timeout_callback, NULL);
     nfs_timeout();
 }
+
+
 
 /*
  * Main entry point - called by crt.
