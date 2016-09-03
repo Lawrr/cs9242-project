@@ -57,6 +57,7 @@ int start_coroutine(void (*function)(seL4_Word badge,int numargs),void* data){
    num++;
    me = current;
    seL4_Word sptr;
+   routine_list[me].free=0;
    int err = frame_alloc(&sptr);
    
    asm volatile ("mov sp, %[sptr]" : [sptr] "=r" (sptr) : :);
@@ -68,6 +69,8 @@ int start_coroutine(void (*function)(seL4_Word badge,int numargs),void* data){
 
    //conditional_panic(err,"fail frame alloc in start_coroutine");
    function(((seL4_Word*)data)[0],((seL4_Word*)data)[1]);
+   num--;
+   routine_list[me].free=1; 
    frame_free(stack);
    longjmp(entry,1);
    //never reach
