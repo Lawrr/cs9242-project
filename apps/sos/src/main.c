@@ -149,7 +149,37 @@ void handle_syscall(seL4_Word badge, int num_args) {
     }
 }
 
+#include <setjmp.h>
+static seL4_Word oldsptr = 0xDEADBEEF;
+static jmp_buf buf;
+
+void test_stack() {
+    int a = 5;
+    printf("Moved stack\n");
+    printf("Variable at %p\n", &a);
+    asm volatile("mov sp, %[oldsp]" : : [oldsp] "r" (oldsptr) : "sp");
+    longjmp(buf, 1);
+}
+
 void syscall_loop(seL4_CPtr ep) {
+    seL4_Word sptr;
+    int err = frame_alloc(&sptr);
+    conditional_panic(err, "Fail stack test\n");
+    int a = 5;
+    printf("Variable at %p\n", &a);
+    printf("a: Old sp: %p, new sp %p\n", oldsptr, sptr);
+    if (!setjmp(buf)) {
+        asm volatile("mov %[oldsp], sp" : [oldsp] "=r" (oldsptr) : : );
+        printf("ASM1\n:");
+        printf("b: Old sp: %p, new sp %p\n", oldsptr, sptr);
+        asm volatile("mov sp, %[newsp]" : : [newsp] "r" (sptr) : "sp");
+        printf("c: Old sp: %p, new sp %p\n", oldsptr, sptr);
+        test_stack();
+    }
+    int b = 5;
+    printf("Back in old stack %p\n", &b);
+    printf("End of test\n");
+
     while (1) {
         seL4_Word badge;
         seL4_Word label;
@@ -473,23 +503,6 @@ static void nfs_timeout_callback(uint32_t id, void *data) {
     nfs_timeout();
 }
 
-void nfs_setup(){
-    /*Init nfs*/
-    struct ip_addr server = {(192 << 24) | (168<<16) | (168<<8) | 2};
-    int err = nfs_init(&server);
-    conditional_panic(err,"fail to initialize nfs");
-    /**change path name**/
-    err = nfs_mount("/var/tftpboot/alan",&mnt_point);
-    conditional_panic(err,"fail to mount nfs");
-    return;
-}
-
-
-
-
-
-
-
 /*
  * Main entry point - called by crt.
  */
@@ -498,9 +511,6 @@ int main(void) {
     dprintf(0, "\nSOS Starting...\n");
 
     _sos_init(&_sos_ipc_ep_cap, &_sos_interrupt_ep_cap);
-   
-    /*Init  nfs*/
-    nfs_setup();
 
     /* Initialise the network hardware */
     network_init(badge_irq_ep(_sos_interrupt_ep_cap, IRQ_BADGE_NETWORK));
