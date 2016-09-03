@@ -111,6 +111,7 @@ void handle_syscall(seL4_Word badge, int num_args) {
     assert(reply_cap != CSPACE_NULL);
 
     printf("Syscall id: %d - received from user application\n", syscall_number);
+    printf("data[0] %d, data[1] %d\n", badge, num_args);
 
     /* Process system call */
     switch (syscall_number) {
@@ -168,7 +169,7 @@ void syscall_loop(seL4_CPtr ep) {
         printf("In syscall loop\n");
         message = seL4_Wait(ep, &badge);
         label = seL4_MessageInfo_get_label(message);
-        if(badge & IRQ_EP_BADGE){
+        if (badge & IRQ_EP_BADGE) {
             /* Interrupt */
             if (badge & IRQ_BADGE_NETWORK) {
                 network_irq();
@@ -177,7 +178,7 @@ void syscall_loop(seL4_CPtr ep) {
                 timer_interrupt();
             }
 
-        }else if(label == seL4_VMFault){
+        } else if (label == seL4_VMFault) {
             /* Page fault */
             dprintf(0, "vm fault at 0x%08x, pc = 0x%08x, %s\n", 
                     seL4_GetMR(1),
@@ -196,7 +197,7 @@ void syscall_loop(seL4_CPtr ep) {
                 map_vaddr = seL4_GetMR(1);
             }
 
-            //Not used
+            /* App cap not used */
             seL4_CPtr app_cap;
             err = sos_map_page(map_vaddr,
                                tty_test_process.vroot,
@@ -212,13 +213,13 @@ void syscall_loop(seL4_CPtr ep) {
             seL4_MessageInfo_t reply = seL4_MessageInfo_new(0, 0, 0, 0);
             seL4_Send(reply_cap, reply);
 
-        }else if(label == seL4_NoFault) {
+        } else if (label == seL4_NoFault) {
             /* System call */
             seL4_Word data[2];
             data[0] = badge;
             data[1] = seL4_MessageInfo_get_length(message) - 1;
             start_coroutine(&handle_syscall, data);
-        }else{
+        } else {
             printf("Rootserver got an unknown message\n");
         }
     }

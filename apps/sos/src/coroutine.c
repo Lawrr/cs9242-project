@@ -27,7 +27,9 @@ static int me = 0;//mark currunt routine num
 
 void yield(){
     me = setjmp(routine_list[me].env);
+    printf("In yield with me = %d\n", me);
     if (!me){
+        printf("Setup new env: %d\n", routine_list[me].env);
         printf("LNGJMP TO ENTRY %d\n", num);
         longjmp(syscall_loop_entry,1);
     } else{
@@ -47,7 +49,7 @@ void resume(){
     while (routine_list[next_to_yield].free) {
         next_to_yield = (next_to_yield+1)%ROUTINE_NUM; 
     }
-    printf("long jumping to %d\n", tar);
+    printf("long jumping to %d = %d\n", tar, routine_list[tar].env);
     longjmp(routine_list[tar].env,tar==0?-1:tar);
     //never reach
 }
@@ -77,21 +79,23 @@ int start_coroutine(void (*function)(seL4_Word badge, int numargs),
     /* Allocate new stack frame */
     char *sptr;
     int err = frame_alloc((seL4_Word *) &sptr);
+    sptr += 4096;
     /* conditional_panic(err, "Could not allocate frame\n"); */
     printf("Frame %p\n", sptr);
+    printf("data[0] %d, data[1] %d\n", ((seL4_Word*)data)[0],((seL4_Word*)data)[1]);
 
+    //TODO memcpy instead?
     /* Add stuff to the new stack */
     void *sptr_new = sptr;
-    *sptr = sptr_new;
     sptr -= sizeof(void *);
+    *sptr = sptr_new;
 
     void *data_new = data;
-    *sptr = (seL4_Word) data_new;
     sptr -= sizeof(void *);
+    *sptr = (seL4_Word) data_new;
 
     /* Change to new sp */
     printf("change\n");
-    sptr += 4096;
     asm volatile("mov sp, %[newsp]" : : [newsp] "r" (sptr) : "sp");
     // TODO change stack limit register?
     test();
