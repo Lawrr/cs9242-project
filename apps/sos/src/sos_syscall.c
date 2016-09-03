@@ -159,6 +159,7 @@ void syscall_time_stamp(seL4_CPtr reply_cap) {
 }
 
 void syscall_write(seL4_CPtr reply_cap) {
+    printf("In write\n");
     int fd = seL4_GetMR(1);
     seL4_Word uaddr = seL4_GetMR(2);
     seL4_Word ubuf_size = seL4_GetMR(3);
@@ -177,6 +178,8 @@ void syscall_write(seL4_CPtr reply_cap) {
 
     seL4_Word end_uaddr = uaddr + ubuf_size;
     while (ubuf_size > 0) {
+        yield();
+        printf("Keep going\n");
         seL4_Word uaddr_next = PAGE_ALIGN_4K(uaddr) + 0x1000;
         seL4_Word size;
         if (end_uaddr >= uaddr_next) {

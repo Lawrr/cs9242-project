@@ -8,6 +8,7 @@
 #include "sos.h"
 #include "vnode.h"
 #include "console.h"
+#include "coroutine.h"
 
 #include <sys/debug.h>
 #include <sys/panic.h>

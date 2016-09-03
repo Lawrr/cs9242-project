@@ -12,6 +12,7 @@
 #include <stdlib.h>
 #include <assert.h>
 #include <string.h>
+#include <setjmp.h>
 
 #include <cspace/cspace.h>
 
@@ -150,29 +151,21 @@ void handle_syscall(seL4_Word badge, int num_args) {
     }
 }
 
-#include <setjmp.h>
-static seL4_Word oldsptr = 0xDEADBEEF;
-static jmp_buf buf;
-
-static void routine_callback(uint32_t id, void*data){
+static void routine_callback(uint32_t id, void *data) {
     resume();
+    register_timer(20000, routine_callback, NULL);
 }
 
-void test_stack() {
-    int a = 5;
-    printf("Moved stack\n");
-    printf("Variable at %p\n", &a);
-    asm volatile("mov sp, %[oldsp]" : : [oldsp] "r" (oldsptr) : "sp");
-    longjmp(buf, 1);
-}
+jmp_buf syscall_loop_entry;
 
 void syscall_loop(seL4_CPtr ep) {
-    yield();//ignore it must be here, just like an initialization 
+    seL4_Word badge;
+    seL4_Word label;
+    seL4_MessageInfo_t message;
+    register_timer(100000, routine_callback, NULL);
     while (1) {
-        seL4_Word badge;
-        seL4_Word label;
-        seL4_MessageInfo_t message;
-        register_timer(2000,routine_callback,NULL);
+        setjmp(syscall_loop_entry);
+        printf("In syscall loop\n");
         message = seL4_Wait(ep, &badge);
         label = seL4_MessageInfo_get_label(message);
         if(badge & IRQ_EP_BADGE){
@@ -221,8 +214,10 @@ void syscall_loop(seL4_CPtr ep) {
 
         }else if(label == seL4_NoFault) {
             /* System call */
-            handle_syscall(badge, seL4_MessageInfo_get_length(message) - 1);
-
+            seL4_Word data[2];
+            data[0] = badge;
+            data[1] = seL4_MessageInfo_get_length(message) - 1;
+            start_coroutine(&handle_syscall, data);
         }else{
             printf("Rootserver got an unknown message\n");
         }
@@ -507,6 +502,9 @@ int main(void) {
 
     /* Initialise open file table */
     of_table_init(); 
+
+    /* Initialise coroutines */
+    coroutine_init();
 
     /* Initialise the timer */
     void *epit1_vaddr = map_device(EPIT1_PADDR, EPIT_REGISTERS * sizeof(uint32_t));
