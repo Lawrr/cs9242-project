@@ -79,19 +79,19 @@ int start_coroutine(void (*function)(seL4_Word badge, int numargs),
     int err = frame_alloc((seL4_Word *) &sptr);
     /* conditional_panic(err, "Could not allocate frame\n"); */
     printf("Frame %p\n", sptr);
-    void *curr_sp = 0;
 
     /* Add stuff to the new stack */
     void *sptr_new = sptr;
     *sptr = sptr_new;
-    sptr += sizeof(void *);
+    sptr -= sizeof(void *);
 
     void *data_new = data;
     *sptr = (seL4_Word) data_new;
-    sptr += sizeof(void *);
+    sptr -= sizeof(void *);
 
     /* Change to new sp */
     printf("change\n");
+    sptr += 4096;
     asm volatile("mov sp, %[newsp]" : : [newsp] "r" (sptr) : "sp");
     // TODO change stack limit register?
     test();
