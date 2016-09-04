@@ -2,8 +2,11 @@
 #include "sos.h"
 #include "vnode.h"
 #include "hashtable.h"
+#include "process.h"
 
 #define VNODE_TABLE_SLOTS 64
+
+extern struct PCB tty_test_process;
 
 static int vnode_open(struct vnode *vnode, int mode);
 static int vnode_close(struct vnode *vnode);

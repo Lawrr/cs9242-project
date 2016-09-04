@@ -483,7 +483,7 @@ static inline seL4_CPtr badge_irq_ep(seL4_CPtr ep, seL4_Word badge) {
 }
 
 static void nfs_timeout_callback(uint32_t id, void *data) {
-    /* register_timer(NFS_TIMEOUT_INTERVAL, nfs_timeout_callback, NULL); */
+    register_timer(NFS_TIMEOUT_INTERVAL, nfs_timeout_callback, NULL);
     nfs_timeout();
 }
 
