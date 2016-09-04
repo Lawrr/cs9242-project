@@ -2,7 +2,7 @@
 #define _VNODE_H_
 
 #include <cspace/cspace.h>
-
+#include <nfs/nfs.h>
 #define MAX_DEV_NUM 32
 #define MAX_DEV_NAME 512
 #define MAX_PATH_LEN 512 
@@ -15,6 +15,8 @@ struct vnode {
     int read_count;
     int write_count;
     void *data;
+    fhandle_t *fh;
+    fattr_t* fattr;    
     struct vnode_ops *ops;
 };
 
@@ -26,10 +28,12 @@ struct uio {
 };
 
 struct vnode_ops {
-    int (*vop_open)(struct vnode *vnode, int mode);
+    int (*vop_open)(struct vnode *vnode, fmode_t mode);
     int (*vop_close)(struct vnode *vnode);
     int (*vop_read)(struct vnode *vnode, struct uio *uio);
     int (*vop_write)(struct vnode *vnode, struct uio *uio);
+    int (*vop_stat)(const char *path);
+    int (*vop_getent)(const char * path);
 };
 
 struct dev {

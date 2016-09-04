@@ -10,12 +10,12 @@
 #include "console.h"
 #include "coroutine.h"
 #include "process.h"
-
 #include <sys/debug.h>
 #include <sys/panic.h>
 
 extern struct PCB tty_test_process;
-
+extern int curr_coroutine_id;
+int my_coroutine_id;
 static struct serial *serial_handle;
 static struct vnode *console_vnode;
 static struct uio console_uio;
@@ -42,19 +42,7 @@ static void console_serial_handler(struct serial *serial, char c) {
 
     /* Check end */
     if (console_uio.remaining == 0 || c == '\n') {
-        seL4_CPtr reply_cap = (seL4_CPtr) vnode_data[0];
-        free(console_vnode->data);
-
-        /* Reply */
-        if (reply_cap != CSPACE_NULL) {
-            seL4_MessageInfo_t reply = seL4_MessageInfo_new(0, 0, 0, 1);
-            seL4_SetMR(0, console_uio.size - console_uio.remaining);
-            seL4_Send(reply_cap, reply);
-            cspace_free_slot(cur_cspace, reply_cap);
-        }
-
-        console_uio.addr = NULL;
-        console_uio.remaining = 0;
+        resume(my_coroutine_id);
     }
 }
 
@@ -108,6 +96,7 @@ int console_read(struct vnode *vnode, struct uio *uio) {
     seL4_Word curr_uaddr = uaddr;
     seL4_Word curr_size = ubuf_size;
 
+    my_coroutine_id = curr_coroutine_id;
     while (curr_size > 0) {
         seL4_Word uaddr_next = PAGE_ALIGN_4K(curr_uaddr) + 0x1000;
         seL4_Word size;
@@ -131,7 +120,7 @@ int console_read(struct vnode *vnode, struct uio *uio) {
 
     console_vnode = vnode;
     console_uio = *uio;
-
+    yield();
     return 0;
 }
 

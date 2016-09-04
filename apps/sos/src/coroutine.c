@@ -3,7 +3,6 @@
 #include <cspace/cspace.h>
 #include <alloca.h>
 #include "frametable.h"
-
 #define NUM_COROUTINES 8
 
 extern jmp_buf syscall_loop_entry;
@@ -15,6 +14,8 @@ static int next_yield_id = 0;
 
 static jmp_buf coroutines[NUM_COROUTINES];
 static int free_list[NUM_COROUTINES];
+//slot for storing arguments passed to callback
+static seL4_Word routine_arguments[NUM_COROUTINES][4];
 
 void coroutine_init() {
     for (int i = 0; i < NUM_COROUTINES; i++) {
@@ -22,13 +23,13 @@ void coroutine_init() {
     }
 }
 
-void yield() {
+yield() {
     int id = setjmp(coroutines[curr_coroutine_id]);
 
     if (id == 0) {
         longjmp(syscall_loop_entry, 1);
     } else {
-        return;
+        return;//when jump bakc use return value as err code
     }
 
     /* Never reached */
@@ -47,6 +48,11 @@ void resume() {
     longjmp(coroutines[continue_id], 1);
 
     /* Never reached */
+}
+
+void resume_couroutine(int id){
+    curr_coroutine_id = id;
+    longjmp(coroutines[curr_coroutine_id],1);
 }
 
 int start_coroutine(void (*task)(seL4_Word badge, int num_args),
@@ -97,3 +103,13 @@ int start_coroutine(void (*task)(seL4_Word badge, int num_args),
 
     /* Never reached */
 }
+
+seL4_Word get_routine_argument(int id,int i){
+    return routine_arguments[id][i];
+}
+
+void set_routine_argument(int i,seL4_Word arg){
+    routine_arguments[curr_coroutine_id][i] = arg;
+}
+
+

@@ -318,7 +318,10 @@ int main(void) {
     char *argv[MAX_ARGS];
     int i, r, done, found, new, argc;
     char *bp, *p;
-
+    int fileid = sos_sys_open("firstfile",O_RDWR);
+    printf("\nfileid=%d\n",fileid);
+    sos_sys_read(fileid,buf,11);
+    printf("Hello world = %s",buf);
     int console_fd = open("console", O_RDWR);
     test_buffers(console_fd);
     sos_sys_close(console_fd);

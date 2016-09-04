@@ -217,6 +217,11 @@ void syscall_read(seL4_CPtr reply_cap) {
     of_table[ofd].vnode->data = (void *) data;
 
     of_table[ofd].vnode->ops->vop_read(of_table[ofd].vnode, &uio);
+    
+    seL4_SetMR(0,uio.size-uio.remaining);
+    seL4_MessageInfo_t reply = seL4_MessageInfo_new(0, 0, 0, 1);
+    seL4_Send(reply_cap, reply);
+    cspace_free_slot(cur_cspace, reply_cap);
 }
 
 void syscall_open(seL4_CPtr reply_cap) {

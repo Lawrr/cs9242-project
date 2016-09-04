@@ -153,9 +153,6 @@ void handle_syscall(seL4_Word badge, int num_args) {
 
 jmp_buf syscall_loop_entry;
 
-static void routine_callback(uint32_t id, void *data) {
-    resume();
-}
 
 void syscall_loop(seL4_CPtr ep) {
     seL4_Word badge;
@@ -163,13 +160,13 @@ void syscall_loop(seL4_CPtr ep) {
     seL4_MessageInfo_t message;
     while (1) {
         setjmp(syscall_loop_entry);
-        register_timer(1000000, routine_callback, NULL);
         message = seL4_Wait(ep, &badge);
         label = seL4_MessageInfo_get_label(message);
-        if (badge & IRQ_EP_BADGE) {
+        printf("sysscall_loop\n");
+	if (badge & IRQ_EP_BADGE) {
             /* Interrupt */
             if (badge & IRQ_BADGE_NETWORK) {
-                printf("Network\n");
+//                printf("Network\n");
                 network_irq();
             }
             if (badge & IRQ_BADGE_TIMER) {
