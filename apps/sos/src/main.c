@@ -70,6 +70,11 @@
  * of an archive of attached applications.                */
 extern char _cpio_archive[];
 
+/**
+ * NFS mount point
+ */
+extern fhandle_t mnt_point;
+
 const seL4_BootInfo* _boot_info;
 
 struct PCB tty_test_process;
@@ -95,11 +100,6 @@ static void of_table_init() {
     of_table[STDOUT].file_info.st_fmode = FM_WRITE;
 }
 
-/**
- * NFS mount point
- */
-extern fhandle_t mnt_point;
-
 void handle_syscall(seL4_Word badge, int num_args) {
     seL4_Word syscall_number;
     seL4_CPtr reply_cap;
@@ -111,7 +111,6 @@ void handle_syscall(seL4_Word badge, int num_args) {
     assert(reply_cap != CSPACE_NULL);
 
     printf("Syscall id: %d - received from user application\n", syscall_number);
-//    printf("data[0] %d, data[1] %d\n", badge, num_args);
 
     /* Process system call */
     switch (syscall_number) {
