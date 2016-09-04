@@ -155,8 +155,8 @@ void handle_syscall(seL4_Word badge, int num_args) {
 jmp_buf syscall_loop_entry;
 
 static void routine_callback(uint32_t id, void *data) {
+    register_timer(50000, routine_callback, NULL);
     resume();
-    register_timer(20000, routine_callback, NULL);
 }
 
 void syscall_loop(seL4_CPtr ep) {
