@@ -6,16 +6,12 @@
 #define CO_STACK_SIZE 512
 #define ROUTINE_NUM 7
 
+static jmp_buf routine_list[ROUTINE_NUM];
+static int free_list[ROUTINE_NUM];
 
-struct routine{
-    int free;
-    jmp_buf env;
-};
-static struct routine routine_list[ROUTINE_NUM] = {0};
-
-void coroutine_init(){
-    for (int i = 0; i < ROUTINE_NUM; i++){
-        routine_list[i].free = 1;
+void coroutine_init() {
+    for (int i = 0; i < ROUTINE_NUM; i++) {
+        free_list[i] = 1;
     }
 }
 
@@ -26,10 +22,10 @@ static int next_to_yield = 0;//next one to resume
 static int me = 0;//mark currunt routine num
 
 void yield(){
-    me = setjmp(routine_list[me].env);
+    me = setjmp(routine_list[me]);
     printf("In yield with me = %d\n", me);
     if (!me){
-        printf("Setup new env: %d\n", routine_list[me].env);
+        printf("Setup new env: %d\n", routine_list[me]);
         printf("LNGJMP TO ENTRY %d\n", num);
         longjmp(syscall_loop_entry,1);
     } else{
@@ -46,12 +42,14 @@ void resume(){
     if (num == 0) return;
     printf("Keep resume\n");
     uint32_t tar = next_to_yield;
-    while (routine_list[next_to_yield].free) {
+    while (free_list[next_to_yield] == 0) {
         next_to_yield = (next_to_yield+1)%ROUTINE_NUM; 
     }
-    printf("long jumping to %d = %d\n", tar, routine_list[tar].env);
-    longjmp(routine_list[tar].env,tar==0?-1:tar);
-    //never reach
+    printf("long jumping to %d = %d\n", tar, routine_list[tar]);
+
+    longjmp(routine_list[tar],tar==0?-1:tar);
+
+    /* Never reach */
 }
 
 void test() {
@@ -68,10 +66,10 @@ int start_coroutine(void (*function)(seL4_Word badge, int numargs),
     printf("Start coroutine\n");
     num++;
     me = current;
-    routine_list[me].free=0;
+    free_list[current] = 0;
 
     /* Set new current */
-    while (!routine_list[current].free){
+    while (free_list[current] != 0){
         current++;
         current %= ROUTINE_NUM;
     }
@@ -105,7 +103,7 @@ int start_coroutine(void (*function)(seL4_Word badge, int numargs),
     printf("TASK FINISH\n");
 
     num--;
-    routine_list[me].free=1; 
+    free_list[current] = 1;
     frame_free(sptr_new);
 
     longjmp(syscall_loop_entry, 1);
