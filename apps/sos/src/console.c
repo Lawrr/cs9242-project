@@ -9,9 +9,12 @@
 #include "vnode.h"
 #include "console.h"
 #include "coroutine.h"
+#include "process.h"
 
 #include <sys/debug.h>
 #include <sys/panic.h>
+
+extern struct PCB tty_test_process;
 
 static struct serial *serial_handle;
 static struct vnode *console_vnode;
@@ -56,13 +59,76 @@ static void console_serial_handler(struct serial *serial, char c) {
 }
 
 int console_write(struct vnode *vnode, struct uio *uio) {
-    int bytes_sent = serial_send(serial_handle, uio->addr, uio->size);
-    uio->remaining -= bytes_sent;
+    seL4_Word uaddr = uio->addr;
+    seL4_Word ubuf_size = uio->size;
+    seL4_Word end_uaddr = uaddr + ubuf_size;
+
+    while (ubuf_size > 0) {
+        seL4_Word uaddr_next = PAGE_ALIGN_4K(uaddr) + 0x1000;
+        seL4_Word size;
+        if (end_uaddr >= uaddr_next) {
+            size = uaddr_next-uaddr;
+        } else {
+            size = ubuf_size;
+        }
+
+        /* Though we can assume the buffer is mapped because it is a write operation,
+         * we still use sos_map_page to find the mapping address if it is already mapped */
+        seL4_CPtr app_cap;
+        seL4_CPtr sos_vaddr;
+        int err = sos_map_page(uaddr,
+                tty_test_process.vroot,
+                tty_test_process.addrspace,
+                &sos_vaddr,
+                &app_cap);
+        if (err && err != ERR_ALREADY_MAPPED) {
+            return 1;
+        }
+        sos_vaddr = PAGE_ALIGN_4K(sos_vaddr);
+        /* Add offset */
+        sos_vaddr |= (uaddr & PAGE_MASK_4K);
+
+        int bytes_sent = serial_send(serial_handle, sos_vaddr, size);
+        uio->remaining -= bytes_sent;
+
+        ubuf_size -= size;
+        uaddr = uaddr_next;
+        uio->offset += size;
+    }
 
     return 0;
 }
 
 int console_read(struct vnode *vnode, struct uio *uio) {
+    seL4_Word uaddr = uio->addr;
+    seL4_Word ubuf_size = uio->size;
+
+    /* Make sure address is mapped */
+    seL4_Word end_uaddr = uaddr + ubuf_size;
+    seL4_Word curr_uaddr = uaddr;
+    seL4_Word curr_size = ubuf_size;
+
+    while (curr_size > 0) {
+        seL4_Word uaddr_next = PAGE_ALIGN_4K(curr_uaddr) + 0x1000;
+        seL4_Word size;
+        if (end_uaddr >= uaddr_next) {
+            size = uaddr_next-curr_uaddr;
+        } else {
+            size = curr_size;
+        }
+
+        seL4_CPtr app_cap;
+        seL4_CPtr sos_vaddr;
+        int err = sos_map_page(curr_uaddr,
+                               tty_test_process.vroot,
+                               tty_test_process.addrspace,
+                               &sos_vaddr,
+                               &app_cap);
+
+        curr_size -= size;
+        curr_uaddr = uaddr_next;
+    }
+
     console_vnode = vnode;
     console_uio = *uio;
 

@@ -159,7 +159,6 @@ void syscall_time_stamp(seL4_CPtr reply_cap) {
 }
 
 void syscall_write(seL4_CPtr reply_cap) {
-    printf("In write\n");
     int fd = seL4_GetMR(1);
     seL4_Word uaddr = seL4_GetMR(2);
     seL4_Word ubuf_size = seL4_GetMR(3);
@@ -171,55 +170,21 @@ void syscall_write(seL4_CPtr reply_cap) {
     if (validate_ofd(reply_cap, ofd)) return;
     if (validate_ofd_mode(reply_cap, ofd, FM_WRITE)) return;
 
-    int bytes_sent = 0;
+    struct uio uio = {
+        .addr = uaddr,
+        .size = ubuf_size,
+        .remaining = ubuf_size,
+        .offset = 0
+    };
 
-    struct uio uio;
-    uio.offset = 0;
-
-    seL4_Word end_uaddr = uaddr + ubuf_size;
-    while (ubuf_size > 0) {
-        seL4_Word uaddr_next = PAGE_ALIGN_4K(uaddr) + 0x1000;
-        seL4_Word size;
-        if (end_uaddr >= uaddr_next) {
-            size = uaddr_next-uaddr;
-        } else {
-            size = ubuf_size;
-        }
-
-        /* Though we can assume the buffer is mapped because it is a write operation,
-         * we still use sos_map_page to find the mapping address if it is already mapped */
-        seL4_CPtr app_cap;
-        seL4_CPtr sos_vaddr;
-        int err = sos_map_page(uaddr,
-                tty_test_process.vroot,
-                tty_test_process.addrspace,
-                &sos_vaddr,
-                &app_cap);
-        if (err && err != ERR_ALREADY_MAPPED) {
-            send_err(reply_cap, ERR_INTERNAL_ERROR);
-        }
-        sos_vaddr = PAGE_ALIGN_4K(sos_vaddr);
-        /* Add offset */
-        sos_vaddr |= (uaddr & PAGE_MASK_4K);
-
-        uio.addr = sos_vaddr;
-        uio.size = size;
-        uio.remaining = size;
-
-        of_table[ofd].vnode->ops->vop_write(of_table[ofd].vnode, &uio);
-
-        bytes_sent += size - uio.remaining;
-
-        ubuf_size -= size;
-        uaddr = uaddr_next;
-        uio.offset += size;
-
-        if (ubuf_size > 0) yield();
+    int err = of_table[ofd].vnode->ops->vop_write(of_table[ofd].vnode, &uio);
+    if (err) {
+        send_err(reply_cap, ERR_INTERNAL_ERROR);
     }
 
     /* Reply */
     seL4_MessageInfo_t reply = seL4_MessageInfo_new(0, 0, 0, 1);
-    seL4_SetMR(0, bytes_sent);
+    seL4_SetMR(0, uio.size - uio.remaining);
     seL4_Send(reply_cap, reply);
     cspace_free_slot(cur_cspace, reply_cap);
 }
@@ -235,31 +200,6 @@ void syscall_read(seL4_CPtr reply_cap) {
     if (validate_fd(reply_cap, fd)) return;
     if (validate_ofd(reply_cap, ofd)) return;
     if (validate_ofd_mode(reply_cap, ofd, FM_READ)) return;
-
-    /* Make sure address is mapped */
-    seL4_Word end_uaddr = uaddr + ubuf_size;
-    seL4_Word curr_uaddr = uaddr;
-    seL4_Word curr_size = ubuf_size;
-    while (curr_size > 0) {
-        seL4_Word uaddr_next = PAGE_ALIGN_4K(curr_uaddr) + 0x1000;
-        seL4_Word size;
-        if (end_uaddr >= uaddr_next) {
-            size = uaddr_next-curr_uaddr;
-        } else {
-            size = curr_size;
-        }
-
-        seL4_CPtr app_cap;
-        seL4_CPtr sos_vaddr;
-        int err = sos_map_page(curr_uaddr,
-                               tty_test_process.vroot,
-                               tty_test_process.addrspace,
-                               &sos_vaddr,
-                               &app_cap);
-
-        curr_size -= size;
-        curr_uaddr = uaddr_next;
-    }
 
     struct uio uio = {
         .addr = uaddr,
