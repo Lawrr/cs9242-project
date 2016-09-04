@@ -111,7 +111,7 @@ void handle_syscall(seL4_Word badge, int num_args) {
     assert(reply_cap != CSPACE_NULL);
 
     printf("Syscall id: %d - received from user application\n", syscall_number);
-    printf("data[0] %d, data[1] %d\n", badge, num_args);
+//    printf("data[0] %d, data[1] %d\n", badge, num_args);
 
     /* Process system call */
     switch (syscall_number) {
@@ -155,7 +155,6 @@ void handle_syscall(seL4_Word badge, int num_args) {
 jmp_buf syscall_loop_entry;
 
 static void routine_callback(uint32_t id, void *data) {
-    register_timer(50000, routine_callback, NULL);
     resume();
 }
 
@@ -163,12 +162,13 @@ void syscall_loop(seL4_CPtr ep) {
     seL4_Word badge;
     seL4_Word label;
     seL4_MessageInfo_t message;
-    register_timer(100000, routine_callback, NULL);
     while (1) {
         setjmp(syscall_loop_entry);
+        int k = register_timer(1000000, routine_callback, NULL);
         printf("In syscall loop\n");
         message = seL4_Wait(ep, &badge);
-        label = seL4_MessageInfo_get_label(message);
+        remove_timer(k);
+	label = seL4_MessageInfo_get_label(message);
         if (badge & IRQ_EP_BADGE) {
             /* Interrupt */
             if (badge & IRQ_BADGE_NETWORK) {

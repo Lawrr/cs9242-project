@@ -22,15 +22,16 @@ static int next_to_yield = 0;//next one to resume
 static int me = 0;//mark currunt routine num
 
 void yield(){
+    printf("stop routine%d\n",me);
     me = setjmp(routine_list[me]);
-    printf("In yield with me = %d\n", me);
+    //printf("In yield with me = %d\n", me);
     if (!me){
-        printf("Setup new env: %d\n", routine_list[me]);
-        printf("LNGJMP TO ENTRY %d\n", num);
+        //printf("Setup new env: %d\n", routine_list[me]);
+        //printf("LNGJMP TO ENTRY %d\n", num);
         longjmp(syscall_loop_entry,1);
     } else{
         if (me == -1) me = 0;
-        printf("Returning to task\n");
+        printf("restart routine%d\n",me);
         return; 
     }
     //never reach
@@ -39,13 +40,14 @@ void yield(){
 //used by main routine to call subroutine --syscall_loop is the main routine
 void resume(){
     /* printf("In resume %d\n", num); */
+    printf("resume_num%d",num);
     if (num == 0) return;
-    printf("Keep resume\n");
+    //printf("Keep resume\n");
     uint32_t tar = next_to_yield;
     while (free_list[next_to_yield] == 0) {
         next_to_yield = (next_to_yield+1)%ROUTINE_NUM; 
     }
-    printf("long jumping to %d = %d\n", tar, routine_list[tar]);
+    //printf("long jumping to %d = %d\n", tar, routine_list[tar]);
 
     longjmp(routine_list[tar],tar==0?-1:tar);
 
@@ -63,7 +65,7 @@ int start_coroutine(void (*function)(seL4_Word badge, int numargs),
         return 0; 
     }
 
-    printf("Start coroutine\n");
+    printf("Start coroutine%d\n",current);
     num++;
     me = current;
     free_list[current] = 0;
@@ -79,8 +81,8 @@ int start_coroutine(void (*function)(seL4_Word badge, int numargs),
     int err = frame_alloc((seL4_Word *) &sptr);
     sptr += 4096;
     /* conditional_panic(err, "Could not allocate frame\n"); */
-    printf("Frame %p\n", sptr);
-    printf("data[0] %d, data[1] %d\n", ((seL4_Word*)data)[0],((seL4_Word*)data)[1]);
+    //printf("Frame %p\n", sptr);
+    //printf("data[0] %d, data[1] %d\n", ((seL4_Word*)data)[0],((seL4_Word*)data)[1]);
 
     //TODO memcpy instead?
     /* Add stuff to the new stack */
@@ -93,19 +95,19 @@ int start_coroutine(void (*function)(seL4_Word badge, int numargs),
     *sptr = (seL4_Word) data_new;
 
     /* Change to new sp */
-    printf("change\n");
+    //printf("change\n");
     asm volatile("mov sp, %[newsp]" : : [newsp] "r" (sptr) : "sp");
     // TODO change stack limit register?
-    test();
+    //test();
 
-    printf("Start task\n");
+    //printf("Start task\n");
     function(((seL4_Word *) data_new)[0], ((seL4_Word *) data_new)[1]);
-    printf("TASK FINISH\n");
+    //printf("TASK FINISH\n");
 
     num--;
-    free_list[current] = 1;
+    free_list[me] = 1;
     frame_free(sptr_new);
-
+    printf("Finish %d\n",me);
     longjmp(syscall_loop_entry, 1);
 
     /* Never reach */
