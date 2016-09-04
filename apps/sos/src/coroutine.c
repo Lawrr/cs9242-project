@@ -8,7 +8,8 @@
 
 extern jmp_buf syscall_loop_entry;
 
-static int curr_id = 0;
+int curr_coroutine_id = 0;
+
 static int num_tasks = 0;
 static int next_yield_id = 0;
 
@@ -22,7 +23,7 @@ void coroutine_init() {
 }
 
 void yield() {
-    int id = setjmp(coroutines[curr_id]);
+    int id = setjmp(coroutines[curr_coroutine_id]);
 
     if (id == 0) {
         longjmp(syscall_loop_entry, 1);
@@ -60,7 +61,7 @@ int start_coroutine(void (*task)(seL4_Word badge, int num_args),
         task_id++;
     }
     free_list[task_id] = 0;
-    curr_id = task_id;
+    curr_coroutine_id = task_id;
 
     /* Allocate new stack frame */
     char *sptr;

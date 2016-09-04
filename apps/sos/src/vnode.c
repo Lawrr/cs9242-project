@@ -7,6 +7,7 @@
 #define VNODE_TABLE_SLOTS 64
 
 extern struct PCB tty_test_process;
+extern int curr_coroutine_id;
 
 static int vnode_open(struct vnode *vnode, int mode);
 static int vnode_close(struct vnode *vnode);
