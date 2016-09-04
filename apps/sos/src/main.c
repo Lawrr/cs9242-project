@@ -157,7 +157,6 @@ jmp_buf syscall_loop_entry;
 static void routine_callback(uint32_t id, void *data) {
     resume();
     register_timer(20000, routine_callback, NULL);
-    longjmp(syscall_loop_entry, 1);
 }
 
 void syscall_loop(seL4_CPtr ep) {
