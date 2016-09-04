@@ -12,6 +12,7 @@
 #include <stdlib.h>
 #include <assert.h>
 #include <string.h>
+#include <setjmp.h>
 
 #include <cspace/cspace.h>
 
@@ -33,7 +34,10 @@
 #include "sos.h"
 #include "file.h"
 #include "process.h"
+#include "vnode.h"
+#include "console.h"
 #include <autoconf.h>
+#include "coroutine.h"
 
 #define verbose 5
 #include <sys/debug.h>
@@ -60,39 +64,41 @@
 #define EPIT2_PADDR 0x020D4000
 #define EPIT_REGISTERS 5
 
+#define NFS_TIMEOUT_INTERVAL 100000 /* Microseconds */
+
 /* The linker will link this symbol to the start address  *
  * of an archive of attached applications.                */
 extern char _cpio_archive[];
+
+/**
+ * NFS mount point
+ */
+extern fhandle_t mnt_point;
 
 const seL4_BootInfo* _boot_info;
 
 struct PCB tty_test_process;
 
 //struct PCB PCB_Array[MAX_PROCESS];
-char *console = "console";
 
 seL4_CPtr _sos_ipc_ep_cap;
 seL4_CPtr _sos_interrupt_ep_cap;
 
-struct serial *serial_handle;
-
 struct oft_entry of_table[MAX_OPEN_FILE];
 seL4_Word ofd_count = 0;
-seL4_Word curr_free_ofd = 3;
+seL4_Word curr_free_ofd = 1;
 
-void of_table_init() {
-   of_table[STD_IN].ptr = console;
-   of_table[STD_IN].file_info.st_fmode = FM_READ;
-   of_table[STD_OUT].ptr = console;
-   of_table[STD_OUT].file_info.st_fmode = FM_WRITE;
-   of_table[STD_INOUT].ptr = console;
-   of_table[STD_INOUT].file_info.st_fmode = FM_WRITE | FM_READ;
+static void of_table_init() {
+    /* Add console device */
+    struct vnode *console_vnode;
+    console_init(&console_vnode);
+
+    /* Set up of table */
+    //of_table[STDIN].vnode = console_vnode;
+    //of_table[STDIN].file_info.st_fmode = FM_READ;
+    of_table[STDOUT].vnode = console_vnode;
+    of_table[STDOUT].file_info.st_fmode = FM_WRITE;
 }
-
-/**
- * NFS mount point
- */
-extern fhandle_t mnt_point;
 
 void handle_syscall(seL4_Word badge, int num_args) {
     seL4_Word syscall_number;
@@ -136,6 +142,14 @@ void handle_syscall(seL4_Word badge, int num_args) {
             syscall_time_stamp(reply_cap);
             break;
 
+        case SOS_GETDIRENT_SYSCALL:
+            syscall_getdirent(reply_cap);
+            break;
+
+        case SOS_STAT_SYSCALL:
+            syscall_stat(reply_cap);
+            break;
+
         default:
             printf("Unknown syscall %d\n", syscall_number);
             /* we don't want to reply to an unknown syscall */
@@ -145,24 +159,33 @@ void handle_syscall(seL4_Word badge, int num_args) {
     }
 }
 
-void syscall_loop(seL4_CPtr ep) {
-    while (1) {
-        seL4_Word badge;
-        seL4_Word label;
-        seL4_MessageInfo_t message;
+jmp_buf syscall_loop_entry;
 
+static void routine_callback(uint32_t id, void *data) {
+    resume();
+}
+
+void syscall_loop(seL4_CPtr ep) {
+    seL4_Word badge;
+    seL4_Word label;
+    seL4_MessageInfo_t message;
+    while (1) {
+        setjmp(syscall_loop_entry);
+        register_timer(1000000, routine_callback, NULL);
         message = seL4_Wait(ep, &badge);
         label = seL4_MessageInfo_get_label(message);
-        if(badge & IRQ_EP_BADGE){
+        if (badge & IRQ_EP_BADGE) {
             /* Interrupt */
             if (badge & IRQ_BADGE_NETWORK) {
+                printf("Network\n");
                 network_irq();
             }
             if (badge & IRQ_BADGE_TIMER) {
+                printf("Timer\n");
                 timer_interrupt();
             }
 
-        }else if(label == seL4_VMFault){
+        } else if (label == seL4_VMFault) {
             /* Page fault */
             dprintf(0, "vm fault at 0x%08x, pc = 0x%08x, %s\n", 
                     seL4_GetMR(1),
@@ -181,7 +204,7 @@ void syscall_loop(seL4_CPtr ep) {
                 map_vaddr = seL4_GetMR(1);
             }
 
-            //Not used
+            /* App cap not used */
             seL4_CPtr app_cap;
             err = sos_map_page(map_vaddr,
                                tty_test_process.vroot,
@@ -197,11 +220,14 @@ void syscall_loop(seL4_CPtr ep) {
             seL4_MessageInfo_t reply = seL4_MessageInfo_new(0, 0, 0, 0);
             seL4_Send(reply_cap, reply);
 
-        }else if(label == seL4_NoFault) {
+        } else if (label == seL4_NoFault) {
+            printf("Syscall\n");
             /* System call */
-            handle_syscall(badge, seL4_MessageInfo_get_length(message) - 1);
-
-        }else{
+            seL4_Word data[2];
+            data[0] = badge;
+            data[1] = seL4_MessageInfo_get_length(message) - 1;
+            start_coroutine(&handle_syscall, data);
+        } else {
             printf("Rootserver got an unknown message\n");
         }
     }
@@ -285,8 +311,8 @@ void start_first_process(char* app_name, seL4_CPtr fault_ep) {
     tty_test_process.addrspace = as_new();
 
     /*open file table increase ref count*/
-    of_table[STD_IN].ref++;
-    of_table[STD_OUT].ref+=2;
+    //of_table[STDIN].ref_count++;
+    of_table[STDOUT].ref_count += 1;
 
     /* Create a VSpace */
     tty_test_process.vroot_addr = ut_alloc(seL4_PageDirBits);
@@ -450,8 +476,8 @@ static void _sos_init(seL4_CPtr* ipc_ep, seL4_CPtr* async_ep){
     /* Initialise frame table */
     frame_init(high,low);
 
-    /* Initialise open file table */
-    of_table_init(); 
+    /* Initialise vfs */
+    vfs_init();
 
     /* Initialiase other system compenents here */
 
@@ -464,59 +490,12 @@ static inline seL4_CPtr badge_irq_ep(seL4_CPtr ep, seL4_Word badge) {
     return badged_cap;
 }
 
-void frame_table_test() {
-    /* Allocate 10 pages and make sure you can touch them all */
-    printf("Test 1\n");
-    for (int i = 0; i < 10; i++) {
-        /* Allocate a page */
-        seL4_Word *vaddr;
-        frame_alloc(&vaddr);
-        assert(vaddr);
-
-        /* Test you can touch the page */
-        *vaddr = 0x37;
-        assert(*vaddr == 0x37);
-
-        printf("Page #%d allocated at %p\n",  i, (void *) vaddr);
-    }
-
-    /* Test that you never run out of memory if you always free frames. */
-    printf("Test 2\n");
-    for (int i = 0; i < 10000; i++) {
-        /* Allocate a page */
-        seL4_Word *vaddr;
-        int page = frame_alloc(&vaddr);
-        assert(vaddr != 0);
-
-        /* Test you can touch the page */
-        *vaddr = 0x37;
-        assert(*vaddr == 0x37);
-
-        /* print every 1000 iterations */
-        if (i % 1000 == 0) {
-            printf("Page #%d allocated at %p\n",  i, vaddr);
-        }
-
-        frame_free(vaddr);
-    }
-
-    /* Test that you eventually run out of memory gracefully,
-       and doesn't crash */
-    printf("Test 3\n");
-    while (1) {
-        /* Allocate a page */
-        seL4_Word *vaddr;
-        frame_alloc(&vaddr);
-        if (!vaddr) {
-            printf("Out of memory!\n");
-            break;
-        }
-
-        /* Test you can touch the page */
-        *vaddr = 0x37;
-        assert(*vaddr == 0x37);
-    }
+static void nfs_timeout_callback(uint32_t id, void *data) {
+    register_timer(NFS_TIMEOUT_INTERVAL, nfs_timeout_callback, NULL);
+    nfs_timeout();
 }
+
+
 
 /*
  * Main entry point - called by crt.
@@ -530,20 +509,24 @@ int main(void) {
     /* Initialise the network hardware */
     network_init(badge_irq_ep(_sos_interrupt_ep_cap, IRQ_BADGE_NETWORK));
 
+    /* Initialise open file table */
+    of_table_init(); 
+
+    /* Initialise coroutines */
+    coroutine_init();
+
     /* Initialise the timer */
     void *epit1_vaddr = map_device(EPIT1_PADDR, EPIT_REGISTERS * sizeof(uint32_t));
     void *epit2_vaddr = map_device(EPIT2_PADDR, EPIT_REGISTERS * sizeof(uint32_t));
     timer_init(epit1_vaddr, epit2_vaddr);
     seL4_CPtr timer_badge = badge_irq_ep(_sos_interrupt_ep_cap, IRQ_BADGE_TIMER);
     start_timer(timer_badge);
-    
-    /* Initialise serial driver */
-    serial_handle = serial_init();
+
+    /* NFS timeout every 100ms */
+    register_timer(NFS_TIMEOUT_INTERVAL, nfs_timeout_callback, NULL);
     
     /* Start the user application */
     start_first_process(TTY_NAME, _sos_ipc_ep_cap);
-
-    //frame_table_test();
 
     /* Wait on synchronous endpoint for IPC */
     dprintf(0, "\nSOS entering syscall loop\n");

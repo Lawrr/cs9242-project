@@ -14,6 +14,12 @@
 #include <sel4/sel4.h>
 #include "addrspace.h"
 
+#define ERR_ALREADY_MAPPED -1
+#define ERR_INVALID_ADDR -2
+#define ERR_INVALID_REGION -3
+#define ERR_NO_MEMORY -4
+#define ERR_INTERNAL_MAP_ERROR -5
+
  /**
  * Maps a page into a page table. 
  * A 2nd level table will be created if required

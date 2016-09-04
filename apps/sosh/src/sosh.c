@@ -26,7 +26,7 @@
 
 #include "benchmark.h"
 
-#define BUF_SIZ    6144
+#define BUF_SIZ    4000
 #define MAX_ARGS   32
 
 static int in;
@@ -319,11 +319,12 @@ int main(void) {
     int i, r, done, found, new, argc;
     char *bp, *p;
 
+    int console_fd = open("console", O_RDWR);
+    test_buffers(console_fd);
+    sos_sys_close(console_fd);
+
     in = open("console", O_RDONLY);
     assert(in >= 0);
-
-    int console_fd = open("console", FM_READ | FM_WRITE);
-    test_buffers(console_fd);
 
     bp = buf;
     done = 0;

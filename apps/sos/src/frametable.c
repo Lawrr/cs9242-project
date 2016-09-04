@@ -119,7 +119,6 @@ void frame_init(seL4_Word high,seL4_Word low) {
 
 int32_t frame_alloc(seL4_Word *vaddr) {
     int err;
-    int ret_index;
     seL4_Word frame_vaddr;
     if (free_index == -1) {
         /* Free list is empty but there is still memory */
@@ -155,18 +154,16 @@ int32_t frame_alloc(seL4_Word *vaddr) {
             return 3;
         }
 
-        *vaddr = frame_vaddr;
-
         /* Calculate index of frame in the frame table */
-        ret_index = (frame_paddr - base_addr) >> INDEX_ADDR_OFFSET;
+        int index = (frame_paddr - base_addr) >> INDEX_ADDR_OFFSET;
         
-        frame_table[ret_index].cap = frame_cap;
+        frame_table[index].cap = frame_cap;
     } else {
-        ret_index = free_index;
-        frame_vaddr = ((ret_index << INDEX_ADDR_OFFSET) + base_addr - low_addr + PROCESS_VMEM_START);
+        frame_vaddr = ((free_index << INDEX_ADDR_OFFSET) + base_addr - low_addr + PROCESS_VMEM_START);
         free_index = frame_table[free_index].next_index;
     }
     
+    *vaddr = frame_vaddr;
     memset(frame_vaddr, 0, PAGE_SIZE);
     return 0;
 }
