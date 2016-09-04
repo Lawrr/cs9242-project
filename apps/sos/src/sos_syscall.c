@@ -178,8 +178,6 @@ void syscall_write(seL4_CPtr reply_cap) {
 
     seL4_Word end_uaddr = uaddr + ubuf_size;
     while (ubuf_size > 0) {
-        yield();
-        printf("Keep going\n");
         seL4_Word uaddr_next = PAGE_ALIGN_4K(uaddr) + 0x1000;
         seL4_Word size;
         if (end_uaddr >= uaddr_next) {
@@ -215,6 +213,8 @@ void syscall_write(seL4_CPtr reply_cap) {
         ubuf_size -= size;
         uaddr = uaddr_next;
         uio.offset += size;
+
+        if (ubuf_size > 0) yield();
     }
 
     /* Reply */

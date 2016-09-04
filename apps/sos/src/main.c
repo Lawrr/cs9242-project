@@ -164,17 +164,17 @@ void syscall_loop(seL4_CPtr ep) {
     seL4_MessageInfo_t message;
     while (1) {
         setjmp(syscall_loop_entry);
-        int k = register_timer(1000000, routine_callback, NULL);
-        printf("In syscall loop\n");
+        register_timer(1000000, routine_callback, NULL);
         message = seL4_Wait(ep, &badge);
-        remove_timer(k);
-	label = seL4_MessageInfo_get_label(message);
+        label = seL4_MessageInfo_get_label(message);
         if (badge & IRQ_EP_BADGE) {
             /* Interrupt */
             if (badge & IRQ_BADGE_NETWORK) {
+                printf("Network\n");
                 network_irq();
             }
             if (badge & IRQ_BADGE_TIMER) {
+                printf("Timer\n");
                 timer_interrupt();
             }
 
@@ -214,6 +214,7 @@ void syscall_loop(seL4_CPtr ep) {
             seL4_Send(reply_cap, reply);
 
         } else if (label == seL4_NoFault) {
+            printf("Syscall\n");
             /* System call */
             seL4_Word data[2];
             data[0] = badge;
@@ -483,7 +484,7 @@ static inline seL4_CPtr badge_irq_ep(seL4_CPtr ep, seL4_Word badge) {
 }
 
 static void nfs_timeout_callback(uint32_t id, void *data) {
-    register_timer(NFS_TIMEOUT_INTERVAL, nfs_timeout_callback, NULL);
+    /* register_timer(NFS_TIMEOUT_INTERVAL, nfs_timeout_callback, NULL); */
     nfs_timeout();
 }
 

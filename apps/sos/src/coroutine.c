@@ -3,86 +3,70 @@
 #include <cspace/cspace.h>
 #include <alloca.h>
 #include "frametable.h"
-#define CO_STACK_SIZE 512
-#define ROUTINE_NUM 7
 
-static jmp_buf routine_list[ROUTINE_NUM];
-static int free_list[ROUTINE_NUM];
+#define NUM_COROUTINES 8
+
+extern jmp_buf syscall_loop_entry;
+
+static int curr_id = 0;
+static int num_tasks = 0;
+static int next_yield_id = 0;
+
+static jmp_buf coroutines[NUM_COROUTINES];
+static int free_list[NUM_COROUTINES];
 
 void coroutine_init() {
-    for (int i = 0; i < ROUTINE_NUM; i++) {
+    for (int i = 0; i < NUM_COROUTINES; i++) {
         free_list[i] = 1;
     }
 }
 
-extern jmp_buf syscall_loop_entry;
-static int current = 0;//current free slot
-static int num = 0;//current num of routine (not include main routine)
-static int next_to_yield = 0;//next one to resume
-static int me = 0;//mark currunt routine num
+void yield() {
+    int id = setjmp(coroutines[curr_id]);
 
-void yield(){
-    printf("stop routine%d\n",me);
-    me = setjmp(routine_list[me]);
-    //printf("In yield with me = %d\n", me);
-    if (!me){
-        //printf("Setup new env: %d\n", routine_list[me]);
-        //printf("LNGJMP TO ENTRY %d\n", num);
-        longjmp(syscall_loop_entry,1);
-    } else{
-        if (me == -1) me = 0;
-        printf("restart routine%d\n",me);
-        return; 
+    if (id == 0) {
+        longjmp(syscall_loop_entry, 1);
+    } else {
+        return;
     }
-    //never reach
+
+    /* Never reached */
 }
 
-//used by main routine to call subroutine --syscall_loop is the main routine
-void resume(){
-    /* printf("In resume %d\n", num); */
-    printf("resume_num%d",num);
-    if (num == 0) return;
-    //printf("Keep resume\n");
-    uint32_t tar = next_to_yield;
-    while (free_list[next_to_yield] == 0) {
-        next_to_yield = (next_to_yield+1)%ROUTINE_NUM; 
-    }
-    //printf("long jumping to %d = %d\n", tar, routine_list[tar]);
+void resume() {
+    if (num_tasks == 0) return;
 
-    longjmp(routine_list[tar],tar==0?-1:tar);
+    uint32_t continue_id = next_yield_id;
 
-    /* Never reach */
+    /* Find next to yield */
+    do {
+        next_yield_id = (next_yield_id + 1) % NUM_COROUTINES;
+    } while (free_list[next_yield_id] == 1);
+
+    longjmp(coroutines[continue_id], 1);
+
+    /* Never reached */
 }
 
-void test() {
-    int a = 5;
-    printf("a %p\n", &a);
-}
-
-int start_coroutine(void (*function)(seL4_Word badge, int numargs),
+int start_coroutine(void (*task)(seL4_Word badge, int num_args),
                     void *data) {
-    if (num==ROUTINE_NUM) {
-        return 0; 
-    }
+    if (num_tasks == NUM_COROUTINES) return 1;
 
-    printf("Start coroutine%d\n",current);
-    num++;
-    me = current;
-    free_list[current] = 0;
+    num_tasks++;
 
-    /* Set new current */
-    while (free_list[current] != 0){
-        current++;
-        current %= ROUTINE_NUM;
+    /* Find free slot */
+    int task_id = 0;
+    while (free_list[task_id] == 0) {
+        task_id++;
     }
+    free_list[task_id] = 0;
+    curr_id = task_id;
 
     /* Allocate new stack frame */
     char *sptr;
     int err = frame_alloc((seL4_Word *) &sptr);
     sptr += 4096;
     /* conditional_panic(err, "Could not allocate frame\n"); */
-    //printf("Frame %p\n", sptr);
-    //printf("data[0] %d, data[1] %d\n", ((seL4_Word*)data)[0],((seL4_Word*)data)[1]);
 
     //TODO memcpy instead?
     /* Add stuff to the new stack */
@@ -95,20 +79,20 @@ int start_coroutine(void (*function)(seL4_Word badge, int numargs),
     *sptr = (seL4_Word) data_new;
 
     /* Change to new sp */
-    //printf("change\n");
     asm volatile("mov sp, %[newsp]" : : [newsp] "r" (sptr) : "sp");
     // TODO change stack limit register?
-    //test();
 
-    //printf("Start task\n");
-    function(((seL4_Word *) data_new)[0], ((seL4_Word *) data_new)[1]);
-    //printf("TASK FINISH\n");
+    /* Run task */
+    task(((seL4_Word *) data_new)[0], ((seL4_Word *) data_new)[1]);
 
-    num--;
-    free_list[me] = 1;
     frame_free(sptr_new);
-    printf("Finish %d\n",me);
+
+    free_list[task_id] = 1;
+
+    num_tasks--;
+
+    printf("Task done\n");
     longjmp(syscall_loop_entry, 1);
 
-    /* Never reach */
+    /* Never reached */
 }
