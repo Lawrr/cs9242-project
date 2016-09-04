@@ -61,7 +61,7 @@ static int validate_uaddr(seL4_CPtr reply_cap, char *uaddr, int32_t size) {
     return 0;
 }
 
-int validate_fd(seL4_CPtr reply_cap, int fd) {
+static int validate_fd(seL4_CPtr reply_cap, int fd) {
     if (fd < 0 || fd >= PROCESS_MAX_FILES) {
         send_err(reply_cap, ERR_INVALID_FD);
         return 1;
@@ -69,7 +69,7 @@ int validate_fd(seL4_CPtr reply_cap, int fd) {
     return 0;
 }
 
-int validate_ofd(seL4_CPtr reply_cap, int ofd) {
+static int validate_ofd(seL4_CPtr reply_cap, int ofd) {
     if (ofd == -1) {
         send_err(reply_cap, ERR_INVALID_FD);
         return 1;
@@ -77,7 +77,7 @@ int validate_ofd(seL4_CPtr reply_cap, int ofd) {
     return 0;
 }
 
-int validate_ofd_mode(seL4_CPtr reply_cap, int ofd, int mode) {
+static int validate_ofd_mode(seL4_CPtr reply_cap, int ofd, int mode) {
     if (!(of_table[ofd].file_info.st_fmode & mode)) {
         send_err(reply_cap, ERR_ILLEGAL_ACCESS_MODE);
         return 1;
@@ -85,7 +85,7 @@ int validate_ofd_mode(seL4_CPtr reply_cap, int ofd, int mode) {
     return 0;
 }
 
-int validate_max_fd(seL4_CPtr reply_cap, int fd_count) {
+static int validate_max_fd(seL4_CPtr reply_cap, int fd_count) {
     if (fd_count == PROCESS_MAX_FILES) {
         send_err(reply_cap, ERR_MAX_FILE);
         return 1;
@@ -93,7 +93,7 @@ int validate_max_fd(seL4_CPtr reply_cap, int fd_count) {
     return 0;
 }
 
-int validate_max_ofd(seL4_CPtr reply_cap, int ofd_count) {
+static int validate_max_ofd(seL4_CPtr reply_cap, int ofd_count) {
     if (ofd_count == MAX_OPEN_FILE) {
         send_err(reply_cap, ERR_MAX_SYSTEM_FILE);
         return 1;
@@ -101,6 +101,48 @@ int validate_max_ofd(seL4_CPtr reply_cap, int ofd_count) {
     return 0;
 }
 
+static int get_safe_path(char *dst, seL4_Word uaddr,
+                         seL4_Word sos_vaddr, uint32_t max_len) {
+    /* Get safe path */
+    seL4_Word uaddr_next_page = PAGE_ALIGN_4K(uaddr) + 0x1000;
+    seL4_Word safe_len = uaddr_next_page - uaddr;
+    if (safe_len < max_len) {
+        int len = strnlen(sos_vaddr, safe_len);
+        if (len == safe_len) {
+            /* Make sure address is mapped */
+            seL4_CPtr app_cap_next;
+            seL4_Word sos_vaddr_next;
+            int err = sos_map_page(uaddr_next_page,
+                                   tty_test_process.vroot,
+                                   tty_test_process.addrspace,
+                                   &sos_vaddr_next,
+                                   &app_cap_next);
+
+            sos_vaddr_next = PAGE_ALIGN_4K(sos_vaddr_next);
+            sos_vaddr_next |= (uaddr_next_page & PAGE_MASK_4K);
+            len = strnlen(sos_vaddr_next, max_len - safe_len);
+            if (len == max_len - safe_len) {
+                /* Doesn't have terminator */
+                return 1;
+            } else {
+                strncpy(dst, sos_vaddr, safe_len);
+                strcpy(dst + safe_len, sos_vaddr_next);    
+            }
+        } else {
+            strcpy(dst, sos_vaddr);
+        }
+    } else {
+        int len = strnlen(sos_vaddr, max_len);
+        if (len == max_len) {
+            /* Doesn't have terminator */
+            return 1;
+        } else {
+            strcpy(dst, sos_vaddr);
+        }
+    }
+
+    return 0;
+}
 
 void syscall_brk(seL4_CPtr reply_cap) {
     seL4_MessageInfo_t reply = seL4_MessageInfo_new(0, 0, 0, 1);
@@ -154,6 +196,80 @@ void syscall_time_stamp(seL4_CPtr reply_cap) {
 
     seL4_MessageInfo_t reply = seL4_MessageInfo_new(0, 0, 0, 1);
     seL4_SetMR(0, timestamp); 
+    seL4_Send(reply_cap, reply);
+    cspace_free_slot(cur_cspace, reply_cap);
+}
+
+void syscall_getdirent(seL4_CPtr reply_cap) {
+    int pos = seL4_GetMR(1);
+    seL4_Word uaddr = seL4_GetMR(2);
+    size_t nbyte = seL4_GetMR(3);
+    
+    if (validate_uaddr(reply_cap, uaddr, 0)) return;
+    //TODO check pos and nbyte valid values
+
+    char path_sos_vaddr[MAX_PATH_LEN];
+    /* Make sure address is mapped */
+    seL4_CPtr app_cap;
+    seL4_Word sos_vaddr;
+    int err = sos_map_page(uaddr,
+            tty_test_process.vroot,
+            tty_test_process.addrspace,
+            &sos_vaddr,
+            &app_cap);
+
+    sos_vaddr = PAGE_ALIGN_4K(sos_vaddr);
+    sos_vaddr |= (uaddr & PAGE_MASK_4K); 
+
+    err = get_safe_path(path_sos_vaddr, uaddr, sos_vaddr, MAX_PATH_LEN);
+    if (err) {
+        send_err(reply_cap, ERR_ILLEGAL_USERADDR);
+        return;
+    }
+
+    //TODO call getdirent
+    //set proper MR return
+
+    /* Reply */
+    seL4_MessageInfo_t reply = seL4_MessageInfo_new(0, 0, 0, 1);
+    seL4_SetMR(0, 0);
+    seL4_Send(reply_cap, reply);
+    cspace_free_slot(cur_cspace, reply_cap);
+}
+
+void syscall_stat(seL4_CPtr reply_cap) {
+    seL4_Word uaddr = seL4_GetMR(1);
+    seL4_Word ustat_buf = seL4_GetMR(2);
+    
+    if (validate_uaddr(reply_cap, uaddr, 0)) return;
+    if (validate_uaddr(reply_cap, ustat_buf, 0)) return;
+
+    char path_sos_vaddr[MAX_PATH_LEN];
+    /* Make sure address is mapped */
+    seL4_CPtr app_cap;
+    seL4_Word sos_vaddr;
+    int err = sos_map_page(uaddr,
+            tty_test_process.vroot,
+            tty_test_process.addrspace,
+            &sos_vaddr,
+            &app_cap);
+
+    sos_vaddr = PAGE_ALIGN_4K(sos_vaddr);
+    sos_vaddr |= (uaddr & PAGE_MASK_4K); 
+
+    err = get_safe_path(path_sos_vaddr, uaddr, sos_vaddr, MAX_PATH_LEN);
+    if (err) {
+        send_err(reply_cap, ERR_ILLEGAL_USERADDR);
+        return;
+    }
+
+    //TODO make sure ustat_buf is mapped
+    //     (need to know sizeof(sos_stat_t))
+    //TODO call stat
+
+    /* Reply */
+    seL4_MessageInfo_t reply = seL4_MessageInfo_new(0, 0, 0, 1);
+    seL4_SetMR(0, 0);
     seL4_Send(reply_cap, reply);
     cspace_free_slot(cur_cspace, reply_cap);
 }
@@ -249,44 +365,10 @@ void syscall_open(seL4_CPtr reply_cap) {
     sos_vaddr = PAGE_ALIGN_4K(sos_vaddr);
     sos_vaddr |= (uaddr & PAGE_MASK_4K); 
 
-    /* Get safe path */
-    seL4_Word uaddr_next_page = PAGE_ALIGN_4K(uaddr)+0x1000;
-    seL4_Word safe_len = uaddr_next_page - uaddr;
-    if (safe_len < MAX_PATH_LEN) {
-        int len = strnlen(sos_vaddr, safe_len);
-        if (len == safe_len) {
-            /* Make sure address is mapped */
-            seL4_CPtr app_cap_next;
-            seL4_Word sos_vaddr_next;
-            int err = sos_map_page(uaddr_next_page,
-                                   tty_test_process.vroot,
-                                   tty_test_process.addrspace,
-                                   &sos_vaddr_next,
-                                   &app_cap_next);
-
-            sos_vaddr_next = PAGE_ALIGN_4K(sos_vaddr_next);
-            sos_vaddr_next |= (uaddr_next_page & PAGE_MASK_4K);
-            len = strnlen(sos_vaddr_next, MAX_PATH_LEN - safe_len);
-            if (len == MAX_PATH_LEN - safe_len) {
-                /* Doesn't have terminator */
-                send_err(reply_cap, ERR_ILLEGAL_USERADDR);
-                return;
-            } else {
-                strncpy(path_sos_vaddr, sos_vaddr, safe_len);
-                strcpy(path_sos_vaddr + safe_len, sos_vaddr_next);    
-            }
-        } else {
-            strcpy(path_sos_vaddr, sos_vaddr);
-        }
-    } else {
-        int len = strnlen(sos_vaddr,MAX_PATH_LEN);
-        if (len == MAX_PATH_LEN) {
-            /* Doesn't have terminator */
-            send_err(reply_cap, ERR_ILLEGAL_USERADDR);
-            return;
-        } else {
-            strcpy(path_sos_vaddr,sos_vaddr);
-        }
+    err = get_safe_path(path_sos_vaddr, uaddr, sos_vaddr, MAX_PATH_LEN);
+    if (err) {
+        send_err(reply_cap, ERR_ILLEGAL_USERADDR);
+        return;
     }
 
     /* Access mode */

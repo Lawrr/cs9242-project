@@ -142,6 +142,14 @@ void handle_syscall(seL4_Word badge, int num_args) {
             syscall_time_stamp(reply_cap);
             break;
 
+        case SOS_GETDIRENT_SYSCALL:
+            syscall_getdirent(reply_cap);
+            break;
+
+        case SOS_STAT_SYSCALL:
+            syscall_stat(reply_cap);
+            break;
+
         default:
             printf("Unknown syscall %d\n", syscall_number);
             /* we don't want to reply to an unknown syscall */
