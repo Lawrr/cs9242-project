@@ -261,8 +261,13 @@ void syscall_stat(seL4_CPtr reply_cap) {
         return;
     }
 
-    //TODO make sure ustat_buf is mapped
-    //     (need to know sizeof(sos_stat_t))
+    /* Get vnode */
+    struct vnode *vnode;
+    err = vfs_get(path_sos_vaddr, &vnode);
+    if (err) {
+        send_err(reply_cap, -1);
+        return;
+    }
 
     /* Make sure stat buf address is mapped */
     seL4_CPtr stat_cap;
@@ -272,19 +277,32 @@ void syscall_stat(seL4_CPtr reply_cap) {
             tty_test_process.addrspace,
             &vstat_buf,
             &stat_cap);
-    
-    struct vnode *vnode;
-    err = vfs_get(path_sos_vaddr, &vnode);
-    if (err) {
-        send_err(reply_cap, -1);
-        return;
+
+    /* sos_stat_t would only max span 2 pages */
+    seL4_Word stat_start_page = PAGE_ALIGN_4K(vstat_buf);
+    seL4_Word stat_end_page = PAGE_ALIGN_4K(vstat_buf + sizeof(sos_stat_t));
+
+    /* Check if we need to map a second page */
+    if (stat_start_page != stat_end_page) {
+        seL4_CPtr stat_cap_end;
+        seL4_Word vstat_buf_end;
+        err = sos_map_page(ustat_buf + sizeof(sos_stat_t),
+                tty_test_process.vroot,
+                tty_test_process.addrspace,
+                &vstat_buf_end,
+                &stat_cap_end);
     }
 
+    /* Add offset to stat address */
+    vstat_buf = PAGE_ALIGN_4K(vstat_buf);
+    vstat_buf |= (ustat_buf & PAGE_MASK_4K); 
+    
     if (vnode->ops->vop_stat == NULL) {
         err = 1;
     } else {
         err = vnode->ops->vop_stat(vnode, (sos_stat_t *) vstat_buf);    
     }
+    vfs_close(vnode, 0);
     if (err) {
         send_err(reply_cap, -1);
         return;
