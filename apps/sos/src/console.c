@@ -149,7 +149,7 @@ void console_init(struct vnode **ret_vnode) {
     console_ops->vop_read = &console_read;
     console_ops->vop_write = &console_write;
     console_ops->vop_stat = NULL;
-    console_ops->vop_getent = NULL;
+    console_ops->vop_getdirent = NULL;
 
     int err = dev_add("console", console_ops);
     conditional_panic(err, "Could not add console serial device");
