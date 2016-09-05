@@ -420,10 +420,12 @@ void syscall_close(seL4_CPtr reply_cap) {
 
     if (of_table[ofd].ref_count == 0) {
         vfs_close(of_table[ofd].vnode, of_table[ofd].file_info.st_fmode);
-        of_table[ofd].file_info.st_fmode = 0;
-        of_table[ofd].vnode = NULL;
+        printf("syscall_close1.1\n");  
+	of_table[ofd].file_info.st_fmode = 0;
+        printf("syscall_close1.2\n");
+	of_table[ofd].vnode = NULL;
     }
-
+    printf("syscall_close1.3\n");
     /* Reply */
     seL4_SetMR(0, 0);
     send_reply(reply_cap);

@@ -226,11 +226,9 @@ static int vnode_open(struct vnode *vnode, fmode_t mode) {
 }
 
 static int vnode_close(struct vnode *vnode) {
-    /*Seems nothing to do*/  
+    /*Seems nothing to do*/ 
     if (vnode -> fh != NULL) free(vnode -> fh);
     if (vnode -> fattr != NULL) free(vnode ->fattr);
-    if (vnode -> path != NULL) free(vnode->path);
-    if (vnode -> data != NULL) free(vnode->data);    
     return 0;
 }
 
@@ -329,16 +327,21 @@ static int vnode_write(struct vnode *vnode, struct uio *uio) {
         /*Add offset*/
         sos_vaddr |= (uaddr & PAGE_MASK_4K);
         set_routine_argument(0,sos_vaddr);
-	err = nfs_write(vnode->fh, uio->offset, size,sos_vaddr,&vnode_write_cb,curr_coroutine_id);
+	
+	printf("ask it to write size:%d\n",size);
+	printf("__why data is always empty:%s__\n",sos_vaddr);
+	err = nfs_write(vnode->fh, uio->offset, (int)size,sos_vaddr,&vnode_write_cb,curr_coroutine_id);
         conditional_panic(err,"fail write in send phrase");
 	yield();
         conditional_panic(argument[0],"fail write in end phrase");
 	bytes_sent += (seL4_Word)argument[1];
-        uio->remaining -= bytes_sent;
+        printf("it only writes size %d\n",argument[1]);
+	uio->remaining -= (seL4_Word)argument[1];
 
         ubuf_size -= size;
         uaddr = uaddr_next;
-        uio->offset += size;
+        uio->offset += (seL4_Word)argument[1];
     }
+    printf("finish write remaing %d\n",uio->remaining);
     return 0;
 }
