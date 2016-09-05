@@ -23,6 +23,7 @@ static int vnode_close(struct vnode *vnode);
 static int vnode_read(struct vnode *vnode, struct uio *uio);
 static int vnode_write(struct vnode *vnode, struct uio *uio);
 static int vnode_stat(struct vnode * vnode,sos_stat_t* stat);
+static int vnode_getdirent(struct vnode* vnode,struct uio *uio);
 static void dev_list_init();
 
 static struct dev dev_list[MAX_DEV_NUM];
@@ -44,8 +45,72 @@ static const struct vnode_ops default_ops = {
     &vnode_close,
     &vnode_read,
     &vnode_write,
-    &vnode_stat
+    &vnode_stat,
+    &vnode_getdirent
 };
+
+void vnode_readdir_cb(uintptr_t token, enum nfs_stat status,int num_files, char* file_names[],nfscookie_t nfscookie){
+    argument[0] = (seL4_Word)status; 
+    argument[1] = nfscookie;
+    
+    int relative_pos = get_routine_argument(0);
+    if (relative_pos  < num_files){
+       set_routine_argument(0,0); 
+       void * addr = (void *)get_routine_argument(2);
+       seL4_Word size = get_routine_argument(1);
+       memcpy(addr,file_names[relative_pos],size);
+       seL4_Word size2 = get_routine_argument(2);
+       if (size2 != 0){
+          addr = get_routine_argument(2);
+	  memcpy(addr,file_names+size,size2);
+       } 
+    }  else{
+       set_routine_argument(0,relative_pos-num_files);
+    }
+    set_resume(token);	
+}
+
+
+static int vnode_getdirent(struct vnode* vnode,struct uio *uio){
+    seL4_Word numfile = 0;
+    seL4_Word cookies = 0;
+    seL4_Word pos = ((seL4_Word*)vnode -> data)[0];
+    set_routine_argument(0,pos);
+    set_routine_argument(1,uio->size); 
+    set_routine_argument(2,uio->addr);
+    seL4_Word end_addr = uio->size + uio->addr;
+    seL4_Word end_page = PAGE_ALIGN_4K(end_addr);
+    
+    
+    if (PAGE_ALIGN_4K(end_addr) !=end_page){
+        seL4_CPtr app_cap;
+        seL4_CPtr sos_vaddr;
+        int err = sos_map_page(end_page,
+                tty_test_process.vroot,
+                tty_test_process.addrspace,
+                &sos_vaddr,
+                &app_cap);
+        if (err && err != ERR_ALREADY_MAPPED) {
+            return 1;
+        }
+        sos_vaddr = PAGE_ALIGN_4K(sos_vaddr);
+	    
+       set_routine_argument(3,sos_vaddr);
+       set_routine_argument(4, end_addr-end_page); 
+    }  else{
+       set_routine_argument(3,0);
+       set_routine_argument(4,0);
+    }
+
+    while (pos > 0){
+        nfs_readdir(vnode->path, cookies,vnode_readdir_cb,curr_coroutine_id);  
+        yield();
+	cookies = argument[1];
+        pos = get_routine_argument(0);
+    }
+    return 0;
+}
+
 
 static void dev_list_init() {
     for (int i = 0 ; i < MAX_DEV_NUM; i++) {
@@ -167,6 +232,9 @@ int vfs_open(char *path, int mode, struct vnode **ret_vnode) {
     *ret_vnode = vnode;
     return 0;
 }
+
+
+
 
 int vfs_close(struct vnode *vnode, int mode) {
     /* Dec ref counts */

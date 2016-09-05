@@ -227,9 +227,27 @@ void syscall_getdirent(seL4_CPtr reply_cap) {
         return;
     }
 
+    struct uio uio = {
+        .addr = uaddr,
+        .size = nbyte,
+        .remaining = nbyte,
+        .offset = 0
+    };
+    struct vnode *ret_vnode; 
+    err = vfs_get(path_sos_vaddr,&ret_vnode);
+    if (err) {
+        send_err(reply_cap, ERR_ILLEGAL_USERADDR);
+        return;
+    }
+
+    seL4_Word *data = malloc(sizeof(seL4_Word)*2);
+    data[0] = pos;
+    data[1] = tty_test_process.addrspace->page_table;
+    ret_vnode->data = (void*)data;  
     //TODO call getdirent
     //set proper MR return
 
+    ret_vnode->ops->vop_getdirent(ret_vnode,&uio);
     /* Reply */
     seL4_SetMR(0, 0);
     send_reply(reply_cap); 

@@ -15,7 +15,7 @@ static int next_yield_id = -1;
 static jmp_buf coroutines[NUM_COROUTINES];
 static int free_list[NUM_COROUTINES];
 //slot for storing arguments passed to callback
-static seL4_Word routine_arguments[NUM_COROUTINES][4];
+static seL4_Word routine_arguments[NUM_COROUTINES][5];
 
 void coroutine_init() {
     for (int i = 0; i < NUM_COROUTINES; i++) {
