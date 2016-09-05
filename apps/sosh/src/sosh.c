@@ -318,6 +318,7 @@ int main(void) {
     char *argv[MAX_ARGS];
     int i, r, done, found, new, argc;
     char *bp, *p;
+    sos_benchmark();
     int fileid = sos_sys_open("firstfile",O_RDWR);
     printf("\nfileid=%d\n",fileid);
     sos_sys_read(fileid,buf,11);

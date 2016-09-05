@@ -35,7 +35,7 @@ struct vnode_ops {
     int (*vop_read)(struct vnode *vnode, struct uio *uio);
     int (*vop_write)(struct vnode *vnode, struct uio *uio);
     int (*vop_stat)(struct vnode *vnode, sos_stat_t* stat);
-    int (*vop_getent)(const char * path);
+    int (*vop_getdirent)(struct vnode *vnode, struct uio *uio);
 };
 
 struct dev {
