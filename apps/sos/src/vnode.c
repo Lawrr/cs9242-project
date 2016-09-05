@@ -180,6 +180,7 @@ void vnode_create_cb(uintptr_t token, nfs_stat_t status,fhandle_t *fh, fattr_t *
     argument[0] = (seL4_Word)status;
     argument[1] = (seL4_Word)malloc(sizeof(fhandle_t));
     argument[2] = (seL4_Word)malloc(sizeof(fattr_t));
+    printf("In create callback\n");
     memcpy(argument[1],fh,sizeof(fhandle_t));
     memcpy(argument[2],fattr,sizeof(fattr_t));
     resume(token,status);  
@@ -210,8 +211,11 @@ static int vnode_open(struct vnode *vnode, fmode_t mode) {
        time.useconds = (timestamp - time.seconds*1000)/10000000;
        sattr.atime = time;
        sattr.mtime = time;
-       nfs_create( &mnt_point, vnode->path, &sattr, &vnode_create_cb, curr_coroutine_id);
+       nfs_create( &mnt_point, vnode->path, &sattr, (nfs_create_cb_t)vnode_create_cb, curr_coroutine_id);
        yield();
+       err = (int)argument[0];
+       
+       return 0;
        if (err == NFS_OK){
           vnode->fh = (fhandle_t*)argument[1];
           vnode->fattr = (fattr_t*)argument[2];
@@ -233,6 +237,8 @@ static int vnode_close(struct vnode *vnode) {
 
 
 void vnode_read_cb(uintptr_t token, nfs_stat_t status,fattr_t *fattr, int count, void* data){
+    
+    conditional_panic(-1,"I am here");
     seL4_Word sos_vaddr = get_routine_argument(token,0); 
     printf("in read call back\n");
     if  (status == NFS_OK){
@@ -280,7 +286,7 @@ static int vnode_read(struct vnode *vnode, struct uio *uio) {
         set_routine_argument(0,sos_vaddr);
         printf("offset = %d\n",uio->offset);
 	printf("offset = %d\n",size);
-	err = nfs_read(vnode->fh, uio->offset, size,&vnode_read_cb,curr_coroutine_id); 
+	err = nfs_read(vnode->fh, uio->offset, size,(nfs_read_cb_t)(vnode_read_cb),curr_coroutine_id); 
         conditional_panic(err,"faild read at send phrase");	
         printf("reading\n");
 	yield();

@@ -170,15 +170,15 @@ void syscall_loop(seL4_CPtr ep) {
         setjmp(syscall_loop_entry);
         message = seL4_Wait(ep, &badge);
         label = seL4_MessageInfo_get_label(message);
-        printf("sysscall_loop\n");
+        //printf("sysscall_loop\n");
 	if (badge & IRQ_EP_BADGE) {
             /* Interrupt */
             if (badge & IRQ_BADGE_NETWORK) {
-//                printf("Network\n");
+                printf("Network\n");
                 network_irq();
             }
             if (badge & IRQ_BADGE_TIMER) {
-                printf("Timer\n");
+                //printf("Timer\n");
                 timer_interrupt();
             }
 

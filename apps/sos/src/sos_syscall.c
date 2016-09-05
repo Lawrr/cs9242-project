@@ -383,7 +383,10 @@ void syscall_open(seL4_CPtr reply_cap) {
 
     struct vnode *ret_vnode;
     err = vfs_open((char *) path_sos_vaddr, sos_access_mode, &ret_vnode);
+    printf("after open--------------\n");
+    
     if (err) {
+	printf("bad\n");
         seL4_SetMR(0, -1);
     } else {
         of_table[curr_free_ofd].vnode = ret_vnode;
@@ -410,7 +413,7 @@ void syscall_open(seL4_CPtr reply_cap) {
         tty_test_process.addrspace->fdt_status = (fd_count << TWO_BYTE_BITS) |
                                                  free_fd;
     }
-
+    printf("reply-------------%d\n",seL4_GetMR(0));
     /* Reply */
     seL4_MessageInfo_t reply = seL4_MessageInfo_new(0, 0, 0, 1);
     seL4_Send(reply_cap, reply);
