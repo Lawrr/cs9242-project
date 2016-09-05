@@ -401,6 +401,9 @@ static int vnode_read(struct vnode *vnode, struct uio *uio) {
         ubuf_size -= (seL4_Word) argument[1];
         uaddr += (seL4_Word) argument[1];
         uio->offset += (seL4_Word) argument[1];
+        if (uio->size - uio->remaining == vnode->fattr->size) {
+            return 0;
+        }
     } 
     return 0;
 }
