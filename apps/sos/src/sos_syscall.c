@@ -164,6 +164,7 @@ void syscall_brk(seL4_CPtr reply_cap) {
     if (curr_region == NULL || newbrk >= PROCESS_HEAP_END || newbrk < PROCESS_HEAP_START) {
         /* Set error */
         send_err(reply_cap,1);
+        return;
     }
 
     /* Set new heap region */
@@ -187,6 +188,7 @@ void syscall_usleep(seL4_CPtr reply_cap) {
     if (msec < 0) {
         seL4_SetMR(0, -1);
         send_reply(reply_cap);	    
+        return;
     } else {
         register_timer(msec * 1000, &uwakeup, (void *) reply_cap);
     }
@@ -259,7 +261,7 @@ void syscall_stat(seL4_CPtr reply_cap) {
     if (validate_uaddr(reply_cap, ustat_buf, 0)) return;
 
     char path_sos_vaddr[MAX_PATH_LEN];
-    /* Make sure address is mapped */
+    /* Make sure path address is mapped */
     seL4_CPtr app_cap;
     seL4_Word sos_vaddr;
     int err = sos_map_page(uaddr,
@@ -277,19 +279,52 @@ void syscall_stat(seL4_CPtr reply_cap) {
         return;
     }
 
-    struct vnode *ret_vnode;
-    err = vfs_open((char *) path_sos_vaddr, FM_READ, &ret_vnode);
+    /* Get vnode */
+    struct vnode *vnode;
+    err = vfs_get(path_sos_vaddr, &vnode);
     if (err) {
         send_err(reply_cap, -1);
         return;
     }
+
+    /* Make sure stat buf address is mapped */
+    seL4_CPtr stat_cap;
+    seL4_Word vstat_buf;
+    err = sos_map_page(ustat_buf,
+            tty_test_process.vroot,
+            tty_test_process.addrspace,
+            &vstat_buf,
+            &stat_cap);
+
+    /* sos_stat_t would only max span 2 pages */
+    seL4_Word stat_start_page = PAGE_ALIGN_4K(vstat_buf);
+    seL4_Word stat_end_page = PAGE_ALIGN_4K(vstat_buf + sizeof(sos_stat_t));
+
+    /* Check if we need to map a second page */
+    if (stat_start_page != stat_end_page) {
+        seL4_CPtr stat_cap_end;
+        seL4_Word vstat_buf_end;
+        err = sos_map_page(ustat_buf + sizeof(sos_stat_t),
+                tty_test_process.vroot,
+                tty_test_process.addrspace,
+                &vstat_buf_end,
+                &stat_cap_end);
+    }
+
+    /* Add offset to stat address */
+    vstat_buf = PAGE_ALIGN_4K(vstat_buf);
+    vstat_buf |= (ustat_buf & PAGE_MASK_4K); 
     
-    ret_vnode->ops->vop_stat(ret_vnode,(sos_stat_t*) ustat_buf);    
-
-    vfs_close(ret_vnode, FM_READ);
-
-    //TODO make sure ustat_buf is mapped
-    //     (need to know sizeof(sos_stat_t))
+    if (vnode->ops->vop_stat == NULL) {
+        err = 1;
+    } else {
+        err = vnode->ops->vop_stat(vnode, (sos_stat_t *) vstat_buf);    
+    }
+    vfs_close(vnode, 0);
+    if (err) {
+        send_err(reply_cap, -1);
+        return;
+    }
 
     /* Reply */
     seL4_SetMR(0, 0);
@@ -309,6 +344,7 @@ void syscall_write(seL4_CPtr reply_cap) {
     if (validate_ofd_mode(reply_cap, ofd, FM_WRITE)) return;
 
     struct oft_entry *entry = &of_table[ofd];
+    struct vnode *vnode = of_table[ofd].vnode;
 
     struct uio uio = {
         .addr = uaddr,
@@ -317,13 +353,17 @@ void syscall_write(seL4_CPtr reply_cap) {
         .offset = entry->offset
     };
 
-    int err = of_table[ofd].vnode->ops->vop_write(of_table[ofd].vnode, &uio);
-    entry->offset = uio.offset;
+    int err;
+    if (vnode->ops->vop_write == NULL) {
+        err = 1;
+    } else {
+        err = vnode->ops->vop_write(vnode, &uio);
+        entry->offset = uio.offset;
+    }
     if (err) {
         send_err(reply_cap, ERR_INTERNAL_ERROR);
+        return;
     }
-
-
 
     /* Reply */
     seL4_SetMR(0, uio.size - uio.remaining);
@@ -343,6 +383,7 @@ void syscall_read(seL4_CPtr reply_cap) {
     if (validate_ofd_mode(reply_cap, ofd, FM_READ)) return;
 
     struct oft_entry *entry = &of_table[ofd];
+    struct vnode *vnode = of_table[ofd].vnode;
 
     struct uio uio = {
         .addr = uaddr,
@@ -357,10 +398,19 @@ void syscall_read(seL4_CPtr reply_cap) {
     seL4_Word *data = malloc(2 * sizeof(seL4_Word));
     data[0] = (seL4_Word) reply_cap;
     data[1] = (seL4_Word) page_table;
-    of_table[ofd].vnode->data = (void *) data;
+    vnode->data = (void *) data;
 
-    of_table[ofd].vnode->ops->vop_read(of_table[ofd].vnode, &uio);
-    entry->offset = uio.offset;
+    int err;
+    if (vnode->ops->vop_read == NULL) {
+        err = 1;
+    } else {
+        err = vnode->ops->vop_read(vnode, &uio);
+        entry->offset = uio.offset;
+    }
+    if (err) {
+        send_err(reply_cap, ERR_INTERNAL_ERROR);
+        return;
+    }
 
     seL4_SetMR(0, uio.size - uio.remaining);
     send_reply(reply_cap); 
@@ -456,12 +506,9 @@ void syscall_close(seL4_CPtr reply_cap) {
 
     if (of_table[ofd].ref_count == 0) {
         vfs_close(of_table[ofd].vnode, of_table[ofd].file_info.st_fmode);
-        printf("syscall_close1.1\n");  
         of_table[ofd].file_info.st_fmode = 0;
-        printf("syscall_close1.2\n");
         of_table[ofd].vnode = NULL;
     }
-    printf("syscall_close1.3\n");
     /* Reply */
     seL4_SetMR(0, 0);
     send_reply(reply_cap);
