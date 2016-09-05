@@ -356,10 +356,12 @@ void syscall_stat(seL4_CPtr reply_cap) {
         vstat_buf_next = PAGE_ALIGN_4K(vstat_buf_next);
 
         /* Boundary write */
-        memcpy(vstat_buf, stat_buf, ustat_buf_next - ustat_buf);
-        strcpy(vstat_buf_next, stat_buf + ustat_buf_next - ustat_buf);
+        int boundary_len = ustat_buf_next - ustat_buf;
+        memcpy(vstat_buf, stat_buf, boundary_len); 
+        memcpy(vstat_buf_next, stat_buf + boundary_len,
+               sizeof(sos_stat_t) - boundary_len);
     } else {
-        strncpy(vstat_buf, stat_buf, sizeof(sos_stat_t));
+        memcpy(vstat_buf, stat_buf, sizeof(sos_stat_t));
     }
 
     free(stat_buf);
