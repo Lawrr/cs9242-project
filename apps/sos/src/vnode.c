@@ -68,11 +68,19 @@ void vnode_readdir_cb(uintptr_t token, enum nfs_stat status,
         num_files--;
     }
     if (cumulative_pos == uio->offset) {
-        /* Found the position - copy path into buffer */
-        strncpy(uio->addr, file_names[curr_pos], uio->size);
-        int len = strnlen(file_names[curr_pos], uio->size);
-        uio->remaining = uio->size - len;
+        /* Found the position - copy path into buffer if not null */
+        if (file_names[curr_pos] != NULL) {
+            strncpy(uio->addr, file_names[curr_pos], uio->size);
+            int len = strnlen(file_names[curr_pos], uio->size);
+            uio->remaining = uio->size - len;
+        } else {
+            *uio->addr = '\0';
+            uio->remaining = uio->size;
+        }
         argument[2] = 1; /* Found */
+    } else if (file_names[curr_pos] == NULL) {
+        /* Went over the end */
+        argument[2] = -1;
     }
     argument[3] = cumulative_pos;
 
@@ -96,8 +104,8 @@ static int vnode_getdirent(struct vnode* vnode, struct uio *uio) {
         cumulative_pos = argument[3];
     } while (!found && cookies != 0);
 
-    //TODO return different for end
-    if (!found) {
+    /* Error over end */
+    if (found == -1) {
         return 1;
     }
 
