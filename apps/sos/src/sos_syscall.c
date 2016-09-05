@@ -243,7 +243,7 @@ void syscall_stat(seL4_CPtr reply_cap) {
     if (validate_uaddr(reply_cap, ustat_buf, 0)) return;
 
     char path_sos_vaddr[MAX_PATH_LEN];
-    /* Make sure address is mapped */
+    /* Make sure path address is mapped */
     seL4_CPtr app_cap;
     seL4_Word sos_vaddr;
     int err = sos_map_page(uaddr,
@@ -263,6 +263,15 @@ void syscall_stat(seL4_CPtr reply_cap) {
 
     //TODO make sure ustat_buf is mapped
     //     (need to know sizeof(sos_stat_t))
+
+    /* Make sure stat buf address is mapped */
+    seL4_CPtr stat_cap;
+    seL4_Word vstat_buf;
+    err = sos_map_page(ustat_buf,
+            tty_test_process.vroot,
+            tty_test_process.addrspace,
+            &vstat_buf,
+            &stat_cap);
     
     struct vnode *vnode;
     err = vfs_get(path_sos_vaddr, &vnode);
@@ -271,7 +280,7 @@ void syscall_stat(seL4_CPtr reply_cap) {
         return;
     }
 
-    err = vnode->ops->vop_stat(vnode, (sos_stat_t*) ustat_buf);    
+    err = vnode->ops->vop_stat(vnode, (sos_stat_t *) vstat_buf);    
     if (err) {
         send_err(reply_cap, -1);
         return;
