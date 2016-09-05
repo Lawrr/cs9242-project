@@ -131,7 +131,7 @@ static int get_safe_path(char *dst, seL4_Word uaddr,
                 /* Doesn't have terminator */
                 return 1;
             } else {
-                strncpy(dst, sos_vaddr, safe_len);
+                memcpy(dst, sos_vaddr, safe_len);
                 strcpy(dst + safe_len, sos_vaddr_next);    
             }
         } else {
@@ -207,9 +207,9 @@ void syscall_getdirent(seL4_CPtr reply_cap) {
 
     if (validate_uaddr(reply_cap, uaddr, 0)) return;
     //TODO check pos and nbyte valid values
+    //TODO multipage mapping
 
-    char path_sos_vaddr[MAX_PATH_LEN];
-    /* Make sure address is mapped */
+    /* Make sure path address is mapped */
     seL4_CPtr app_cap;
     seL4_Word sos_vaddr;
     int err = sos_map_page(uaddr,
@@ -221,35 +221,33 @@ void syscall_getdirent(seL4_CPtr reply_cap) {
     sos_vaddr = PAGE_ALIGN_4K(sos_vaddr);
     sos_vaddr |= (uaddr & PAGE_MASK_4K); 
 
-    err = get_safe_path(path_sos_vaddr, uaddr, sos_vaddr, MAX_PATH_LEN);
-    if (err) {
-        send_err(reply_cap, ERR_ILLEGAL_USERADDR);
-        return;
-    }
-
     struct uio uio = {
-        .addr = uaddr,
+        .addr = sos_vaddr,
         .size = nbyte,
         .remaining = nbyte,
-        .offset = 0
+        .offset = pos
     };
-    struct vnode *ret_vnode; 
-    err = vfs_get(path_sos_vaddr,&ret_vnode);
+
+    struct vnode *vnode; 
+    err = vfs_get("", &vnode);
     if (err) {
         send_err(reply_cap, ERR_ILLEGAL_USERADDR);
         return;
     }
 
-    seL4_Word *data = malloc(sizeof(seL4_Word)*2);
-    data[0] = pos;
-    data[1] = tty_test_process.addrspace->page_table;
-    ret_vnode->data = (void*)data;  
-    //TODO call getdirent
-    //set proper MR return
+    if (vnode->ops->vop_getdirent == NULL) {
+        err = 1;
+    } else {
+        err = vnode->ops->vop_getdirent(vnode, &uio);
+    }
+    if (err) {
+        send_err(reply_cap, -1);
+        return;
+    }
+    printf("Sending size: %d\n", uio.size - uio.remaining);
 
-    ret_vnode->ops->vop_getdirent(ret_vnode,&uio);
     /* Reply */
-    seL4_SetMR(0, 0);
+    seL4_SetMR(0, uio.size - uio.remaining);
     send_reply(reply_cap); 
 }
 
@@ -273,7 +271,9 @@ void syscall_stat(seL4_CPtr reply_cap) {
     sos_vaddr = PAGE_ALIGN_4K(sos_vaddr);
     sos_vaddr |= (uaddr & PAGE_MASK_4K); 
 
+    printf("Uaddr: '%s'\n", sos_vaddr);
     err = get_safe_path(path_sos_vaddr, uaddr, sos_vaddr, MAX_PATH_LEN);
+    printf("After: '%s'\n", path_sos_vaddr);
     if (err) {
         send_err(reply_cap, ERR_ILLEGAL_USERADDR);
         return;

@@ -49,65 +49,58 @@ static const struct vnode_ops default_ops = {
     &vnode_getdirent
 };
 
-void vnode_readdir_cb(uintptr_t token, enum nfs_stat status,int num_files, char* file_names[],nfscookie_t nfscookie){
-    argument[0] = (seL4_Word)status; 
+void vnode_readdir_cb(uintptr_t token, enum nfs_stat status,
+                      int num_files, char* file_names[],
+                      nfscookie_t nfscookie) {
+    argument[0] = (seL4_Word) status; 
     argument[1] = nfscookie;
-    
-    int relative_pos = get_routine_argument(0);
-    if (relative_pos  < num_files){
-       set_routine_argument(0,0); 
-       void * addr = (void *)get_routine_argument(2);
-       seL4_Word size = get_routine_argument(1);
-       memcpy(addr,file_names[relative_pos],size);
-       seL4_Word size2 = get_routine_argument(2);
-       if (size2 != 0){
-          addr = get_routine_argument(2);
-	  memcpy(addr,file_names+size,size2);
-       } 
-    }  else{
-       set_routine_argument(0,relative_pos-num_files);
+    argument[2] = 0; /* Found */
+
+    struct uio *uio = get_routine_argument(0);
+    int cumulative_pos = get_routine_argument(1);
+    int curr_pos = 0;
+    while (num_files > 0) {
+        if (cumulative_pos == uio->offset) {
+            break;
+        }
+        curr_pos++;
+        cumulative_pos++;
+        num_files--;
     }
-    set_resume(token);	
+    if (cumulative_pos == uio->offset) {
+        /* Found the position - copy path into buffer */
+        strncpy(uio->addr, file_names[curr_pos], uio->size);
+        int len = strnlen(file_names[curr_pos], uio->size);
+        uio->remaining = uio->size - len;
+        argument[2] = 1; /* Found */
+    }
+    argument[3] = cumulative_pos;
+
+    set_resume(token);
 }
 
 
-static int vnode_getdirent(struct vnode* vnode,struct uio *uio){
-    seL4_Word numfile = 0;
+static int vnode_getdirent(struct vnode* vnode, struct uio *uio) {
+    int cumulative_pos = 0;
     seL4_Word cookies = 0;
-    seL4_Word pos = ((seL4_Word*)vnode -> data)[0];
-    set_routine_argument(0,pos);
-    set_routine_argument(1,uio->size); 
-    set_routine_argument(2,uio->addr);
-    seL4_Word end_addr = uio->size + uio->addr;
-    seL4_Word end_page = PAGE_ALIGN_4K(end_addr);
-    
-    
-    if (PAGE_ALIGN_4K(end_addr) !=end_page){
-        seL4_CPtr app_cap;
-        seL4_CPtr sos_vaddr;
-        int err = sos_map_page(end_page,
-                tty_test_process.vroot,
-                tty_test_process.addrspace,
-                &sos_vaddr,
-                &app_cap);
-        if (err && err != ERR_ALREADY_MAPPED) {
-            return 1;
-        }
-        sos_vaddr = PAGE_ALIGN_4K(sos_vaddr);
-	    
-       set_routine_argument(3,sos_vaddr);
-       set_routine_argument(4, end_addr-end_page); 
-    }  else{
-       set_routine_argument(3,0);
-       set_routine_argument(4,0);
+    int found = 0;
+
+    do {
+        set_routine_argument(0, uio);
+        set_routine_argument(1, cumulative_pos);
+        nfs_readdir(&mnt_point, cookies, vnode_readdir_cb, curr_coroutine_id);  
+        yield();
+        int err = argument[0];
+        cookies = argument[1];
+        found = argument[2];
+        cumulative_pos = argument[3];
+    } while (!found && cookies != 0);
+
+    //TODO return different for end
+    if (!found) {
+        return 1;
     }
 
-    while (pos > 0){
-        nfs_readdir(vnode->path, cookies,vnode_readdir_cb,curr_coroutine_id);  
-        yield();
-	cookies = argument[1];
-        pos = get_routine_argument(0);
-    }
     return 0;
 }
 
