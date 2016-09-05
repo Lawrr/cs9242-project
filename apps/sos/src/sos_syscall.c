@@ -206,7 +206,10 @@ void syscall_getdirent(seL4_CPtr reply_cap) {
     size_t nbyte = seL4_GetMR(3);
 
     if (validate_uaddr(reply_cap, uaddr, 0)) return;
-    //TODO check pos and nbyte valid values
+    if (pos < 0) {
+        send_err(reply_cap, -1);
+        return;
+    }
 
     /* Make sure path address is mapped */
     seL4_CPtr app_cap;

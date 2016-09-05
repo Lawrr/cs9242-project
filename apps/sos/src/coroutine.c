@@ -70,7 +70,6 @@ int start_coroutine(void (*task)(seL4_Word badge, int num_args),
     sptr += 4096;
     /* conditional_panic(err, "Could not allocate frame\n"); */
 
-    //TODO memcpy instead?
     /* Add stuff to the new stack */
     void *sptr_new = sptr;
     sptr -= sizeof(void *);
@@ -82,7 +81,6 @@ int start_coroutine(void (*task)(seL4_Word badge, int num_args),
 
     /* Change to new sp */
     asm volatile("mov sp, %[newsp]" : : [newsp] "r" (sptr) : "sp");
-    // TODO change stack limit register?
 
     /* Run task */
     task(((seL4_Word *) data_new)[0], ((seL4_Word *) data_new)[1]);
