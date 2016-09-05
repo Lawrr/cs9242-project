@@ -10,7 +10,7 @@ extern jmp_buf syscall_loop_entry;
 int curr_coroutine_id = 0;
 
 static int num_tasks = 0;
-static int next_yield_id = 0;
+static int next_yield_id = -1;
 
 static jmp_buf coroutines[NUM_COROUTINES];
 static int free_list[NUM_COROUTINES];
@@ -27,6 +27,7 @@ yield() {
     int id = setjmp(coroutines[curr_coroutine_id]);
 
     if (id == 0) {
+        printf("Routine %d pause \n",curr_coroutine_id);
         longjmp(syscall_loop_entry, 1);
     } else {
         return;//when jump bakc use return value as err code
@@ -36,23 +37,18 @@ yield() {
 }
 
 void resume() {
-    if (num_tasks == 0) return;
-
-    uint32_t continue_id = next_yield_id;
-
-    /* Find next to yield */
-    do {
-        next_yield_id = (next_yield_id + 1) % NUM_COROUTINES;
-    } while (free_list[next_yield_id] == 1);
-
-    longjmp(coroutines[continue_id], 1);
-
-    /* Never reached */
+   if (next_yield_id != -1){
+      int tar = next_yield_id;
+      curr_coroutine_id = tar; 
+      next_yield_id = -1;
+      longjmp(coroutines[tar], 1);
+   }
+   return;
 }
 
-void resume_couroutine(int id){
-    curr_coroutine_id = id;
-    longjmp(coroutines[curr_coroutine_id],1);
+
+void set_resume(int id){
+    next_yield_id = id; 
 }
 
 int start_coroutine(void (*task)(seL4_Word badge, int num_args),
@@ -68,7 +64,9 @@ int start_coroutine(void (*task)(seL4_Word badge, int num_args),
     }
     free_list[task_id] = 0;
     curr_coroutine_id = task_id;
-
+    
+    printf("=======================================================\n"); 
+    printf("Routine %d starts\n",task_id);
     /* Allocate new stack frame */
     char *sptr;
     int err = frame_alloc((seL4_Word *) &sptr);
@@ -98,7 +96,7 @@ int start_coroutine(void (*task)(seL4_Word badge, int num_args),
 
     num_tasks--;
 
-    printf("Task done\n");
+    printf("Routine %d finishes\n",task_id);
     longjmp(syscall_loop_entry, 1);
 
     /* Never reached */
@@ -109,7 +107,7 @@ seL4_Word get_routine_argument(int id,int i){
 }
 
 void set_routine_argument(int i,seL4_Word arg){
-    routine_arguments[curr_coroutine_id][i] = arg;
+   routine_arguments[curr_coroutine_id][i] = arg;
 }
 
 

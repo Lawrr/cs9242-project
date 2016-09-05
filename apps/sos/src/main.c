@@ -65,6 +65,22 @@
 #define EPIT_REGISTERS 5
 
 #define NFS_TIMEOUT_INTERVAL 100000 /* Microseconds */
+//sys name
+char *sys_name[9]={
+    "Sos write",
+    "Sos read",
+    "Sos open",
+    "Sos close",
+    "Sos brk",
+    "Sos unsleep",
+    "Sos timestampe",
+    "Sos getdirent",
+    "Sos stat"
+
+};
+
+
+
 
 /* The linker will link this symbol to the start address  *
  * of an archive of attached applications.                */
@@ -109,8 +125,8 @@ void handle_syscall(seL4_Word badge, int num_args) {
     /* Save the caller */
     reply_cap = cspace_save_reply_cap(cur_cspace);
     assert(reply_cap != CSPACE_NULL);
-
-    printf("Syscall id: %d - received from user application\n", syscall_number);
+    
+    printf("Syscall :%s  -- received from user application\n", sys_name[syscall_number]);
 
     /* Process system call */
     switch (syscall_number) {
@@ -174,8 +190,9 @@ void syscall_loop(seL4_CPtr ep) {
 	if (badge & IRQ_EP_BADGE) {
             /* Interrupt */
             if (badge & IRQ_BADGE_NETWORK) {
-                printf("Network\n");
                 network_irq();
+                resume();
+                //printf("Network\n");
             }
             if (badge & IRQ_BADGE_TIMER) {
                 //printf("Timer\n");
@@ -218,7 +235,6 @@ void syscall_loop(seL4_CPtr ep) {
             seL4_Send(reply_cap, reply);
 
         } else if (label == seL4_NoFault) {
-            printf("Syscall\n");
             /* System call */
             seL4_Word data[2];
             data[0] = badge;

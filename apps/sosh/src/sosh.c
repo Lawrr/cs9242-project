@@ -321,7 +321,8 @@ int main(void) {
     int fileid = sos_sys_open("firstfile",O_RDWR);
     printf("\nfileid=%d\n",fileid);
     sos_sys_read(fileid,buf,11);
-    printf("Hello world = %s",buf);
+    printf("Hello world = %s\n",buf);
+    sos_sys_write(fileid,"You are stupid",14);
     int console_fd = open("console", O_RDWR);
     test_buffers(console_fd);
     sos_sys_close(console_fd);

@@ -42,7 +42,7 @@ static void console_serial_handler(struct serial *serial, char c) {
 
     /* Check end */
     if (console_uio.remaining == 0 || c == '\n') {
-        resume(my_coroutine_id);
+        set_resume(my_coroutine_id);
     }
 }
 

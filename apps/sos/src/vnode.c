@@ -73,7 +73,6 @@ int dev_add(char *name, struct vnode_ops *ops) {
 }
 
 static int is_dev(char *dev) {
-    printf("dev\n");
     for (int i = 0; i < MAX_DEV_NUM; i++) {
         if (dev_list[i].name == NULL){
 	    return -1;
@@ -98,7 +97,6 @@ static struct vnode *vnode_new(char *path) {
     strcpy(vnode->path, path);
     vnode->read_count = 0;
     vnode->write_count = 0;
-    printf("finish copying path\n");
     int dev_id = is_dev(path);
     if (dev_id != -1) {
         /* Handle device */
@@ -116,7 +114,6 @@ static struct vnode *vnode_new(char *path) {
 int vfs_open(char *path, int mode, struct vnode **ret_vnode) {
     struct vnode *vnode;
     /* Check if vnode for path already exists */
-    printf("accessing hashtable\n%s\n",path);
     struct hashtable_entry *entry = hashtable_get(vnode_table, path);
     if (entry == NULL) {
         vnode = vnode_new(path);
@@ -170,7 +167,7 @@ void vnode_open_cb(uintptr_t token, nfs_stat_t status, fhandle_t *fh, fattr_t *f
     memcpy(argument[1],fh,sizeof(fhandle_t));
     memcpy(argument[2],fattr,sizeof(fattr_t));
     status == 0 ? -1:status;
-    resume(token,status);    
+    set_resume(token);    
 }
 
 
@@ -180,10 +177,9 @@ void vnode_create_cb(uintptr_t token, nfs_stat_t status,fhandle_t *fh, fattr_t *
     argument[0] = (seL4_Word)status;
     argument[1] = (seL4_Word)malloc(sizeof(fhandle_t));
     argument[2] = (seL4_Word)malloc(sizeof(fattr_t));
-    printf("In create callback\n");
     memcpy(argument[1],fh,sizeof(fhandle_t));
     memcpy(argument[2],fattr,sizeof(fattr_t));
-    resume(token,status);  
+    set_resume(token);  
 }
 
 
@@ -230,24 +226,24 @@ static int vnode_open(struct vnode *vnode, fmode_t mode) {
 }
 
 static int vnode_close(struct vnode *vnode) {
-    /*Seems nothing to do*/ 
-	
+    /*Seems nothing to do*/  
+    if (vnode -> fh != NULL) free(vnode -> fh);
+    if (vnode -> fattr != NULL) free(vnode ->fattr);
+    if (vnode -> path != NULL) free(vnode->path);
+    if (vnode -> data != NULL) free(vnode->data);    
     return 0;
 }
 
 
 void vnode_read_cb(uintptr_t token, nfs_stat_t status,fattr_t *fattr, int count, void* data){
-    
-    conditional_panic(-1,"I am here");
     seL4_Word sos_vaddr = get_routine_argument(token,0); 
-    printf("in read call back\n");
     if  (status == NFS_OK){
         memcpy((void*)sos_vaddr, data,count);
     }
 
     argument[0] = (seL4_Word)status;
     argument[1] = (seL4_Word)count;
-    resume(token);
+    set_resume(token);
 }
 
 
@@ -284,11 +280,8 @@ static int vnode_read(struct vnode *vnode, struct uio *uio) {
         sos_vaddr |= (uaddr & PAGE_MASK_4K);
 
         set_routine_argument(0,sos_vaddr);
-        printf("offset = %d\n",uio->offset);
-	printf("offset = %d\n",size);
 	err = nfs_read(vnode->fh, uio->offset, size,(nfs_read_cb_t)(vnode_read_cb),curr_coroutine_id); 
         conditional_panic(err,"faild read at send phrase");	
-        printf("reading\n");
 	yield();
         conditional_panic(argument[0],"fail read in end phrase");
 	bytes_read += (seL4_Word)argument[1];
@@ -300,11 +293,10 @@ static int vnode_read(struct vnode *vnode, struct uio *uio) {
     return 0;
 }
 void vnode_write_cb(uintptr_t token, enum nfs_stat status,fattr_t *fattr, int count){
-     printf("in write call back");
      seL4_Word sos_vaddr = get_routine_argument(token,0); 
      argument[0] = (seL4_Word)status;
      argument[1] = (seL4_Word)count;
-     resume(token);
+     set_resume(token);
 }
 
 static int vnode_write(struct vnode *vnode, struct uio *uio) {

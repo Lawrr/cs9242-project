@@ -38,6 +38,12 @@ static int legal_uaddr(seL4_Word base, uint32_t size) {
     return 0;
 }
 
+void send_reply(seL4_CPtr reply_cap){
+    seL4_MessageInfo_t reply = seL4_MessageInfo_new(0, 0, 0, 1);
+    seL4_Send(reply_cap, reply);
+    cspace_free_slot(cur_cspace, reply_cap);
+}
+
 static void send_err(seL4_CPtr reply_cap, int err) {
     seL4_MessageInfo_t reply = seL4_MessageInfo_new(0, 0, 0, 1);
     seL4_SetMR(0, err); 
@@ -145,7 +151,6 @@ static int get_safe_path(char *dst, seL4_Word uaddr,
 }
 
 void syscall_brk(seL4_CPtr reply_cap) {
-    seL4_MessageInfo_t reply = seL4_MessageInfo_new(0, 0, 0, 1);
     uintptr_t newbrk = seL4_GetMR(1);
 
     /* Find heap region */
@@ -158,9 +163,7 @@ void syscall_brk(seL4_CPtr reply_cap) {
     /* Check that newbrk is within heap (and that we actually have a heap region) */
     if (curr_region == NULL || newbrk >= PROCESS_HEAP_END || newbrk < PROCESS_HEAP_START) {
         /* Set error */
-        seL4_SetMR(0, 1);
-        seL4_Send((seL4_CPtr) reply_cap, reply);
-        cspace_free_slot(cur_cspace, reply_cap);
+        send_err(reply_cap,1);
     }
 
     /* Set new heap region */
@@ -168,14 +171,13 @@ void syscall_brk(seL4_CPtr reply_cap) {
 
     /* Reply */
     seL4_SetMR(0, 0);
-    seL4_Send(reply_cap, reply);
+    send_reply(reply_cap);
 }
 
 static void uwakeup(uint32_t id, void *reply_cap) {
     /* Wake up and reply back to application */
-    seL4_MessageInfo_t reply = seL4_MessageInfo_new(0, 0, 0, 0);
-    seL4_Send((seL4_CPtr) reply_cap, reply);
-    cspace_free_slot(cur_cspace, reply_cap);
+    seL4_SetMR(0,0);
+    send_reply(reply_cap);
 }
 
 void syscall_usleep(seL4_CPtr reply_cap) {
@@ -183,9 +185,8 @@ void syscall_usleep(seL4_CPtr reply_cap) {
 
     /* Make sure sec is positive else reply */
     if (msec < 0) {
-        seL4_MessageInfo_t reply = seL4_MessageInfo_new(0, 0, 0, 0);
-        seL4_Send(reply_cap, reply);
-        cspace_free_slot(cur_cspace, reply_cap);
+	seL4_SetMR(0,-1);
+        send_reply(reply_cap);	    
     } else {
         register_timer(msec * 1000, &uwakeup, (void *) reply_cap);
     }
@@ -193,11 +194,8 @@ void syscall_usleep(seL4_CPtr reply_cap) {
 
 void syscall_time_stamp(seL4_CPtr reply_cap) {
     timestamp_t timestamp = time_stamp();
-
-    seL4_MessageInfo_t reply = seL4_MessageInfo_new(0, 0, 0, 1);
     seL4_SetMR(0, timestamp); 
-    seL4_Send(reply_cap, reply);
-    cspace_free_slot(cur_cspace, reply_cap);
+    send_reply(reply_cap);
 }
 
 void syscall_getdirent(seL4_CPtr reply_cap) {
@@ -231,10 +229,8 @@ void syscall_getdirent(seL4_CPtr reply_cap) {
     //set proper MR return
 
     /* Reply */
-    seL4_MessageInfo_t reply = seL4_MessageInfo_new(0, 0, 0, 1);
     seL4_SetMR(0, 0);
-    seL4_Send(reply_cap, reply);
-    cspace_free_slot(cur_cspace, reply_cap);
+    send_reply(reply_cap); 
 }
 
 void syscall_stat(seL4_CPtr reply_cap) {
@@ -268,10 +264,8 @@ void syscall_stat(seL4_CPtr reply_cap) {
     //TODO call stat
 
     /* Reply */
-    seL4_MessageInfo_t reply = seL4_MessageInfo_new(0, 0, 0, 1);
     seL4_SetMR(0, 0);
-    seL4_Send(reply_cap, reply);
-    cspace_free_slot(cur_cspace, reply_cap);
+    send_reply(reply_cap);
 }
 
 void syscall_write(seL4_CPtr reply_cap) {
@@ -299,10 +293,8 @@ void syscall_write(seL4_CPtr reply_cap) {
     }
 
     /* Reply */
-    seL4_MessageInfo_t reply = seL4_MessageInfo_new(0, 0, 0, 1);
     seL4_SetMR(0, uio.size - uio.remaining);
-    seL4_Send(reply_cap, reply);
-    cspace_free_slot(cur_cspace, reply_cap);
+    send_reply(reply_cap);
 }
 
 void syscall_read(seL4_CPtr reply_cap) {
@@ -335,10 +327,11 @@ void syscall_read(seL4_CPtr reply_cap) {
     of_table[ofd].vnode->ops->vop_read(of_table[ofd].vnode, &uio);
     
     seL4_SetMR(0,uio.size-uio.remaining);
-    seL4_MessageInfo_t reply = seL4_MessageInfo_new(0, 0, 0, 1);
-    seL4_Send(reply_cap, reply);
-    cspace_free_slot(cur_cspace, reply_cap);
+    send_reply(reply_cap); 
 }
+
+
+
 
 void syscall_open(seL4_CPtr reply_cap) {
     seL4_Word fdt_status = tty_test_process.addrspace->fdt_status;			  
@@ -383,10 +376,8 @@ void syscall_open(seL4_CPtr reply_cap) {
 
     struct vnode *ret_vnode;
     err = vfs_open((char *) path_sos_vaddr, sos_access_mode, &ret_vnode);
-    printf("after open--------------\n");
     
     if (err) {
-	printf("bad\n");
         seL4_SetMR(0, -1);
     } else {
         of_table[curr_free_ofd].vnode = ret_vnode;
@@ -413,11 +404,8 @@ void syscall_open(seL4_CPtr reply_cap) {
         tty_test_process.addrspace->fdt_status = (fd_count << TWO_BYTE_BITS) |
                                                  free_fd;
     }
-    printf("reply-------------%d\n",seL4_GetMR(0));
     /* Reply */
-    seL4_MessageInfo_t reply = seL4_MessageInfo_new(0, 0, 0, 1);
-    seL4_Send(reply_cap, reply);
-    cspace_free_slot(cur_cspace, reply_cap);
+    send_reply(reply_cap);
 }
 
 void syscall_close(seL4_CPtr reply_cap) {
@@ -437,8 +425,6 @@ void syscall_close(seL4_CPtr reply_cap) {
     }
 
     /* Reply */
-    seL4_MessageInfo_t reply = seL4_MessageInfo_new(0, 0, 0, 1);
     seL4_SetMR(0, 0);
-    seL4_Send(reply_cap, reply);       	
-    cspace_free_slot(cur_cspace, reply_cap);
+    send_reply(reply_cap);
 }
