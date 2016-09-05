@@ -9,9 +9,10 @@
 #include <mapping.h>
 #include <utils/page.h>
 #include <nfs/nfs.h>
+#include <clock/clock.h>
+
 #define VNODE_TABLE_SLOTS 64
 #define NUM_ARG 4
-#include <clock/clock.h>
 
 extern struct PCB tty_test_process;
 extern int curr_coroutine_id;
@@ -95,11 +96,20 @@ static struct vnode *vnode_new(char *path) {
         return NULL;
     }
 
+    int dev_id = is_dev(path);
+
+    /* Initialise variables */
     vnode->path = malloc(strlen(path + 1));
+    if (vnode->path == NULL) {
+        return NULL;
+    }
     strcpy(vnode->path, path);
     vnode->read_count = 0;
     vnode->write_count = 0;
-    int dev_id = is_dev(path);
+    vnode->data = NULL;
+    vnode->fh = NULL;
+    vnode->fattr = NULL;
+
     if (dev_id != -1) {
         /* Handle device */
 
@@ -194,7 +204,8 @@ void vnode_create_cb(uintptr_t token, nfs_stat_t status,fhandle_t *fh, fattr_t *
 }
 
 static int vnode_open(struct vnode *vnode, fmode_t mode) {
-    if (vnode->fh != NULL) return 0;	
+    if (vnode->fh != NULL) return 0;
+
     nfs_lookup (&mnt_point, vnode->path,(nfs_lookup_cb_t)vnode_open_cb,curr_coroutine_id);
     yield();
     int err = (int)argument[0];

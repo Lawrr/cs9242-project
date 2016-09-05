@@ -267,11 +267,11 @@ void syscall_stat(seL4_CPtr reply_cap) {
     }
     
     ret_vnode->ops->vop_stat(ret_vnode,(sos_stat_t*) ustat_buf);    
-    ret_vnode->ops->vop_close(ret_vnode);
+
+    vfs_close(ret_vnode, FM_READ);
 
     //TODO make sure ustat_buf is mapped
     //     (need to know sizeof(sos_stat_t))
-    //TODO call stat
 
     /* Reply */
     seL4_SetMR(0, 0);
