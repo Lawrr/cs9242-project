@@ -123,18 +123,34 @@ static struct vnode *vnode_new(char *path) {
     return vnode;
 }
 
-int vfs_open(char *path, int mode, struct vnode **ret_vnode) {
+int vfs_get(char *path, struct vnode **ret_vnode) {
     struct vnode *vnode;
     /* Check if vnode for path already exists */
     struct hashtable_entry *entry = hashtable_get(vnode_table, path);
     if (entry == NULL) {
         vnode = vnode_new(path);
+        if (vnode == NULL) {
+            return -1;
+        }
         hashtable_insert(vnode_table, path, vnode);
     } else {
         vnode = (struct vnode *) entry->value;
     }
+
+    *ret_vnode = vnode;
+    return 0;
+}
+
+int vfs_open(char *path, int mode, struct vnode **ret_vnode) {
+    /* Get vnode */
+    struct vnode *vnode;
+    int err = vfs_get(path, &vnode);
+    if (err) {
+        return err;
+    }
+
     /* Open the vnode */
-    int err = vnode->ops->vop_open(vnode, mode);
+    err = vnode->ops->vop_open(vnode, mode);
     /* Check for errors, include single read */
     if (err) {
         return err;
@@ -165,6 +181,8 @@ int vfs_close(struct vnode *vnode, int mode) {
 
     if (vnode->read_count + vnode->write_count == 0) {
         hashtable_remove(vnode_table, vnode->path);
+        if (vnode->fh != NULL) free(vnode->fh);
+        if (vnode->fattr != NULL) free(vnode->fattr);
         free(vnode->path);
         free(vnode);
     }
@@ -172,7 +190,10 @@ int vfs_close(struct vnode *vnode, int mode) {
     return 0;
 }
 
-void vnode_open_cb(uintptr_t token, nfs_stat_t status, fhandle_t *fh, fattr_t *fattr){
+static void vnode_open_cb(uintptr_t token,
+                          nfs_stat_t status,
+                          fhandle_t *fh,
+                          fattr_t *fattr) {
     argument[0] = (seL4_Word)status;
     argument[1] = (seL4_Word)malloc(sizeof(fhandle_t));
     argument[2] = (seL4_Word)malloc(sizeof(fattr_t));
@@ -182,18 +203,39 @@ void vnode_open_cb(uintptr_t token, nfs_stat_t status, fhandle_t *fh, fattr_t *f
     set_resume(token);    
 }
 
-
-int vnode_stat(struct vnode *vnode, sos_stat_t* a){
-
-    a-> st_type = vnode->fattr->type,
-        a->st_fmode = vnode->fattr->mode,
-        a->st_size=  vnode->fattr-> size,
-        ((seL4_Word*)a)[3]=vnode->fattr->ctime.seconds * 1000 + vnode->fattr->ctime.seconds/1000,
-        ((seL4_Word*)a)[4]=vnode->fattr->atime.seconds * 1000 + vnode->fattr->atime.seconds/1000;
-    return vnode->fattr;
+static void vnode_stat_cb(uintptr_t token, nfs_stat_t status, fhandle_t *fh, fattr_t *fattr){
+    argument[0] = (seL4_Word)status;
+    argument[1] = (seL4_Word)malloc(sizeof(fattr_t));
+    memcpy(argument[1],fattr,sizeof(fattr_t));
+    status == 0 ? -1:status;
+    set_resume(token);    
 }
 
-void vnode_create_cb(uintptr_t token, nfs_stat_t status,fhandle_t *fh, fattr_t *fattr){
+int vnode_stat(struct vnode *vnode, sos_stat_t* a){
+    nfs_lookup (&mnt_point, vnode->path, (nfs_lookup_cb_t) vnode_stat_cb,curr_coroutine_id);
+    yield();
+    int err = (int) argument[0];
+    int ret = 0;
+    fattr_t *fattr = (fattr_t*) argument[1];
+
+    if (err == NFS_OK) {
+        a->st_type = fattr->type,
+        a->st_fmode = fattr->mode,
+        a->st_size = fattr->size,
+        ((seL4_Word*)a)[3] = fattr->ctime.seconds * 1000 +
+                             fattr->ctime.seconds / 1000,
+        ((seL4_Word*)a)[4] = fattr->atime.seconds * 1000 +
+                             fattr->atime.seconds / 1000;
+
+    } else if (err == NFSERR_NOENT) {
+        ret = -1;
+    }
+
+    if (fattr != NULL) free(fattr);
+    return ret;
+}
+
+static void vnode_create_cb(uintptr_t token, nfs_stat_t status,fhandle_t *fh, fattr_t *fattr){
     argument[0] = (seL4_Word)status;
     argument[1] = (seL4_Word)malloc(sizeof(fhandle_t));
     argument[2] = (seL4_Word)malloc(sizeof(fattr_t));
@@ -243,13 +285,10 @@ static int vnode_open(struct vnode *vnode, fmode_t mode) {
 
 static int vnode_close(struct vnode *vnode) {
     /*Seems nothing to do*/ 
-    if (vnode -> fh != NULL) free(vnode -> fh);
-    if (vnode -> fattr != NULL) free(vnode ->fattr);
     return 0;
 }
 
-
-void vnode_read_cb(uintptr_t token, nfs_stat_t status,fattr_t *fattr, int count, void* data){
+static void vnode_read_cb(uintptr_t token, nfs_stat_t status,fattr_t *fattr, int count, void* data){
     seL4_Word sos_vaddr = get_routine_argument(token,0); 
     if  (status == NFS_OK){
         memcpy((void*)sos_vaddr, data,count);
@@ -259,8 +298,6 @@ void vnode_read_cb(uintptr_t token, nfs_stat_t status,fattr_t *fattr, int count,
     argument[1] = (seL4_Word)count;
     set_resume(token);
 }
-
-
 
 //doesn't work right now and I don't know why
 static int vnode_read(struct vnode *vnode, struct uio *uio) {
@@ -306,7 +343,7 @@ static int vnode_read(struct vnode *vnode, struct uio *uio) {
     } 
     return 0;
 }
-void vnode_write_cb(uintptr_t token, enum nfs_stat status,fattr_t *fattr, int count){
+static void vnode_write_cb(uintptr_t token, enum nfs_stat status,fattr_t *fattr, int count){
     seL4_Word sos_vaddr = get_routine_argument(token,0); 
     argument[0] = (seL4_Word)status;
     argument[1] = (seL4_Word)count;

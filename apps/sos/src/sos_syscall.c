@@ -164,6 +164,7 @@ void syscall_brk(seL4_CPtr reply_cap) {
     if (curr_region == NULL || newbrk >= PROCESS_HEAP_END || newbrk < PROCESS_HEAP_START) {
         /* Set error */
         send_err(reply_cap,1);
+        return;
     }
 
     /* Set new heap region */
@@ -187,6 +188,7 @@ void syscall_usleep(seL4_CPtr reply_cap) {
     if (msec < 0) {
         seL4_SetMR(0, -1);
         send_reply(reply_cap);	    
+        return;
     } else {
         register_timer(msec * 1000, &uwakeup, (void *) reply_cap);
     }
@@ -259,19 +261,21 @@ void syscall_stat(seL4_CPtr reply_cap) {
         return;
     }
 
-    struct vnode *ret_vnode;
-    err = vfs_open((char *) path_sos_vaddr, FM_READ, &ret_vnode);
+    //TODO make sure ustat_buf is mapped
+    //     (need to know sizeof(sos_stat_t))
+    
+    struct vnode *vnode;
+    err = vfs_get(path_sos_vaddr, &vnode);
     if (err) {
         send_err(reply_cap, -1);
         return;
     }
-    
-    ret_vnode->ops->vop_stat(ret_vnode,(sos_stat_t*) ustat_buf);    
 
-    vfs_close(ret_vnode, FM_READ);
-
-    //TODO make sure ustat_buf is mapped
-    //     (need to know sizeof(sos_stat_t))
+    err = vnode->ops->vop_stat(vnode, (sos_stat_t*) ustat_buf);    
+    if (err) {
+        send_err(reply_cap, -1);
+        return;
+    }
 
     /* Reply */
     seL4_SetMR(0, 0);
@@ -303,9 +307,8 @@ void syscall_write(seL4_CPtr reply_cap) {
     entry->offset = uio.offset;
     if (err) {
         send_err(reply_cap, ERR_INTERNAL_ERROR);
+        return;
     }
-
-
 
     /* Reply */
     seL4_SetMR(0, uio.size - uio.remaining);
@@ -438,12 +441,9 @@ void syscall_close(seL4_CPtr reply_cap) {
 
     if (of_table[ofd].ref_count == 0) {
         vfs_close(of_table[ofd].vnode, of_table[ofd].file_info.st_fmode);
-        printf("syscall_close1.1\n");  
         of_table[ofd].file_info.st_fmode = 0;
-        printf("syscall_close1.2\n");
         of_table[ofd].vnode = NULL;
     }
-    printf("syscall_close1.3\n");
     /* Reply */
     seL4_SetMR(0, 0);
     send_reply(reply_cap);

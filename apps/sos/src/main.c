@@ -122,12 +122,13 @@ void handle_syscall(seL4_Word badge, int num_args) {
 
     syscall_number = seL4_GetMR(0);
 
+    printf("Syscall :%s  -- received from user application\n",
+           sys_name[syscall_number]);
+
     /* Save the caller */
     reply_cap = cspace_save_reply_cap(cur_cspace);
     assert(reply_cap != CSPACE_NULL);
     
-    printf("Syscall :%s  -- received from user application\n", sys_name[syscall_number]);
-
     /* Process system call */
     switch (syscall_number) {
         case SOS_WRITE_SYSCALL:

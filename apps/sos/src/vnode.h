@@ -45,6 +45,8 @@ struct dev {
 
 int vfs_init();
 
+int vfs_get(char *path, struct vnode **ret_vnode);
+
 int vfs_open(char *path, int mode, struct vnode **ret_vnode);
 
 int vfs_close(struct vnode *vnode, int mode);

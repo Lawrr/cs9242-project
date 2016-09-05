@@ -132,6 +132,7 @@ int sos_stat(const char *path, sos_stat_t *buf) {
     
     seL4_Call(SOS_IPC_EP_CAP, tag);    
     
+    printf("Stat return with %d\n", seL4_GetMR(0));
     return seL4_GetMR(0);
 }
 
