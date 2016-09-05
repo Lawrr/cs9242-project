@@ -59,28 +59,33 @@ void vnode_readdir_cb(uintptr_t token, enum nfs_stat status,
     struct uio *uio = get_routine_argument(0);
     int cumulative_pos = get_routine_argument(1);
     int curr_pos = 0;
+    int first_null = 1;
     while (num_files > 0) {
         if (cumulative_pos == uio->offset) {
+            /* Found the position - copy path into buffer if not null */
+            if (file_names[curr_pos] != NULL) {
+                strncpy(uio->addr, file_names[curr_pos], uio->size);
+                int len = strnlen(file_names[curr_pos], uio->size);
+                uio->remaining = uio->size - len;
+                argument[2] = 1; /* Found */
+            } else {
+                *uio->addr = '\0';
+                uio->remaining = uio->size;
+            }
+            argument[2] = 1; /* Found */
             break;
+        } 
+        if (file_names[curr_pos] == NULL) {
+            if (first_null) {
+                first_null = 0;
+            } else {
+                argument[2] = -1;
+                break;
+            }
         }
         curr_pos++;
         cumulative_pos++;
         num_files--;
-    }
-    if (cumulative_pos == uio->offset) {
-        /* Found the position - copy path into buffer if not null */
-        if (file_names[curr_pos] != NULL) {
-            strncpy(uio->addr, file_names[curr_pos], uio->size);
-            int len = strnlen(file_names[curr_pos], uio->size);
-            uio->remaining = uio->size - len;
-        } else {
-            *uio->addr = '\0';
-            uio->remaining = uio->size;
-        }
-        argument[2] = 1; /* Found */
-    } else if (file_names[curr_pos] == NULL) {
-        /* Went over the end */
-        argument[2] = -1;
     }
     argument[3] = cumulative_pos;
 
