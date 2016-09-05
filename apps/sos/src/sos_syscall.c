@@ -259,6 +259,16 @@ void syscall_stat(seL4_CPtr reply_cap) {
         return;
     }
 
+    struct vnode *ret_vnode;
+    err = vfs_open((char *) path_sos_vaddr, FM_READ, &ret_vnode);
+    if (err) {
+        send_err(reply_cap, -1);
+        return;
+    }
+    
+    ret_vnode->ops->vop_stat(ret_vnode,(sos_stat_t*) ustat_buf);    
+    ret_vnode->ops->vop_close(ret_vnode);
+
     //TODO make sure ustat_buf is mapped
     //     (need to know sizeof(sos_stat_t))
     //TODO call stat
