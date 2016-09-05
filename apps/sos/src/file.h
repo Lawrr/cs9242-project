@@ -13,6 +13,7 @@ struct oft_entry {
     sos_stat_t file_info;
     struct vnode *vnode;
     int ref_count;
+    int offset;
 };
 
 #endif

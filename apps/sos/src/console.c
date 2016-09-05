@@ -18,30 +18,31 @@ extern int curr_coroutine_id;
 int my_coroutine_id;
 static struct serial *serial_handle;
 static struct vnode *console_vnode;
-static struct uio console_uio;
+static struct uio *console_uio;
 
 static void console_serial_handler(struct serial *serial, char c) {
     /* Return if we do not currently need to read */
-    if (console_uio.addr == NULL || console_uio.remaining == 0) return;
+    if (console_uio->addr == NULL || console_uio->remaining == 0) return;
 
     seL4_Word *vnode_data = (seL4_Word *) (console_vnode->data);
 
     /* Take uaddr and turn it into sos_vaddr */
-    seL4_Word index1 = ((seL4_Word) console_uio.addr >> 22);
-    seL4_Word index2 = ((seL4_Word) console_uio.addr << 10) >> 22;
+    seL4_Word index1 = ((seL4_Word) console_uio->addr >> 22);
+    seL4_Word index2 = ((seL4_Word) console_uio->addr << 10) >> 22;
     struct page_table_entry **page_table = (struct page_table **) vnode_data[1];
 
     char *sos_vaddr = PAGE_ALIGN_4K(page_table[index1][index2].sos_vaddr);
     /* Add offset */
-    sos_vaddr = ((seL4_Word) sos_vaddr) | ((seL4_Word) console_uio.addr & PAGE_MASK_4K);
+    sos_vaddr = ((seL4_Word) sos_vaddr) | ((seL4_Word) console_uio->addr & PAGE_MASK_4K);
 
     /* Write into buffer */
     *sos_vaddr = c;
-    console_uio.addr++;
-    console_uio.remaining--;
+    console_uio->addr++;
+    console_uio->remaining--;
+    console_uio->offset++;
 
     /* Check end */
-    if (console_uio.remaining == 0 || c == '\n') {
+    if (console_uio->remaining == 0 || c == '\n') {
         set_resume(my_coroutine_id);
     }
 }
@@ -119,7 +120,7 @@ int console_read(struct vnode *vnode, struct uio *uio) {
     }
 
     console_vnode = vnode;
-    console_uio = *uio;
+    console_uio = uio;
     yield();
     return 0;
 }

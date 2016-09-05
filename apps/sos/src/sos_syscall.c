@@ -24,7 +24,7 @@ static int legal_uaddr(seL4_Word base, uint32_t size) {
     struct region *curr = tty_test_process.addrspace->regions;
     while (curr != NULL) {
         if (base >= curr->baseaddr &&
-            base + size < curr->baseaddr + curr->size) {
+                base + size < curr->baseaddr + curr->size) {
             break;
         }
         curr = curr->next;
@@ -108,7 +108,7 @@ static int validate_max_ofd(seL4_CPtr reply_cap, int ofd_count) {
 }
 
 static int get_safe_path(char *dst, seL4_Word uaddr,
-                         seL4_Word sos_vaddr, uint32_t max_len) {
+        seL4_Word sos_vaddr, uint32_t max_len) {
     /* Get safe path */
     seL4_Word uaddr_next_page = PAGE_ALIGN_4K(uaddr) + 0x1000;
     seL4_Word safe_len = uaddr_next_page - uaddr;
@@ -119,10 +119,10 @@ static int get_safe_path(char *dst, seL4_Word uaddr,
             seL4_CPtr app_cap_next;
             seL4_Word sos_vaddr_next;
             int err = sos_map_page(uaddr_next_page,
-                                   tty_test_process.vroot,
-                                   tty_test_process.addrspace,
-                                   &sos_vaddr_next,
-                                   &app_cap_next);
+                    tty_test_process.vroot,
+                    tty_test_process.addrspace,
+                    &sos_vaddr_next,
+                    &app_cap_next);
 
             sos_vaddr_next = PAGE_ALIGN_4K(sos_vaddr_next);
             sos_vaddr_next |= (uaddr_next_page & PAGE_MASK_4K);
@@ -156,7 +156,7 @@ void syscall_brk(seL4_CPtr reply_cap) {
     /* Find heap region */
     struct region *curr_region = tty_test_process.addrspace->regions;
     while (curr_region != NULL &&
-           curr_region->baseaddr != PROCESS_HEAP_START) {
+            curr_region->baseaddr != PROCESS_HEAP_START) {
         curr_region = curr_region->next;
     }
 
@@ -176,7 +176,7 @@ void syscall_brk(seL4_CPtr reply_cap) {
 
 static void uwakeup(uint32_t id, void *reply_cap) {
     /* Wake up and reply back to application */
-    seL4_SetMR(0,0);
+    seL4_SetMR(0, 0);
     send_reply(reply_cap);
 }
 
@@ -185,7 +185,7 @@ void syscall_usleep(seL4_CPtr reply_cap) {
 
     /* Make sure sec is positive else reply */
     if (msec < 0) {
-	seL4_SetMR(0,-1);
+        seL4_SetMR(0, -1);
         send_reply(reply_cap);	    
     } else {
         register_timer(msec * 1000, &uwakeup, (void *) reply_cap);
@@ -202,7 +202,7 @@ void syscall_getdirent(seL4_CPtr reply_cap) {
     int pos = seL4_GetMR(1);
     seL4_Word uaddr = seL4_GetMR(2);
     size_t nbyte = seL4_GetMR(3);
-    
+
     if (validate_uaddr(reply_cap, uaddr, 0)) return;
     //TODO check pos and nbyte valid values
 
@@ -236,7 +236,7 @@ void syscall_getdirent(seL4_CPtr reply_cap) {
 void syscall_stat(seL4_CPtr reply_cap) {
     seL4_Word uaddr = seL4_GetMR(1);
     seL4_Word ustat_buf = seL4_GetMR(2);
-    
+
     if (validate_uaddr(reply_cap, uaddr, 0)) return;
     if (validate_uaddr(reply_cap, ustat_buf, 0)) return;
 
@@ -280,17 +280,22 @@ void syscall_write(seL4_CPtr reply_cap) {
     if (validate_ofd(reply_cap, ofd)) return;
     if (validate_ofd_mode(reply_cap, ofd, FM_WRITE)) return;
 
+    struct oft_entry *entry = &of_table[ofd];
+
     struct uio uio = {
         .addr = uaddr,
         .size = ubuf_size,
         .remaining = ubuf_size,
-        .offset = 0
+        .offset = entry->offset
     };
 
     int err = of_table[ofd].vnode->ops->vop_write(of_table[ofd].vnode, &uio);
+    entry->offset = uio.offset;
     if (err) {
         send_err(reply_cap, ERR_INTERNAL_ERROR);
     }
+
+
 
     /* Reply */
     seL4_SetMR(0, uio.size - uio.remaining);
@@ -302,18 +307,20 @@ void syscall_read(seL4_CPtr reply_cap) {
     seL4_Word uaddr = seL4_GetMR(2);
     seL4_Word ubuf_size = seL4_GetMR(3);
     int ofd = tty_test_process.addrspace->fd_table[fd].ofd;
-    
+
     if (validate_buffer_size(reply_cap, ubuf_size)) return;
     if (validate_uaddr(reply_cap, uaddr, ubuf_size)) return;
     if (validate_fd(reply_cap, fd)) return;
     if (validate_ofd(reply_cap, ofd)) return;
     if (validate_ofd_mode(reply_cap, ofd, FM_READ)) return;
 
+    struct oft_entry *entry = &of_table[ofd];
+
     struct uio uio = {
         .addr = uaddr,
         .size = ubuf_size,
         .remaining = ubuf_size,
-        .offset = 0
+        .offset = entry->offset
     };
 
     struct page_table_entry **page_table = tty_test_process.addrspace->page_table;
@@ -325,8 +332,9 @@ void syscall_read(seL4_CPtr reply_cap) {
     of_table[ofd].vnode->data = (void *) data;
 
     of_table[ofd].vnode->ops->vop_read(of_table[ofd].vnode, &uio);
-    
-    seL4_SetMR(0,uio.size-uio.remaining);
+    entry->offset = uio.offset;
+
+    seL4_SetMR(0, uio.size - uio.remaining);
     send_reply(reply_cap); 
 }
 
@@ -340,7 +348,7 @@ void syscall_open(seL4_CPtr reply_cap) {
 
     seL4_Word uaddr = seL4_GetMR(1);
     fmode_t access_mode = seL4_GetMR(2);
-    
+
     if (validate_max_fd(reply_cap, fd_count)) return;
     if (validate_max_ofd(reply_cap, ofd_count)) return;
     if (validate_uaddr(reply_cap, uaddr, 0)) return;
@@ -376,7 +384,7 @@ void syscall_open(seL4_CPtr reply_cap) {
 
     struct vnode *ret_vnode;
     err = vfs_open((char *) path_sos_vaddr, sos_access_mode, &ret_vnode);
-    
+
     if (err) {
         seL4_SetMR(0, -1);
     } else {
@@ -384,7 +392,7 @@ void syscall_open(seL4_CPtr reply_cap) {
 
         of_table[curr_free_ofd].file_info.st_fmode = sos_access_mode;
         of_table[curr_free_ofd].ref_count++;
-        
+
         tty_test_process.addrspace->fd_table[free_fd].ofd = curr_free_ofd;
 
         ofd_count++;
@@ -402,7 +410,7 @@ void syscall_open(seL4_CPtr reply_cap) {
         }
 
         tty_test_process.addrspace->fdt_status = (fd_count << TWO_BYTE_BITS) |
-                                                 free_fd;
+            free_fd;
     }
     /* Reply */
     send_reply(reply_cap);
@@ -421,9 +429,9 @@ void syscall_close(seL4_CPtr reply_cap) {
     if (of_table[ofd].ref_count == 0) {
         vfs_close(of_table[ofd].vnode, of_table[ofd].file_info.st_fmode);
         printf("syscall_close1.1\n");  
-	of_table[ofd].file_info.st_fmode = 0;
+        of_table[ofd].file_info.st_fmode = 0;
         printf("syscall_close1.2\n");
-	of_table[ofd].vnode = NULL;
+        of_table[ofd].vnode = NULL;
     }
     printf("syscall_close1.3\n");
     /* Reply */

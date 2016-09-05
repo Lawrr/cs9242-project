@@ -75,11 +75,11 @@ int dev_add(char *name, struct vnode_ops *ops) {
 static int is_dev(char *dev) {
     for (int i = 0; i < MAX_DEV_NUM; i++) {
         if (dev_list[i].name == NULL){
-	    return -1;
-	}
-	if (!strcmp(dev_list[i].name, dev)) {
+            return -1;
+        }
+        if (!strcmp(dev_list[i].name, dev)) {
             /* Found device */
-	   return i;
+            return i;
         }
     }
 
@@ -193,34 +193,32 @@ static int vnode_open(struct vnode *vnode, fmode_t mode) {
     yield();
     int err = (int)argument[0];
     if (err == NFS_OK){
-       vnode->fh = (fhandle_t*)argument[1];
-       vnode->fattr = (fattr_t*)argument[2];
+        vnode->fh = (fhandle_t*)argument[1];
+        vnode->fattr = (fattr_t*)argument[2];
     }  else if (err == NFSERR_NOENT){
-       sattr_t sattr;
-       sattr.mode = S_IROTH|S_IWOTH;
-       sattr.uid = 1000;
-       sattr.gid = 1000;
-       sattr.size = 0;
-       uint64_t timestamp = time_stamp();
-       timeval_t time;
-       time.seconds = timestamp/1000;
-       time.useconds = (timestamp - time.seconds*1000)/10000000;
-       sattr.atime = time;
-       sattr.mtime = time;
-       nfs_create( &mnt_point, vnode->path, &sattr, (nfs_create_cb_t)vnode_create_cb, curr_coroutine_id);
-       yield();
-       err = (int)argument[0];
-       
-       return 0;
-       if (err == NFS_OK){
-          vnode->fh = (fhandle_t*)argument[1];
-          vnode->fattr = (fattr_t*)argument[2];
-       }  else{
-          conditional_panic(err,"faile create");
-       }
+        sattr_t sattr;
+        sattr.mode = S_IROTH|S_IWOTH;
+        sattr.uid = 1000;
+        sattr.gid = 1000;
+        sattr.size = 0;
+        uint64_t timestamp = time_stamp();
+        timeval_t time;
+        time.seconds = timestamp/1000;
+        time.useconds = (timestamp - time.seconds*1000)/10000000;
+        sattr.atime = time;
+        sattr.mtime = time;
+        nfs_create( &mnt_point, vnode->path, &sattr, (nfs_create_cb_t)vnode_create_cb, curr_coroutine_id);
+        yield();
+        err = (int)argument[0];
+        if (err == NFS_OK){
+            vnode->fh = (fhandle_t*)argument[1];
+            vnode->fattr = (fattr_t*)argument[2];
+        }  else{
+            conditional_panic(err,"faile create");
+        }
 
     }  else{
-       conditional_panic(err,"fail look up");
+        conditional_panic(err,"fail look up");
     } 
     return 0;
 }
@@ -248,24 +246,24 @@ void vnode_read_cb(uintptr_t token, nfs_stat_t status,fattr_t *fattr, int count,
 
 //doesn't work right now and I don't know why
 static int vnode_read(struct vnode *vnode, struct uio *uio) {
-    seL4_Word uaddr = uio->addr;
+    char *uaddr = (char *) uio->addr;
     seL4_Word ubuf_size = uio->size;
-    seL4_Word end_uaddr = uaddr + ubuf_size;
+    seL4_Word end_uaddr = (seL4_Word) uaddr + ubuf_size;
     seL4_Word bytes_read = 0;
     while (ubuf_size > 0) {
-        seL4_Word uaddr_next = PAGE_ALIGN_4K(uaddr) + 0x1000;
+        seL4_Word uaddr_next = PAGE_ALIGN_4K((seL4_Word) uaddr) + 0x1000;
         seL4_Word size;
         if (end_uaddr >= uaddr_next) {
-            size = uaddr_next-uaddr;
+            size = uaddr_next - (seL4_Word) uaddr;
         } else {
             size = ubuf_size;
         }
 
-      /*   Though we can assume the buffer is mapped because it is a write operation,
-         we still use sos_map_page to find the mapping address if it is already mapped */
+        /*   Though we can assume the buffer is mapped because it is a write operation,
+             we still use sos_map_page to find the mapping address if it is already mapped */
         seL4_CPtr app_cap;
         seL4_CPtr sos_vaddr;
-        int err = sos_map_page(uaddr,
+        int err = sos_map_page((seL4_Word) uaddr,
                 tty_test_process.vroot,
                 tty_test_process.addrspace,
                 &sos_vaddr,
@@ -275,47 +273,47 @@ static int vnode_read(struct vnode *vnode, struct uio *uio) {
         }
         sos_vaddr = PAGE_ALIGN_4K(sos_vaddr);
         //Add offset
-        sos_vaddr |= (uaddr & PAGE_MASK_4K);
+        sos_vaddr |= ((seL4_Word) uaddr & PAGE_MASK_4K);
 
         set_routine_argument(0,sos_vaddr);
-	err = nfs_read(vnode->fh, uio->offset, size,(nfs_read_cb_t)(vnode_read_cb),curr_coroutine_id); 
+        err = nfs_read(vnode->fh, uio->offset, size,(nfs_read_cb_t)(vnode_read_cb),curr_coroutine_id); 
         conditional_panic(err,"faild read at send phrase");	
-	yield();
+        yield();
         conditional_panic(argument[0],"fail read in end phrase");
-	bytes_read += (seL4_Word)argument[1];
-        uio->remaining -= bytes_read;
-        ubuf_size -= size;
-        uaddr = uaddr_next;
-        uio->offset += size;
+        bytes_read += (seL4_Word)argument[1];
+        uio->remaining -= (seL4_Word) argument[1];
+        ubuf_size -= (seL4_Word) argument[1];
+        uaddr += (seL4_Word) argument[1];
+        uio->offset += (seL4_Word) argument[1];
     } 
     return 0;
 }
 void vnode_write_cb(uintptr_t token, enum nfs_stat status,fattr_t *fattr, int count){
-     seL4_Word sos_vaddr = get_routine_argument(token,0); 
-     argument[0] = (seL4_Word)status;
-     argument[1] = (seL4_Word)count;
-     set_resume(token);
+    seL4_Word sos_vaddr = get_routine_argument(token,0); 
+    argument[0] = (seL4_Word)status;
+    argument[1] = (seL4_Word)count;
+    set_resume(token);
 }
 
 static int vnode_write(struct vnode *vnode, struct uio *uio) {
-    seL4_Word uaddr = uio->addr;
+    char *uaddr = (char *) uio->addr;
     seL4_Word ubuf_size = uio->size;
-    seL4_Word end_uaddr = uaddr + ubuf_size;
+    seL4_Word end_uaddr = (seL4_Word) uaddr + ubuf_size;
     seL4_Word bytes_sent = 0;
     while (ubuf_size > 0) {
-        seL4_Word uaddr_next = PAGE_ALIGN_4K(uaddr) + 0x1000;
+        seL4_Word uaddr_next = PAGE_ALIGN_4K((seL4_Word) uaddr) + 0x1000;
         seL4_Word size;
         if (end_uaddr >= uaddr_next) {
-            size = uaddr_next-uaddr;
+            size = uaddr_next - (seL4_Word) uaddr;
         } else {
             size = ubuf_size;
         }
 
         /* Though we can assume the buffer is mapped because it is a write operation,
-         we still use sos_map_page to find the mapping address if it is already mapped */
+           we still use sos_map_page to find the mapping address if it is already mapped */
         seL4_CPtr app_cap;
         seL4_CPtr sos_vaddr;
-        int err = sos_map_page(uaddr,
+        int err = sos_map_page((seL4_Word) uaddr,
                 tty_test_process.vroot,
                 tty_test_process.addrspace,
                 &sos_vaddr,
@@ -325,23 +323,19 @@ static int vnode_write(struct vnode *vnode, struct uio *uio) {
         }
         sos_vaddr = PAGE_ALIGN_4K(sos_vaddr);
         /*Add offset*/
-        sos_vaddr |= (uaddr & PAGE_MASK_4K);
+        sos_vaddr |= ((seL4_Word) uaddr & PAGE_MASK_4K);
         set_routine_argument(0,sos_vaddr);
-	
-	printf("ask it to write size:%d\n",size);
-	printf("__why data is always empty:%s__\n",sos_vaddr);
-	err = nfs_write(vnode->fh, uio->offset, (int)size,sos_vaddr,&vnode_write_cb,curr_coroutine_id);
-        conditional_panic(err,"fail write in send phrase");
-	yield();
-        conditional_panic(argument[0],"fail write in end phrase");
-	bytes_sent += (seL4_Word)argument[1];
-        printf("it only writes size %d\n",argument[1]);
-	uio->remaining -= (seL4_Word)argument[1];
 
-        ubuf_size -= size;
-        uaddr = uaddr_next;
+        err = nfs_write(vnode->fh, uio->offset, (int)size,sos_vaddr,&vnode_write_cb,curr_coroutine_id);
+        conditional_panic(err,"fail write in send phrase");
+        yield();
+        conditional_panic(argument[0],"fail write in end phrase");
+        bytes_sent += (seL4_Word)argument[1];
+        uio->remaining -= (seL4_Word)argument[1];
+
+        ubuf_size -= (seL4_Word)argument[1];
+        uaddr += (seL4_Word)argument[1];
         uio->offset += (seL4_Word)argument[1];
     }
-    printf("finish write remaing %d\n",uio->remaining);
     return 0;
 }
