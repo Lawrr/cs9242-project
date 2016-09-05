@@ -330,7 +330,7 @@ void syscall_stat(seL4_CPtr reply_cap) {
     if (vnode->ops->vop_stat == NULL) {
         err = 1;
     } else {
-        err = vnode->ops->vop_stat(vnode, (sos_stat_t *) stat_buf);    
+        err = vnode->ops->vop_stat(vnode, stat_buf);    
     }
     vfs_close(vnode, 0);
     if (err) {
@@ -340,15 +340,14 @@ void syscall_stat(seL4_CPtr reply_cap) {
     }
 
     /* sos_stat_t would only max span 2 pages */
-    int len = strlen(stat_buf);
-    seL4_Word uaddr_end = ((char *) uaddr) + sizeof(sos_stat_t);
+    seL4_Word ustat_buf_end = ((char *) ustat_buf) + sizeof(sos_stat_t);
 
     /* Check if we need to map a second page */
-    if (PAGE_ALIGN_4K(uaddr) != PAGE_ALIGN_4K(uaddr_end)) {
-        seL4_Word uaddr_next = PAGE_ALIGN_4K(uaddr) + 0x1000;
+    if (PAGE_ALIGN_4K(ustat_buf) != PAGE_ALIGN_4K(ustat_buf_end)) {
+        seL4_Word ustat_buf_next = PAGE_ALIGN_4K(ustat_buf) + 0x1000;
         seL4_CPtr app_cap_next;
         seL4_Word vstat_buf_next;
-        err = sos_map_page(uaddr_next,
+        err = sos_map_page(ustat_buf_next,
                 tty_test_process.vroot,
                 tty_test_process.addrspace,
                 &vstat_buf_next,
@@ -357,8 +356,8 @@ void syscall_stat(seL4_CPtr reply_cap) {
         vstat_buf_next = PAGE_ALIGN_4K(vstat_buf_next);
 
         /* Boundary write */
-        memcpy(vstat_buf, stat_buf, uaddr_next - uaddr);
-        strcpy(vstat_buf_next, stat_buf + uaddr_next - uaddr);
+        memcpy(vstat_buf, stat_buf, ustat_buf_next - ustat_buf);
+        strcpy(vstat_buf_next, stat_buf + ustat_buf_next - ustat_buf);
     } else {
         strncpy(vstat_buf, stat_buf, sizeof(sos_stat_t));
     }
