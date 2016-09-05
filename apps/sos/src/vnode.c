@@ -1,5 +1,4 @@
 #include <string.h>
-#include "sos.h"
 #include "vnode.h"
 #include "hashtable.h"
 #include "process.h"
@@ -13,6 +12,7 @@
 #define VNODE_TABLE_SLOTS 64
 #define NUM_ARG 4
 #include <clock/clock.h>
+
 extern struct PCB tty_test_process;
 extern int curr_coroutine_id;
 extern fhandle_t mnt_point;
@@ -21,6 +21,7 @@ static int vnode_open(struct vnode *vnode, int mode);
 static int vnode_close(struct vnode *vnode);
 static int vnode_read(struct vnode *vnode, struct uio *uio);
 static int vnode_write(struct vnode *vnode, struct uio *uio);
+static int vnode_stat(struct vnode * vnode,sos_stat_t* stat);
 static void dev_list_init();
 
 static struct dev dev_list[MAX_DEV_NUM];
@@ -41,7 +42,8 @@ static const struct vnode_ops default_ops = {
     &vnode_open,
     &vnode_close,
     &vnode_read,
-    &vnode_write
+    &vnode_write,
+    &vnode_stat
 };
 
 static void dev_list_init() {
@@ -160,6 +162,8 @@ int vfs_close(struct vnode *vnode, int mode) {
     return 0;
 }
 
+
+
 void vnode_open_cb(uintptr_t token, nfs_stat_t status, fhandle_t *fh, fattr_t *fattr){
     argument[0] = (seL4_Word)status;
     argument[1] = (seL4_Word)malloc(sizeof(fhandle_t));
@@ -171,12 +175,24 @@ void vnode_open_cb(uintptr_t token, nfs_stat_t status, fhandle_t *fh, fattr_t *f
 }
 
 
+int vnode_stat(struct vnode *vnode, sos_stat_t* a){
+    
+    a-> st_type = vnode->fattr->type,
+    a->st_fmode = vnode->fattr->mode,
+    a->st_size=  vnode->fattr-> size,
+    ((seL4_Word*)a)[3]=vnode->fattr->ctime.seconds * 1000 + vnode->fattr->ctime.seconds/1000,
+    ((seL4_Word*)a)[4]=vnode->fattr->atime.seconds * 1000 + vnode->fattr->atime.seconds/1000;
+    return vnode->fattr;
+}
 
 
 void vnode_create_cb(uintptr_t token, nfs_stat_t status,fhandle_t *fh, fattr_t *fattr){
     argument[0] = (seL4_Word)status;
     argument[1] = (seL4_Word)malloc(sizeof(fhandle_t));
     argument[2] = (seL4_Word)malloc(sizeof(fattr_t));
+    
+    printf("creating %x\n",argument[1]);
+    printf("creating %d\n",argument[2]);
     memcpy(argument[1],fh,sizeof(fhandle_t));
     memcpy(argument[2],fattr,sizeof(fattr_t));
     set_resume(token);  
@@ -189,6 +205,7 @@ void vnode_create_cb(uintptr_t token, nfs_stat_t status,fhandle_t *fh, fattr_t *
 
 
 static int vnode_open(struct vnode *vnode, fmode_t mode) {
+    if (vnode->fh != NULL) return 0;	
     nfs_lookup (&mnt_point, vnode->path,(nfs_lookup_cb_t)vnode_open_cb,curr_coroutine_id);
     yield();
     int err = (int)argument[0];
@@ -211,10 +228,10 @@ static int vnode_open(struct vnode *vnode, fmode_t mode) {
        yield();
        err = (int)argument[0];
        
-       return 0;
        if (err == NFS_OK){
           vnode->fh = (fhandle_t*)argument[1];
           vnode->fattr = (fattr_t*)argument[2];
+	  printf("vnode addr%x",vnode);
        }  else{
           conditional_panic(err,"faile create");
        }
@@ -278,8 +295,12 @@ static int vnode_read(struct vnode *vnode, struct uio *uio) {
         sos_vaddr |= (uaddr & PAGE_MASK_4K);
 
         set_routine_argument(0,sos_vaddr);
+	
+	printf("before %x\n",vnode);
+	printf("before %x\n",vnode->fh);
 	err = nfs_read(vnode->fh, uio->offset, size,(nfs_read_cb_t)(vnode_read_cb),curr_coroutine_id); 
-        conditional_panic(err,"faild read at send phrase");	
+        printf("after %d\n",err);
+	conditional_panic(err,"faild read at send phrase");	
 	yield();
         conditional_panic(argument[0],"fail read in end phrase");
 	bytes_read += (seL4_Word)argument[1];

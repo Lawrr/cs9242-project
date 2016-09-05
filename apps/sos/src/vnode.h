@@ -3,6 +3,7 @@
 
 #include <cspace/cspace.h>
 #include <nfs/nfs.h>
+#include <sos.h>
 #define MAX_DEV_NUM 32
 #define MAX_DEV_NAME 512
 #define MAX_PATH_LEN 512 
@@ -32,7 +33,7 @@ struct vnode_ops {
     int (*vop_close)(struct vnode *vnode);
     int (*vop_read)(struct vnode *vnode, struct uio *uio);
     int (*vop_write)(struct vnode *vnode, struct uio *uio);
-    int (*vop_stat)(const char *path);
+    int (*vop_stat)(struct vnode *vnode, sos_stat_t* stat);
     int (*vop_getent)(const char * path);
 };
 
