@@ -280,7 +280,11 @@ void syscall_stat(seL4_CPtr reply_cap) {
         return;
     }
 
-    err = vnode->ops->vop_stat(vnode, (sos_stat_t *) vstat_buf);    
+    if (vnode->ops->vop_stat == NULL) {
+        err = 1;
+    } else {
+        err = vnode->ops->vop_stat(vnode, (sos_stat_t *) vstat_buf);    
+    }
     if (err) {
         send_err(reply_cap, -1);
         return;
@@ -304,6 +308,7 @@ void syscall_write(seL4_CPtr reply_cap) {
     if (validate_ofd_mode(reply_cap, ofd, FM_WRITE)) return;
 
     struct oft_entry *entry = &of_table[ofd];
+    struct vnode *vnode = of_table[ofd].vnode;
 
     struct uio uio = {
         .addr = uaddr,
@@ -312,8 +317,13 @@ void syscall_write(seL4_CPtr reply_cap) {
         .offset = entry->offset
     };
 
-    int err = of_table[ofd].vnode->ops->vop_write(of_table[ofd].vnode, &uio);
-    entry->offset = uio.offset;
+    int err;
+    if (vnode->ops->vop_write == NULL) {
+        err = 1;
+    } else {
+        err = vnode->ops->vop_write(vnode, &uio);
+        entry->offset = uio.offset;
+    }
     if (err) {
         send_err(reply_cap, ERR_INTERNAL_ERROR);
         return;
@@ -337,6 +347,7 @@ void syscall_read(seL4_CPtr reply_cap) {
     if (validate_ofd_mode(reply_cap, ofd, FM_READ)) return;
 
     struct oft_entry *entry = &of_table[ofd];
+    struct vnode *vnode = of_table[ofd].vnode;
 
     struct uio uio = {
         .addr = uaddr,
@@ -351,10 +362,19 @@ void syscall_read(seL4_CPtr reply_cap) {
     seL4_Word *data = malloc(2 * sizeof(seL4_Word));
     data[0] = (seL4_Word) reply_cap;
     data[1] = (seL4_Word) page_table;
-    of_table[ofd].vnode->data = (void *) data;
+    vnode->data = (void *) data;
 
-    of_table[ofd].vnode->ops->vop_read(of_table[ofd].vnode, &uio);
-    entry->offset = uio.offset;
+    int err;
+    if (vnode->ops->vop_read == NULL) {
+        err = 1;
+    } else {
+        err = vnode->ops->vop_read(vnode, &uio);
+        entry->offset = uio.offset;
+    }
+    if (err) {
+        send_err(reply_cap, ERR_INTERNAL_ERROR);
+        return;
+    }
 
     seL4_SetMR(0, uio.size - uio.remaining);
     send_reply(reply_cap); 
