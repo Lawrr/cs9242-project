@@ -27,7 +27,6 @@ yield() {
     int id = setjmp(coroutines[curr_coroutine_id]);
 
     if (id == 0) {
-        printf("Routine %d pause \n",curr_coroutine_id);
         longjmp(syscall_loop_entry, 1);
     } else {
         return;//when jump bakc use return value as err code
@@ -65,8 +64,6 @@ int start_coroutine(void (*task)(seL4_Word badge, int num_args),
     free_list[task_id] = 0;
     curr_coroutine_id = task_id;
     
-    printf("=======================================================\n"); 
-    printf("Routine %d starts\n",task_id);
     /* Allocate new stack frame */
     char *sptr;
     int err = frame_alloc((seL4_Word *) &sptr);
@@ -96,7 +93,6 @@ int start_coroutine(void (*task)(seL4_Word badge, int num_args),
 
     num_tasks--;
 
-    printf("Routine %d finishes\n",task_id);
     longjmp(syscall_loop_entry, 1);
 
     /* Never reached */
