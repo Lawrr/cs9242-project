@@ -161,6 +161,7 @@ int32_t frame_alloc(seL4_Word *vaddr) {
     } else {
         frame_vaddr = ((free_index << INDEX_ADDR_OFFSET) + base_addr - low_addr + PROCESS_VMEM_START);
         free_index = frame_table[free_index].next_index;
+	memset(frame_vaddr,0,PAGE_SIZE);
     }
     
     *vaddr = frame_vaddr;
