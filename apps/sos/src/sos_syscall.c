@@ -551,7 +551,7 @@ void syscall_close(seL4_CPtr reply_cap) {
     tty_test_process.addrspace->fd_table[fd].ofd = -1;
 
     seL4_Word fdt_status = tty_test_process.addrspace->fdt_status;			  
-    seL4_Word fd_count = fdt_status >> TWO_BYTE_BITS;
+    seL4_Word fd_count = (fdt_status >> TWO_BYTE_BITS) - 1;
     tty_test_process.addrspace->fdt_status = (fd_count << TWO_BYTE_BITS) | fd;
 
     of_table[ofd].ref_count--;
@@ -560,7 +560,8 @@ void syscall_close(seL4_CPtr reply_cap) {
         vfs_close(of_table[ofd].vnode, of_table[ofd].file_info.st_fmode);
         of_table[ofd].file_info.st_fmode = 0;
         of_table[ofd].vnode = NULL;
-        curr_free_ofd = ofd;
+	ofd_count--;
+        //curr_free_ofd = ofd;
     }
     /* Reply */
     seL4_SetMR(0, 0);

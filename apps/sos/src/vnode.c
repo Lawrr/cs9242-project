@@ -378,7 +378,7 @@ static int vnode_read(struct vnode *vnode, struct uio *uio) {
     seL4_Word ubuf_size = uio->size;
     seL4_Word end_uaddr = (seL4_Word) uaddr + ubuf_size;
     seL4_Word bytes_read = 0;
-    
+    int err = 0; 
     while (ubuf_size > 0) {
         seL4_Word uaddr_next = PAGE_ALIGN_4K((seL4_Word) uaddr) + 0x1000;
         seL4_Word size;
@@ -390,16 +390,20 @@ static int vnode_read(struct vnode *vnode, struct uio *uio) {
 
         /*   Though we can assume the buffer is mapped because it is a write operation,
              we still use sos_map_page to find the mapping address if it is already mapped */
-        seL4_CPtr app_cap;
-        seL4_CPtr sos_vaddr;
-        int err = sos_map_page((seL4_Word) uaddr,
-                tty_test_process.vroot,
-                tty_test_process.addrspace,
-                &sos_vaddr,
-                &app_cap);
-        if (err && err != ERR_ALREADY_MAPPED) {
-            return 1;
-        }
+        
+	
+        seL4_CPtr sos_vaddr = get_sos_vaddr(uaddr,tty_test_process.addrspace);;
+	if (!sos_vaddr){
+	   seL4_CPtr app_cap;
+           int err = sos_map_page((seL4_Word) uaddr,
+                                 tty_test_process.vroot,
+                                 tty_test_process.addrspace,
+                                 &sos_vaddr,
+                                 &app_cap);
+           if (err && err != ERR_ALREADY_MAPPED) {
+              return 1;
+           }
+	}
         sos_vaddr = PAGE_ALIGN_4K(sos_vaddr);
         //Add offset
         sos_vaddr |= ((seL4_Word) uaddr & PAGE_MASK_4K);
@@ -432,6 +436,7 @@ static int vnode_write(struct vnode *vnode, struct uio *uio) {
     seL4_Word ubuf_size = uio->size;
     seL4_Word end_uaddr = (seL4_Word) uaddr + ubuf_size;
     seL4_Word bytes_sent = 0;
+    int err = 0;
     while (ubuf_size > 0) {
         seL4_Word uaddr_next = PAGE_ALIGN_4K((seL4_Word) uaddr) + 0x1000;
         seL4_Word size;
@@ -443,16 +448,18 @@ static int vnode_write(struct vnode *vnode, struct uio *uio) {
 
         /* Though we can assume the buffer is mapped because it is a write operation,
            we still use sos_map_page to find the mapping address if it is already mapped */
-        seL4_CPtr app_cap;
-        seL4_CPtr sos_vaddr;
-        int err = sos_map_page((seL4_Word) uaddr,
-                tty_test_process.vroot,
-                tty_test_process.addrspace,
-                &sos_vaddr,
-                &app_cap);
-        if (err && err != ERR_ALREADY_MAPPED) {
-            return 1;
-        }
+        seL4_CPtr sos_vaddr = get_sos_vaddr(uaddr,tty_test_process.addrspace);;
+	if (!sos_vaddr){
+	   seL4_CPtr app_cap;
+           err = sos_map_page((seL4_Word) uaddr,
+                                 tty_test_process.vroot,
+                                 tty_test_process.addrspace,
+                                 &sos_vaddr,
+                                 &app_cap);
+           if (err && err != ERR_ALREADY_MAPPED) {
+              return 1;
+           }
+	}
         sos_vaddr = PAGE_ALIGN_4K(sos_vaddr);
         /*Add offset*/
         sos_vaddr |= ((seL4_Word) uaddr & PAGE_MASK_4K);
