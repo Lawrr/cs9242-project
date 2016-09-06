@@ -54,63 +54,72 @@ void vnode_readdir_cb(uintptr_t token, enum nfs_stat status,
                       nfscookie_t nfscookie) {
     argument[0] = (seL4_Word) status; 
     argument[1] = nfscookie;
-    argument[2] = 0; /* Found */
 
     struct uio *uio = get_routine_argument(0);
-    int cumulative_pos = get_routine_argument(1);
-    int curr_pos = 0;
-    int first_null = 1;
-    while (num_files > 0) {
-        if (cumulative_pos == uio->offset) {
-            /* Found the position - copy path into buffer if not null */
-            if (file_names[curr_pos] != NULL) {
-                strncpy(uio->addr, file_names[curr_pos], uio->size);
-                int len = strnlen(file_names[curr_pos], uio->size);
-                uio->remaining = uio->size - len;
-                argument[2] = 1; /* Found */
-            } else {
-                *uio->addr = '\0';
-                uio->remaining = uio->size;
-            }
-            argument[2] = 1; /* Found */
-            break;
-        } 
-        if (file_names[curr_pos] == NULL) {
-            if (first_null) {
-                first_null = 0;
-            } else {
-                argument[2] = -1;
-                break;
-            }
-        }
-        curr_pos++;
-        cumulative_pos++;
-        num_files--;
+    if (uio->offset == 0 && num_files == 0){
+          uio->addr = "\0";
+	  uio->offset = 0;
+    }  else if (uio->offset < num_files ){  
+          //two page mapping
+          /* Check if we need to map a second page */
+	  int len = strlen(file_names[uio->offset]);
+	  if (len > uio->size){ 
+	     argument[1] = 0;//hard set to stop it
+	  }
+	       
+	  seL4_Word uaddr = uio->addr;
+	  seL4_Word uaddr_end = uio->addr + len;
+          
+          seL4_CPtr app_cap;
+          seL4_Word sos_vaddr;
+          int err = sos_map_page(uaddr,
+                         tty_test_process.vroot,
+                         tty_test_process.addrspace,
+                         &sos_vaddr,
+                         &app_cap);
+          sos_vaddr = PAGE_ALIGN_4K(sos_vaddr);
+          sos_vaddr |= (uaddr & PAGE_MASK_4K);
+	  if (PAGE_ALIGN_4K(uaddr) != PAGE_ALIGN_4K(uaddr_end)) {
+             seL4_Word uaddr_next = PAGE_ALIGN_4K(uaddr) + 0x1000;
+             seL4_CPtr app_cap_next;
+             seL4_Word sos_vaddr_next;
+             err = sos_map_page(uaddr_next,
+                                tty_test_process.vroot,
+                                tty_test_process.addrspace,
+                                &sos_vaddr_next,
+                                &app_cap_next);
+
+             sos_vaddr_next = PAGE_ALIGN_4K(sos_vaddr_next);
+
+             /* Boundary write */
+             memcpy(sos_vaddr, file_names[uio->offset], uaddr_next - uaddr);
+	     strcpy(sos_vaddr_next, ((char*)file_names[uio->offset])+ uaddr_next - uaddr);	     
+          } else {
+	    //same page
+            strncpy(sos_vaddr, file_names[uio->offset], uio->size);
+          }
+          uio->remaining = uio->size-len;
+          uio->offset = 0;
+    }  else{
+       uio->offset-=num_files;
     }
-    argument[3] = cumulative_pos;
 
     set_resume(token);
 }
 
 
 static int vnode_getdirent(struct vnode* vnode, struct uio *uio) {
-    int cumulative_pos = 0;
     seL4_Word cookies = 0;
-    int found = 0;
-
+    set_routine_argument(0, uio);	
     do {
-        set_routine_argument(0, uio);
-        set_routine_argument(1, cumulative_pos);
         nfs_readdir(&mnt_point, cookies, vnode_readdir_cb, curr_coroutine_id);  
         yield();
         int err = argument[0];
         cookies = argument[1];
-        found = argument[2];
-        cumulative_pos = argument[3];
-    } while (!found && cookies != 0);
+    } while (uio->offset > 0 && cookies != 0);
 
     /* Error over end */
-    if (found == -1) {
+    if (uio->offset > 0 && cookies == 0) {
         return 1;
     }
 
@@ -285,7 +294,7 @@ static void vnode_stat_cb(uintptr_t token, nfs_stat_t status, fhandle_t *fh, fat
     set_resume(token);    
 }
 
-int vnode_stat(struct vnode *vnode, sos_stat_t* a){
+int vnode_stat(struct vnode *vnode, sos_stat_t* stat){
     nfs_lookup (&mnt_point, vnode->path, (nfs_lookup_cb_t) vnode_stat_cb,curr_coroutine_id);
     yield();
     int err = (int) argument[0];
@@ -293,14 +302,51 @@ int vnode_stat(struct vnode *vnode, sos_stat_t* a){
     fattr_t *fattr = (fattr_t*) argument[1];
 
     if (err == NFS_OK) {
-        a->st_type = fattr->type,
-        a->st_fmode = fattr->mode,
-        a->st_size = fattr->size,
-        ((seL4_Word*)a)[3] = fattr->ctime.seconds * 1000 +
-                             fattr->ctime.seconds / 1000,
-        ((seL4_Word*)a)[4] = fattr->atime.seconds * 1000 +
-                             fattr->atime.seconds / 1000;
+       seL4_CPtr app_cap;
+       seL4_Word sos_vaddr;
+       seL4_Word uaddr = (seL4_Word)stat;
+       int err = sos_map_page(uaddr,
+                              tty_test_process.vroot,
+                              tty_test_process.addrspace,
+                              &sos_vaddr,
+                              &app_cap);
 
+       sos_vaddr = PAGE_ALIGN_4K(sos_vaddr);
+       sos_vaddr |= (uaddr & PAGE_MASK_4K);
+
+       if (PAGE_ALIGN_4K(uaddr+sizeof(stat)) != PAGE_ALIGN_4K(uaddr)){
+           seL4_Word *buffer = malloc(sizeof(sos_stat_t));
+           buffer[0] = fattr->type,
+           buffer[1] = fattr->mode,
+           buffer[2] = fattr->size,
+           buffer[3] = fattr->ctime.seconds * 1000 +
+                             fattr->ctime.seconds / 1000,
+           buffer[4] = fattr->atime.seconds * 1000 +
+                             fattr->atime.seconds / 1000;
+      
+           seL4_CPtr app_cap_next;
+           seL4_Word sos_vaddr_next;
+           int err = sos_map_page(PAGE_ALIGN_4K(uaddr+sizeof(stat)),
+                              tty_test_process.vroot,
+                              tty_test_process.addrspace,
+                              &sos_vaddr_next,
+                              &app_cap_next);
+
+           sos_vaddr_next = PAGE_ALIGN_4K(sos_vaddr);
+
+	   seL4_Word first_half = (PAGE_ALIGN_4K(uaddr+sizeof(stat)) - (seL4_Word)stat); 
+           memcpy(sos_vaddr,buffer,first_half);
+           memcpy(sos_vaddr_next,buffer+first_half,sizeof(stat)-first_half);
+       }   else{
+	   seL4_Word *buffer = (seL4_Word*)sos_vaddr;
+           buffer[0] = fattr->type,
+           buffer[1] = fattr->mode,
+           buffer[2] = fattr->size,
+           buffer[3] = fattr->ctime.seconds * 1000 +
+                             fattr->ctime.seconds / 1000,
+           buffer[4] = fattr->atime.seconds * 1000 +
+                             fattr->atime.seconds / 1000;
+       }
     } else if (err == NFSERR_NOENT) {
         ret = -1;
     }

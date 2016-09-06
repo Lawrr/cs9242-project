@@ -210,30 +210,17 @@ void syscall_getdirent(seL4_CPtr reply_cap) {
         send_err(reply_cap, -1);
         return;
     }
-
-    /* Make sure path address is mapped */
-    seL4_CPtr app_cap;
-    seL4_Word sos_vaddr;
-    int err = sos_map_page(uaddr,
-            tty_test_process.vroot,
-            tty_test_process.addrspace,
-            &sos_vaddr,
-            &app_cap);
-
-    sos_vaddr = PAGE_ALIGN_4K(sos_vaddr);
-    sos_vaddr |= (uaddr & PAGE_MASK_4K); 
-
-    char *path_buf = malloc(sizeof(char) * nbyte);
+    
 
     struct uio uio = {
-        .addr = path_buf,
+        .addr = uaddr,
         .size = nbyte,
         .remaining = nbyte,
         .offset = pos
     };
 
     struct vnode *vnode; 
-    err = vfs_get("", &vnode);
+    int err = vfs_get("", &vnode);
     if (err) {
         send_err(reply_cap, ERR_ILLEGAL_USERADDR);
         return;
@@ -245,36 +232,9 @@ void syscall_getdirent(seL4_CPtr reply_cap) {
         err = vnode->ops->vop_getdirent(vnode, &uio);
     }
     if (err) {
-        free(path_buf);
         send_err(reply_cap, -1);
         return;
     }
-
-    /* path would only max span 2 pages */
-    int len = strlen(path_buf);
-    seL4_Word uaddr_end = ((char *) uaddr) + len;
-
-    /* Check if we need to map a second page */
-    if (PAGE_ALIGN_4K(uaddr) != PAGE_ALIGN_4K(uaddr_end)) {
-        seL4_Word uaddr_next = PAGE_ALIGN_4K(uaddr) + 0x1000;
-        seL4_CPtr app_cap_next;
-        seL4_Word sos_vaddr_next;
-        err = sos_map_page(uaddr_next,
-                tty_test_process.vroot,
-                tty_test_process.addrspace,
-                &sos_vaddr_next,
-                &app_cap_next);
-
-        sos_vaddr_next = PAGE_ALIGN_4K(sos_vaddr_next);
-
-        /* Boundary write */
-        memcpy(sos_vaddr, path_buf, uaddr_next - uaddr);
-        strcpy(sos_vaddr_next, path_buf + uaddr_next - uaddr);
-    } else {
-        strncpy(sos_vaddr, path_buf, nbyte);
-    }
-
-    free(path_buf);
 
     /* Reply */
     seL4_SetMR(0, uio.size - uio.remaining);
@@ -315,59 +275,17 @@ void syscall_stat(seL4_CPtr reply_cap) {
         return;
     }
 
-    /* Make sure stat buf address is mapped */
-    seL4_CPtr stat_cap;
-    seL4_Word vstat_buf;
-    err = sos_map_page(ustat_buf,
-            tty_test_process.vroot,
-            tty_test_process.addrspace,
-            &vstat_buf,
-            &stat_cap);
-
-    /* Add offset to stat address */
-    vstat_buf = PAGE_ALIGN_4K(vstat_buf);
-    vstat_buf |= (ustat_buf & PAGE_MASK_4K); 
-
-    sos_stat_t *stat_buf = malloc(sizeof(sos_stat_t));
-    
-    if (vnode->ops->vop_stat == NULL) {
-        err = 1;
-    } else {
-        err = vnode->ops->vop_stat(vnode, stat_buf);    
-    }
-    vfs_close(vnode, 0);
+    err = vnode->ops->vop_stat(vnode, ustat_buf);    
     if (err) {
-        free(stat_buf);
         send_err(reply_cap, -1);
         return;
     }
-
-    /* sos_stat_t would only max span 2 pages */
-    seL4_Word ustat_buf_end = ((char *) ustat_buf) + sizeof(sos_stat_t);
-
-    /* Check if we need to map a second page */
-    if (PAGE_ALIGN_4K(ustat_buf) != PAGE_ALIGN_4K(ustat_buf_end)) {
-        seL4_Word ustat_buf_next = PAGE_ALIGN_4K(ustat_buf) + 0x1000;
-        seL4_CPtr app_cap_next;
-        seL4_Word vstat_buf_next;
-        err = sos_map_page(ustat_buf_next,
-                tty_test_process.vroot,
-                tty_test_process.addrspace,
-                &vstat_buf_next,
-                &app_cap_next);
-
-        vstat_buf_next = PAGE_ALIGN_4K(vstat_buf_next);
-
-        /* Boundary write */
-        int boundary_len = ustat_buf_next - ustat_buf;
-        memcpy(vstat_buf, stat_buf, boundary_len); 
-        memcpy(vstat_buf_next, stat_buf + boundary_len,
-               sizeof(sos_stat_t) - boundary_len);
-    } else {
-        memcpy(vstat_buf, stat_buf, sizeof(sos_stat_t));
+    
+    err = vfs_close(vnode, 0);
+    if (err) {
+        send_err(reply_cap, -1);
+        return;
     }
-
-    free(stat_buf);
 
     /* Reply */
     seL4_SetMR(0, 0);
