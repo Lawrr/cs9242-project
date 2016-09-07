@@ -110,12 +110,11 @@ void vnode_readdir_cb(uintptr_t token, enum nfs_stat status,
 
 static int vnode_getdirent(struct vnode* vnode, struct uio *uio) {
     seL4_Word cookies = 0;
-    set_routine_argument(0, uio);	
+    set_routine_argument(curr_coroutine_id,0, uio);	
     do {
         set_routine_argument(curr_coroutine_id,0, uio);
-        set_routine_argument(curr_coroutine_id,1, cumulative_pos);
-        nfs_readdir(&mnt_point, cookies, vnode_readdir_cb, curr_coroutine_id);  
-        yield();
+        nfs_readdir(&mnt_point, cookies, vnode_readdir_cb, curr_coroutine_id);
+	yield();
         int err = argument[0];
         cookies = argument[1];
     } while (uio->offset > 0 && cookies != 0);
@@ -428,18 +427,7 @@ static int vnode_read(struct vnode *vnode, struct uio *uio) {
     seL4_Word bytes_read = 0;
     int err = 0; 
     
-    seL4_CPtr sos_vaddr = get_sos_vaddr(uaddr,tty_test_process.addrspace);
-    if (!sos_vaddr){
-       seL4_CPtr app_cap;
-       int err = sos_map_page((seL4_Word) uaddr,
-                              tty_test_process.vroot,
-                              tty_test_process.addrspace,
-                              &sos_vaddr,
-                              &app_cap);
-       if (err && err != ERR_ALREADY_MAPPED) {
-          return 1;
-       }
-    }   
+       
     
     
     while (ubuf_size > 0) {
@@ -451,31 +439,28 @@ static int vnode_read(struct vnode *vnode, struct uio *uio) {
             size = ubuf_size;
         }
 
-        /*   Though we can assume the buffer is mapped because it is a write operation,
-             we still use sos_map_page to find the mapping address if it is already mapped */
          
-        sos_vaddr = PAGE_ALIGN_4K(sos_vaddr);
-        //Add offset
-        sos_vaddr |= ((seL4_Word) uaddr & PAGE_MASK_4K);
+        
 
-        set_routine_argument(curr_coroutine_id,0,sos_vaddr);
         err = nfs_read(vnode->fh, uio->offset, size,(nfs_read_cb_t)(vnode_read_cb),curr_coroutine_id); 
         conditional_panic(err,"faild read at send phrase");	
         
-	//map next page to improve performance
-	sos_vaddr = get_sos_vaddr(uaddr_next,tty_test_process.addrspace);
-        if (!sos_vaddr && end_uaddr > uaddr_next){
+	seL4_CPtr sos_vaddr = get_sos_vaddr(uaddr,tty_test_process.addrspace);
+        if (!sos_vaddr){
            seL4_CPtr app_cap;
-           int err = sos_map_page((seL4_Word) uaddr_next,
+           err = sos_map_page((seL4_Word) uaddr,
                                  tty_test_process.vroot,
                                  tty_test_process.addrspace,
                                  &sos_vaddr,
                                  &app_cap);
-           if (err && err != ERR_ALREADY_MAPPED) {
+           if (err) {
               return 1;
            }
-	}
-        	
+        }
+        
+	sos_vaddr = PAGE_ALIGN_4K(sos_vaddr);
+        sos_vaddr |= ((seL4_Word) uaddr & PAGE_MASK_4K);	
+        set_routine_argument(curr_coroutine_id,0,sos_vaddr);
         yield();
 	
 	conditional_panic(argument[0],"fail read in end phrase");

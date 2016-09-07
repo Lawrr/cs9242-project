@@ -211,14 +211,12 @@ void syscall_getdirent(seL4_CPtr reply_cap) {
         return;
     }
     
-
     struct uio uio = {
         .addr = uaddr,
         .size = nbyte,
         .remaining = nbyte,
         .offset = pos
     };
-
     struct vnode *vnode; 
     int err = vfs_get("", &vnode);
     if (err) {
