@@ -102,8 +102,8 @@ seL4_Word get_routine_argument(int id,int i){
     return routine_arguments[id][i];
 }
 
-void set_routine_argument(int i,seL4_Word arg){
-   routine_arguments[curr_coroutine_id][i] = arg;
+void set_routine_argument(int id,int i,seL4_Word arg){
+   routine_arguments[id][i] = arg;
 }
 
 

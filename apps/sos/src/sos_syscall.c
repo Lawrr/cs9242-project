@@ -561,7 +561,8 @@ void syscall_close(seL4_CPtr reply_cap) {
         of_table[ofd].file_info.st_fmode = 0;
         of_table[ofd].vnode = NULL;
 	ofd_count--;
-        //curr_free_ofd = ofd;
+	of_table[ofd].offset = 0;
+        curr_free_ofd = ofd;
     }
     /* Reply */
     seL4_SetMR(0, 0);
