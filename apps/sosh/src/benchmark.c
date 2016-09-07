@@ -22,7 +22,7 @@
 #include <sos.h>
 
 /* turn this off when recording real results */
-#define BENCHMARK_DEBUG 1
+#define BENCHMARK_DEBUG 0
 
 /* number of times to run the benchmark before recording results
  * this primes the caches etc so we don't use cold cache results */
@@ -31,7 +31,7 @@
 /* number of times to run the benchmarks and collect data -
  * for testing purposes you can set this to 1, but for reported
  * results it should be 10 */
-#define ITERATIONS 1
+#define ITERATIONS 10
 
 /* total number of iterations for the benchmark loop */
 #define N_RESULTS (WARMUPS + ITERATIONS)
