@@ -413,7 +413,6 @@ static void vnode_read_cb(uintptr_t token, nfs_stat_t status,fattr_t *fattr, int
     if  (status == NFS_OK){
         memcpy((void*)sos_vaddr, data,count);
     }
-
     argument[0] = (seL4_Word)status;
     argument[1] = (seL4_Word)count;
     set_resume(token);
@@ -425,10 +424,11 @@ static int vnode_read(struct vnode *vnode, struct uio *uio) {
     seL4_Word ubuf_size = uio->size;
     seL4_Word end_uaddr = (seL4_Word) uaddr + ubuf_size;
     seL4_Word bytes_read = 0;
+    
     while (ubuf_size > 0) {
         seL4_Word uaddr_next = PAGE_ALIGN_4K((seL4_Word) uaddr) + 0x1000;
         seL4_Word size;
-        if (end_uaddr >= uaddr_next) {
+	if (end_uaddr >= uaddr_next) {
             size = uaddr_next - (seL4_Word) uaddr;
         } else {
             size = ubuf_size;
@@ -461,9 +461,9 @@ static int vnode_read(struct vnode *vnode, struct uio *uio) {
         uaddr += (seL4_Word) argument[1];
         uio->offset += (seL4_Word) argument[1];
         if (uio->offset >= vnode->fattr->size) {
-            return 0;
+	   return 0;
         }
-    } 
+    }
     return 0;
 }
 static void vnode_write_cb(uintptr_t token, enum nfs_stat status,fattr_t *fattr, int count){
