@@ -532,13 +532,15 @@ static int vnode_write(struct vnode *vnode, struct uio *uio) {
             seL4_Word *token = malloc(sizeof(seL4_Word) * 2);
             token[0] = curr_coroutine_id;
             token[1] = req_id;
+
+            int offset = 1024 * req_id;
             if (size > 1024) {
-                err = nfs_write(vnode->fh, uio->offset + 1024 * req_id, 1024, sos_vaddr, &vnode_write_cb, token);
+                err = nfs_write(vnode->fh, uio->offset + offset, 1024, sos_vaddr + offset, &vnode_write_cb, token);
                 req_id++;
                 size -= 1024;
                 conditional_panic(err, "fail write in send phrase");
             } else {
-                err = nfs_write(vnode->fh, uio->offset + 1024 * req_id, size, sos_vaddr, &vnode_write_cb, token);
+                err = nfs_write(vnode->fh, uio->offset + offset, size, sos_vaddr + offset, &vnode_write_cb, token);
                 size = 0;
 
                 set_routine_arg(curr_coroutine_id, 0, (1 << (req_id + 1)) - 1);
