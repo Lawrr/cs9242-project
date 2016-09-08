@@ -59,33 +59,33 @@ static inline seL4_Word get_sel4_rights_from_elf(unsigned long permissions) {
  * TODO: Don't keep these pages mapped in
  */
 static int load_segment_into_vspace(seL4_ARM_PageDirectory dest_pd,
-                                    struct app_addrspace *dest_as,
-                                    char *src, unsigned long segment_size,
-                                    unsigned long file_size, unsigned long dst,
-                                    unsigned long permissions) {
+        struct app_addrspace *dest_as,
+        char *src, unsigned long segment_size,
+        unsigned long file_size, unsigned long dst,
+        unsigned long permissions) {
 
     /* Overview of ELF segment loading
 
-       dst: destination base virtual address of the segment being loaded
-       segment_size: obvious
-       
-       So the segment range to "load" is [dst, dst + segment_size).
+dst: destination base virtual address of the segment being loaded
+segment_size: obvious
 
-       The content to load is either zeros or the content of the ELF
-       file itself, or both.
+So the segment range to "load" is [dst, dst + segment_size).
 
-       The split between file content and zeros is a follows.
+The content to load is either zeros or the content of the ELF
+file itself, or both.
 
-       File content: [dst, dst + file_size)
-       Zeros:        [dst + file_size, dst + segment_size)
+The split between file content and zeros is a follows.
 
-       Note: if file_size == segment_size, there is no zero-filled region.
-       Note: if file_size == 0, the whole segment is just zero filled.
+File content: [dst, dst + file_size)
+Zeros:        [dst + file_size, dst + segment_size)
 
-       The code below relies on seL4's frame allocator already
-       zero-filling a newly allocated frame.
+Note: if file_size == segment_size, there is no zero-filled region.
+Note: if file_size == 0, the whole segment is just zero filled.
 
-    */
+The code below relies on seL4's frame allocator already
+zero-filling a newly allocated frame.
+
+*/
 
 
 
@@ -113,7 +113,7 @@ static int load_segment_into_vspace(seL4_ARM_PageDirectory dest_pd,
         nbytes = PAGESIZE - (dst & PAGEMASK);
         if (pos < file_size){
             memcpy((void*) (sos_vaddr | ((dst << LOWER_BITS_SHIFT) >> LOWER_BITS_SHIFT)),
-                   (void*)src, MIN(nbytes, file_size - pos));
+                    (void*)src, MIN(nbytes, file_size - pos));
         }
         sos_cap = get_cap(sos_vaddr);
 

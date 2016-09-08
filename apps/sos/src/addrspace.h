@@ -2,7 +2,7 @@
 #define _ADDRSPACE_H_
 
 #define PTE_VALID (1 << 3)
-#define PTE_SWAP  (1 << 4)
+#define PTE_SWAP (1 << 4)
 
 struct app_addrspace {
     seL4_Word asid;
@@ -30,9 +30,9 @@ struct fdt_entry {
  *S:Swap bit
  *V:Valid bit
  *P:Permission 3bits same as elf_permission
- *  seL4_CanWrite = 0x01,
- *  seL4_CanRead = 0x02,
- *  seL4_CanGrant = 0x04, 
+ * seL4_CanWrite = 0x01,
+ * seL4_CanRead = 0x02,
+ * seL4_CanGrant = 0x04,
  */
 struct page_table_entry {
     seL4_CPtr sos_vaddr;
@@ -41,8 +41,8 @@ struct page_table_entry {
 struct app_addrspace *as_new();
 
 int as_define_region(struct app_addrspace *as,
-                     seL4_Word vroot,
-                     seL4_Word size,
-                     seL4_Word permissions);
+        seL4_Word vroot,
+        seL4_Word size,
+        seL4_Word permissions);
 
 #endif /* _ADDRSPACE_H_ */

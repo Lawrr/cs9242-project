@@ -112,37 +112,38 @@ map_device(void* paddr, int size){
     }
     return (void*)vstart;
 }
+
 /*
-int sos_ummap_page(seL4_Word vaddr, seL4_Word asid) {
-    seL4_CPtr cap;
-    int err = get_app_cap((vaddr>>PAGE_BITS_4K) << PAGE_BITS_4K, asid, &cap); 
-    if (err != 0) return err;
-    err = seL4_ARM_Page_Unmap(cap);
-    if (err != 0) return err;
-    cspace_delete_cap(cur_cspace, cap);
-    return err;
-}*/
+   int sos_ummap_page(seL4_Word vaddr, seL4_Word asid) {
+   seL4_CPtr cap;
+   int err = get_app_cap((vaddr>>PAGE_BITS_4K) << PAGE_BITS_4K, asid, &cap);
+   if (err != 0) return err;
+   err = seL4_ARM_Page_Unmap(cap);
+   if (err != 0) return err;
+   cspace_delete_cap(cur_cspace, cap);
+   return err;
+   }*/
 
 int
 get_uaddr(seL4_Word sos_vaddr,
-          seL4_ARM_PageDirectory pd,
-          struct app_addrspace *as,
-          seL4_Word *ret_uaddr) {
+        seL4_ARM_PageDirectory pd,
+        struct app_addrspace *as,
+        seL4_Word *ret_uaddr) {
     // TODO
     return 0;
 }
 
-int 
+int
 sos_map_page(seL4_Word vaddr_unaligned,
-             seL4_ARM_PageDirectory pd,
-             struct app_addrspace *as,
-             seL4_Word *sos_vaddr_ret,
-             seL4_CPtr *app_cap) {
+        seL4_ARM_PageDirectory pd,
+        struct app_addrspace *as,
+        seL4_Word *sos_vaddr_ret,
+        seL4_CPtr *app_cap) {
     int err;
     seL4_Word vaddr = PAGE_ALIGN_4K(vaddr_unaligned);
     /* Get the addr to simplify later implementation */
     struct page_table_entry ***page_table_vaddr = &(as->page_table);
-    
+
     /* Invalid mapping NULL */
     if (((void *) vaddr) == NULL) {
         return ERR_INVALID_ADDR;
@@ -155,7 +156,7 @@ sos_map_page(seL4_Word vaddr_unaligned,
     struct region *curr_region = as->regions;
     while (curr_region != NULL) {
         if (vaddr_unaligned >= curr_region->baseaddr &&
-            vaddr_unaligned < curr_region->baseaddr + curr_region->size) {
+                vaddr_unaligned < curr_region->baseaddr + curr_region->size) {
             break;
         }
         curr_region = curr_region->next;
@@ -189,14 +190,14 @@ sos_map_page(seL4_Word vaddr_unaligned,
     }
 
     if ((seL4_Word *) (*page_table_vaddr)[index1][index2].sos_vaddr != NULL) {
-       /* Already mapped */
-       *sos_vaddr_ret = (*page_table_vaddr)[index1][index2].sos_vaddr;
-       return ERR_ALREADY_MAPPED;
+        /* Already mapped */
+        *sos_vaddr_ret = (*page_table_vaddr)[index1][index2].sos_vaddr;
+        return ERR_ALREADY_MAPPED;
     }
 
     /* Call the internal kernel page mapping */
     seL4_Word sos_vaddr;
-    err = frame_alloc(&sos_vaddr);	
+    err = frame_alloc(&sos_vaddr);
     if (err) {
         return ERR_NO_MEMORY;
     }
@@ -204,27 +205,27 @@ sos_map_page(seL4_Word vaddr_unaligned,
     seL4_Word cap = get_cap(sos_vaddr);
 
     seL4_Word copied_cap = cspace_copy_cap(cur_cspace,
-                                           cur_cspace,
-                                           cap,
-                                           seL4_AllRights);
+            cur_cspace,
+            cap,
+            seL4_AllRights);
 
     err = map_page(copied_cap,
-		           pd,
-		           (vaddr >> PAGE_BITS_4K) << PAGE_BITS_4K,
-		           curr_region->permissions,
-		           seL4_ARM_Default_VMAttributes);
+            pd,
+            (vaddr >> PAGE_BITS_4K) << PAGE_BITS_4K,
+            curr_region->permissions,
+            seL4_ARM_Default_VMAttributes);
     if (err) {
         cspace_delete_cap(cur_cspace, copied_cap);
         frame_free(sos_vaddr);
         return ERR_INTERNAL_MAP_ERROR;
     }
-    
+
     /* Book keeping the copied caps */
     insert_app_cap(PAGE_ALIGN_4K(sos_vaddr), copied_cap, &(*page_table_vaddr)[index1][index2]);
-    
+
     /* Book keeping in our own page table */
     struct page_table_entry pte = {PAGE_ALIGN_4K(sos_vaddr) |
-                                   (curr_region->permissions | PTE_VALID)};
+        (curr_region->permissions | PTE_VALID)};
     (*page_table_vaddr)[index1][index2] = pte;
     *app_cap = copied_cap;
     *sos_vaddr_ret = sos_vaddr;
@@ -232,12 +233,12 @@ sos_map_page(seL4_Word vaddr_unaligned,
     return 0;
 }
 
-int get_sos_vaddr(seL4_Word uaddr,struct app_addrspace*as){ 
+int get_sos_vaddr(seL4_Word uaddr, struct app_addrspace*as) {
     seL4_Word index1 = uaddr >> INDEX1_SHIFT;
-    seL4_Word index2 = (uaddr & INDEX2_MASK) >> PAGE_BITS_4K;    
-    if (as->page_table[index1][index2].sos_vaddr|PTE_VALID){
-       return as->page_table[index1][index2].sos_vaddr; 
-    }  else{
-       return 0;
+    seL4_Word index2 = (uaddr & INDEX2_MASK) >> PAGE_BITS_4K;
+    if (as->page_table[index1][index2].sos_vaddr|PTE_VALID) {
+        return as->page_table[index1][index2].sos_vaddr;
+    } else {
+        return 0;
     }
 }

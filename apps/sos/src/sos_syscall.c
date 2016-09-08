@@ -38,7 +38,7 @@ static int legal_uaddr(seL4_Word base, uint32_t size) {
     return 0;
 }
 
-void send_reply(seL4_CPtr reply_cap){
+void send_reply(seL4_CPtr reply_cap) {
     seL4_MessageInfo_t reply = seL4_MessageInfo_new(0, 0, 0, 1);
     seL4_Send(reply_cap, reply);
     cspace_free_slot(cur_cspace, reply_cap);
@@ -46,7 +46,7 @@ void send_reply(seL4_CPtr reply_cap){
 
 static void send_err(seL4_CPtr reply_cap, int err) {
     seL4_MessageInfo_t reply = seL4_MessageInfo_new(0, 0, 0, 1);
-    seL4_SetMR(0, err); 
+    seL4_SetMR(0, err);
     seL4_Send(reply_cap, reply);
     cspace_free_slot(cur_cspace, reply_cap);
 }
@@ -132,7 +132,7 @@ static int get_safe_path(char *dst, seL4_Word uaddr,
                 return 1;
             } else {
                 memcpy(dst, sos_vaddr, safe_len);
-                strcpy(dst + safe_len, sos_vaddr_next);    
+                strcpy(dst + safe_len, sos_vaddr_next);
             }
         } else {
             strcpy(dst, sos_vaddr);
@@ -163,7 +163,7 @@ void syscall_brk(seL4_CPtr reply_cap) {
     /* Check that newbrk is within heap (and that we actually have a heap region) */
     if (curr_region == NULL || newbrk >= PROCESS_HEAP_END || newbrk < PROCESS_HEAP_START) {
         /* Set error */
-        send_err(reply_cap,1);
+        send_err(reply_cap, 1);
         return;
     }
 
@@ -187,7 +187,7 @@ void syscall_usleep(seL4_CPtr reply_cap) {
     /* Make sure sec is positive else reply */
     if (msec < 0) {
         seL4_SetMR(0, -1);
-        send_reply(reply_cap);	    
+        send_reply(reply_cap);
         return;
     } else {
         register_timer(msec * 1000, &uwakeup, (void *) reply_cap);
@@ -196,7 +196,7 @@ void syscall_usleep(seL4_CPtr reply_cap) {
 
 void syscall_time_stamp(seL4_CPtr reply_cap) {
     timestamp_t timestamp = time_stamp();
-    seL4_SetMR(0, timestamp); 
+    seL4_SetMR(0, timestamp);
     send_reply(reply_cap);
 }
 
@@ -210,14 +210,14 @@ void syscall_getdirent(seL4_CPtr reply_cap) {
         send_err(reply_cap, -1);
         return;
     }
-    
+
     struct uio uio = {
         .addr = uaddr,
         .size = nbyte,
         .remaining = nbyte,
         .offset = pos
     };
-    struct vnode *vnode; 
+    struct vnode *vnode;
     int err = vfs_get("", &vnode);
     if (err) {
         send_err(reply_cap, ERR_ILLEGAL_USERADDR);
@@ -236,7 +236,7 @@ void syscall_getdirent(seL4_CPtr reply_cap) {
 
     /* Reply */
     seL4_SetMR(0, uio.size - uio.remaining);
-    send_reply(reply_cap); 
+    send_reply(reply_cap);
 }
 
 void syscall_stat(seL4_CPtr reply_cap) {
@@ -257,7 +257,7 @@ void syscall_stat(seL4_CPtr reply_cap) {
             &app_cap);
 
     sos_vaddr = PAGE_ALIGN_4K(sos_vaddr);
-    sos_vaddr |= (uaddr & PAGE_MASK_4K); 
+    sos_vaddr |= (uaddr & PAGE_MASK_4K);
 
     err = get_safe_path(path_sos_vaddr, uaddr, sos_vaddr, MAX_PATH_LEN);
     if (err) {
@@ -273,12 +273,12 @@ void syscall_stat(seL4_CPtr reply_cap) {
         return;
     }
 
-    err = vnode->ops->vop_stat(vnode, ustat_buf);    
+    err = vnode->ops->vop_stat(vnode, ustat_buf);
     if (err) {
         send_err(reply_cap, -1);
         return;
     }
-    
+
     err = vfs_close(vnode, 0);
     if (err) {
         send_err(reply_cap, -1);
@@ -372,14 +372,14 @@ void syscall_read(seL4_CPtr reply_cap) {
     }
 
     seL4_SetMR(0, uio.size - uio.remaining);
-    send_reply(reply_cap); 
+    send_reply(reply_cap);
 }
 
 
 
 
 void syscall_open(seL4_CPtr reply_cap) {
-    seL4_Word fdt_status = tty_test_process.addrspace->fdt_status;			  
+    seL4_Word fdt_status = tty_test_process.addrspace->fdt_status;
     seL4_Word free_fd = fdt_status & LOWER_TWO_BYTE_MASK;
     seL4_Word fd_count = fdt_status >> TWO_BYTE_BITS;
 
@@ -401,7 +401,7 @@ void syscall_open(seL4_CPtr reply_cap) {
             &app_cap);
 
     sos_vaddr = PAGE_ALIGN_4K(sos_vaddr);
-    sos_vaddr |= (uaddr & PAGE_MASK_4K); 
+    sos_vaddr |= (uaddr & PAGE_MASK_4K);
 
     err = get_safe_path(path_sos_vaddr, uaddr, sos_vaddr, MAX_PATH_LEN);
     if (err) {
@@ -435,7 +435,7 @@ void syscall_open(seL4_CPtr reply_cap) {
         ofd_count++;
         if (ofd_count != MAX_OPEN_FILE) {
             while (of_table[curr_free_ofd].vnode != NULL) {
-                curr_free_ofd = (curr_free_ofd + 1) % MAX_OPEN_FILE;  
+                curr_free_ofd = (curr_free_ofd + 1) % MAX_OPEN_FILE;
             }
         } else {
             curr_free_ofd = -1;
@@ -469,7 +469,7 @@ void syscall_close(seL4_CPtr reply_cap) {
 
     tty_test_process.addrspace->fd_table[fd].ofd = -1;
 
-    seL4_Word fdt_status = tty_test_process.addrspace->fdt_status;			  
+    seL4_Word fdt_status = tty_test_process.addrspace->fdt_status;
     seL4_Word fd_count = (fdt_status >> TWO_BYTE_BITS) - 1;
     tty_test_process.addrspace->fdt_status = (fd_count << TWO_BYTE_BITS) | fd;
 
@@ -479,8 +479,8 @@ void syscall_close(seL4_CPtr reply_cap) {
         vfs_close(of_table[ofd].vnode, of_table[ofd].file_info.st_fmode);
         of_table[ofd].file_info.st_fmode = 0;
         of_table[ofd].vnode = NULL;
-	ofd_count--;
-	of_table[ofd].offset = 0;
+        ofd_count--;
+        of_table[ofd].offset = 0;
         curr_free_ofd = ofd;
     }
     /* Reply */

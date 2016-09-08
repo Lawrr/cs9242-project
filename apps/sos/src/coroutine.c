@@ -36,22 +36,22 @@ yield() {
 }
 
 void resume() {
-   if (next_yield_id != -1){
-      int tar = next_yield_id;
-      curr_coroutine_id = tar; 
-      next_yield_id = -1;
-      longjmp(coroutines[tar], 1);
-   }
-   return;
+    if (next_yield_id != -1) {
+        int tar = next_yield_id;
+        curr_coroutine_id = tar;
+        next_yield_id = -1;
+        longjmp(coroutines[tar], 1);
+    }
+    return;
 }
 
 
-void set_resume(int id){
-    next_yield_id = id; 
+void set_resume(int id) {
+    next_yield_id = id;
 }
 
 int start_coroutine(void (*task)(seL4_Word badge, int num_args),
-                    void *data) {
+        void *data) {
     if (num_tasks == NUM_COROUTINES) return 1;
 
     num_tasks++;
@@ -63,7 +63,7 @@ int start_coroutine(void (*task)(seL4_Word badge, int num_args),
     }
     free_list[task_id] = 0;
     curr_coroutine_id = task_id;
-    
+
     /* Allocate new stack frame */
     char *sptr;
     int err = frame_alloc((seL4_Word *) &sptr);
@@ -96,12 +96,12 @@ int start_coroutine(void (*task)(seL4_Word badge, int num_args),
     /* Never reached */
 }
 
-seL4_Word get_routine_argument(int id,int i){
+seL4_Word get_routine_argument(int id, int i) {
     return routine_arguments[id][i];
 }
 
-void set_routine_argument(int id,int i,seL4_Word arg){
-   routine_arguments[id][i] = arg;
+void set_routine_argument(int id, int i, seL4_Word arg) {
+    routine_arguments[id][i] = arg;
 }
 
 

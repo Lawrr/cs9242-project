@@ -13,8 +13,6 @@
 
 #include <cspace/cspace.h>
 
-
-
 void syscall_brk(seL4_CPtr reply_cap);
 
 void syscall_usleep(seL4_CPtr reply_cap);

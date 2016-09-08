@@ -5,6 +5,7 @@
 #include "ut_manager/ut.h"
 #include "frametable.h"
 #include "sos.h"
+
 struct app_addrspace *as_new() {
     struct app_addrspace *as = malloc(sizeof(struct app_addrspace));
     if (as == NULL) {
@@ -14,7 +15,7 @@ struct app_addrspace *as_new() {
     as->page_table = CSPACE_NULL;
     as->fdt_status = 3 << TWO_BYTE_BITS | 3;
     as->fd_table = malloc(sizeof(struct fdt_entry)*PROCESS_MAX_FILES);
-    for (int i = 0 ; i < PROCESS_MAX_FILES;i++){
+    for (int i = 0 ; i < PROCESS_MAX_FILES;i++) {
         as->fd_table[i].ofd = -1;
     }
     /* STDIN */
@@ -27,9 +28,9 @@ struct app_addrspace *as_new() {
 }
 
 int as_define_region(struct app_addrspace *as,
-                     seL4_Word baseaddr,
-                     seL4_Word size,
-                     seL4_Word permissions) {
+        seL4_Word baseaddr,
+        seL4_Word size,
+        seL4_Word permissions) {
     struct region *new_region = malloc(sizeof(struct region));
     if (new_region == NULL) {
         return -1;
@@ -53,7 +54,7 @@ int as_define_region(struct app_addrspace *as,
 }
 
 int as_free(struct app_addrspace *as) {
-    for (int i = 0; i < 1024; i++){
+    for (int i = 0; i < 1024; i++) {
         if (as->page_table[i] == NULL) continue;
         for (int j = 0;j < 1024; j++) {
             if (as->page_table[i][j].sos_vaddr & PTE_VALID) {

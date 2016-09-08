@@ -13,7 +13,7 @@ static uint32_t hash(char *key, uint32_t slots) {
 
 //TODO just insert into head
 static int list_insert(struct hashtable_entry *entry_head,
-                       struct hashtable_entry *new_entry) {
+        struct hashtable_entry *new_entry) {
     struct hashtable_entry *curr_entry = entry_head;
     if (curr_entry == NULL || curr_entry->key == NULL) {
         /* First entry in list */
@@ -29,11 +29,11 @@ static int list_insert(struct hashtable_entry *entry_head,
 }
 
 static struct hashtable_entry *list_get(struct hashtable_entry *entry_head,
-                                        char *key) {
+        char *key) {
     struct hashtable_entry *curr_entry = entry_head;
     while (curr_entry != NULL && curr_entry->key != NULL) {
-        
-	if (!strcmp(curr_entry->key, key)) {
+
+        if (!strcmp(curr_entry->key, key)) {
             return curr_entry;
         }
         curr_entry = curr_entry->next;
@@ -43,7 +43,7 @@ static struct hashtable_entry *list_get(struct hashtable_entry *entry_head,
 }
 
 static int *list_remove(struct hashtable_entry *entry_head,
-                                        char *key) {
+        char *key) {
     struct hashtable_entry *prev = NULL;
     struct hashtable_entry *curr = entry_head;
     while (curr != NULL && curr->key != NULL) {

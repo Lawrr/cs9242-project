@@ -23,8 +23,8 @@ static struct uio *console_uio;
 static void console_serial_handler(struct serial *serial, char c) {
     /* Return if we do not currently need to read */
     if (console_uio == NULL ||
-        console_uio->addr == NULL ||
-        console_uio->remaining == 0) return;
+            console_uio->addr == NULL ||
+            console_uio->remaining == 0) return;
 
     seL4_Word *vnode_data = (seL4_Word *) (console_vnode->data);
 
@@ -112,10 +112,10 @@ int console_read(struct vnode *vnode, struct uio *uio) {
         seL4_CPtr app_cap;
         seL4_CPtr sos_vaddr;
         int err = sos_map_page(curr_uaddr,
-                               tty_test_process.vroot,
-                               tty_test_process.addrspace,
-                               &sos_vaddr,
-                               &app_cap);
+                tty_test_process.vroot,
+                tty_test_process.addrspace,
+                &sos_vaddr,
+                &app_cap);
 
         curr_size -= size;
         curr_uaddr = uaddr_next;
