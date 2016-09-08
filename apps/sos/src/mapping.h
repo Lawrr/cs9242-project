@@ -44,8 +44,6 @@ int map_page(seL4_CPtr frame_cap, seL4_ARM_PageDirectory pd, seL4_Word vaddr,
  */
 void* map_device(void* paddr, int size);
 
-int sos_map_page(seL4_Word vaddr, seL4_ARM_PageDirectory pd,
-                 struct app_addrspace *as, seL4_Word *sos_vaddr,
-                 seL4_CPtr *app_cap);
+int sos_map_page(seL4_Word uaddr, seL4_Word *sos_vaddr_ret);
 
 #endif /* _MAPPING_H_ */

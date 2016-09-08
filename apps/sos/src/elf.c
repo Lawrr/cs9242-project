@@ -101,10 +101,8 @@ zero-filling a newly allocated frame.
         int nbytes;
         int err;
 
-        /* Unused cap */
-        seL4_CPtr app_cap;
-        /* Map the frame into tty_test address spaces */
-        err = sos_map_page(dst, dest_pd, dest_as, &sos_vaddr, &app_cap);
+        /* Map the frame into address space */
+        err = sos_map_page(dst, &sos_vaddr);
         if (err) {
             return err;
         }

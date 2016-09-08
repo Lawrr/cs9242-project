@@ -18,6 +18,7 @@
 #include "vmem_layout.h"
 #include "addrspace.h"
 #include "frametable.h"
+#include "process.h"
 
 #define verbose 0
 #include <sys/panic.h>
@@ -28,6 +29,7 @@
 #define INDEX2_MASK (1023 << PAGE_BITS_4K)
 
 extern const seL4_BootInfo* _boot_info;
+extern struct PCB *curproc;
 
 /**
  * Maps a page table into the root servers page directory
@@ -134,12 +136,12 @@ get_uaddr(seL4_Word sos_vaddr,
 }
 
 int
-sos_map_page(seL4_Word vaddr_unaligned,
-        seL4_ARM_PageDirectory pd,
-        struct app_addrspace *as,
-        seL4_Word *sos_vaddr_ret,
-        seL4_CPtr *app_cap) {
+sos_map_page(seL4_Word vaddr_unaligned, seL4_Word *sos_vaddr_ret) {
+    seL4_ARM_PageDirectory pd = curproc->vroot;
+    struct app_addrspace *as = curproc->addrspace;
+
     int err;
+
     seL4_Word vaddr = PAGE_ALIGN_4K(vaddr_unaligned);
     /* Get the addr to simplify later implementation */
     struct page_table_entry ***page_table_vaddr = &(as->page_table);
@@ -221,15 +223,16 @@ sos_map_page(seL4_Word vaddr_unaligned,
     }
 
     /* Book keeping the copied caps */
-    insert_app_cap(PAGE_ALIGN_4K(sos_vaddr), copied_cap, &(*page_table_vaddr)[index1][index2]);
+    insert_app_cap(PAGE_ALIGN_4K(sos_vaddr),
+            copied_cap,
+            &(*page_table_vaddr)[index1][index2]);
 
     /* Book keeping in our own page table */
     struct page_table_entry pte = {PAGE_ALIGN_4K(sos_vaddr) |
         (curr_region->permissions | PTE_VALID)};
     (*page_table_vaddr)[index1][index2] = pte;
-    *app_cap = copied_cap;
-    *sos_vaddr_ret = sos_vaddr;
 
+    *sos_vaddr_ret = sos_vaddr;
     return 0;
 }
 

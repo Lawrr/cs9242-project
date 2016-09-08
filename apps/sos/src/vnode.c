@@ -70,24 +70,14 @@ void vnode_readdir_cb(uintptr_t token, enum nfs_stat status,
         seL4_Word uaddr = uio->addr;
         seL4_Word uaddr_end = uio->addr + len;
 
-        seL4_CPtr app_cap;
         seL4_Word sos_vaddr;
-        int err = sos_map_page(uaddr,
-                tty_test_process.vroot,
-                tty_test_process.addrspace,
-                &sos_vaddr,
-                &app_cap);
+        int err = sos_map_page(uaddr, &sos_vaddr);
         sos_vaddr = PAGE_ALIGN_4K(sos_vaddr);
         sos_vaddr |= (uaddr & PAGE_MASK_4K);
         if (PAGE_ALIGN_4K(uaddr) != PAGE_ALIGN_4K(uaddr_end)) {
             seL4_Word uaddr_next = PAGE_ALIGN_4K(uaddr) + 0x1000;
-            seL4_CPtr app_cap_next;
             seL4_Word sos_vaddr_next;
-            err = sos_map_page(uaddr_next,
-                    tty_test_process.vroot,
-                    tty_test_process.addrspace,
-                    &sos_vaddr_next,
-                    &app_cap_next);
+            err = sos_map_page(uaddr_next, &sos_vaddr_next);
 
             sos_vaddr_next = PAGE_ALIGN_4K(sos_vaddr_next);
 
@@ -303,14 +293,9 @@ int vnode_stat(struct vnode *vnode, sos_stat_t *stat) {
     fattr_t *fattr = (fattr_t*) argument[1];
 
     if (err == NFS_OK) {
-        seL4_CPtr app_cap;
         seL4_Word sos_vaddr;
         seL4_Word uaddr = (seL4_Word)stat;
-        int err = sos_map_page(uaddr,
-                tty_test_process.vroot,
-                tty_test_process.addrspace,
-                &sos_vaddr,
-                &app_cap);
+        int err = sos_map_page(uaddr, &sos_vaddr);
 
         sos_vaddr = PAGE_ALIGN_4K(sos_vaddr);
         sos_vaddr |= (uaddr & PAGE_MASK_4K);
@@ -325,13 +310,9 @@ int vnode_stat(struct vnode *vnode, sos_stat_t *stat) {
                 buffer[4] = fattr->atime.seconds * 1000 +
                     fattr->atime.seconds / 1000;
 
-            seL4_CPtr app_cap_next;
             seL4_Word sos_vaddr_next;
             int err = sos_map_page(PAGE_ALIGN_4K(uaddr+sizeof(stat)),
-                    tty_test_process.vroot,
-                    tty_test_process.addrspace,
-                    &sos_vaddr_next,
-                    &app_cap_next);
+                    &sos_vaddr_next);
 
             sos_vaddr_next = PAGE_ALIGN_4K(sos_vaddr);
 
@@ -447,12 +428,7 @@ static int vnode_read(struct vnode *vnode, struct uio *uio) {
 
         seL4_CPtr sos_vaddr = get_sos_vaddr(uaddr, tty_test_process.addrspace);
         if (!sos_vaddr) {
-            seL4_CPtr app_cap;
-            err = sos_map_page((seL4_Word) uaddr,
-                    tty_test_process.vroot,
-                    tty_test_process.addrspace,
-                    &sos_vaddr,
-                    &app_cap);
+            err = sos_map_page((seL4_Word) uaddr, &sos_vaddr);
             if (err) {
                 return 1;
             }
@@ -501,12 +477,7 @@ static int vnode_write(struct vnode *vnode, struct uio *uio) {
 
     seL4_CPtr sos_vaddr = get_sos_vaddr(uaddr, tty_test_process.addrspace);;
     if (!sos_vaddr) {
-        seL4_CPtr app_cap;
-        err = sos_map_page((seL4_Word) uaddr,
-                tty_test_process.vroot,
-                tty_test_process.addrspace,
-                &sos_vaddr,
-                &app_cap);
+        err = sos_map_page((seL4_Word) uaddr, &sos_vaddr);
         if (err && err != ERR_ALREADY_MAPPED) {
             return 1;
         }
@@ -549,12 +520,7 @@ static int vnode_write(struct vnode *vnode, struct uio *uio) {
 
         sos_vaddr = get_sos_vaddr(uaddr_next, tty_test_process.addrspace);
         if (!sos_vaddr && uaddr_next < end_uaddr) {
-            seL4_CPtr app_cap;
-            err = sos_map_page((seL4_Word) uaddr_next,
-                    tty_test_process.vroot,
-                    tty_test_process.addrspace,
-                    &sos_vaddr,
-                    &app_cap);
+            err = sos_map_page((seL4_Word) uaddr_next, &sos_vaddr);
             if (err && err != ERR_ALREADY_MAPPED) {
                 return 1;
             }

@@ -95,6 +95,8 @@ const seL4_BootInfo* _boot_info;
 
 struct PCB tty_test_process;
 
+struct PCB *curproc = &tty_test_process;
+
 //struct PCB PCB_Array[MAX_PROCESS];
 
 seL4_CPtr _sos_ipc_ep_cap;
@@ -217,13 +219,7 @@ void syscall_loop(seL4_CPtr ep) {
                 map_vaddr = seL4_GetMR(1);
             }
 
-            /* App cap not used */
-            seL4_CPtr app_cap;
-            err = sos_map_page(map_vaddr,
-                               tty_test_process.vroot,
-                               tty_test_process.addrspace,
-                               &sos_vaddr,
-                               &app_cap);
+            err = sos_map_page(map_vaddr, &sos_vaddr);
             conditional_panic(err, "Fail to map the page to the application\n"); 
 
             /* Save the caller */
@@ -350,10 +346,8 @@ void start_first_process(char* app_name, seL4_CPtr fault_ep) {
 
     /* Create an IPC buffer */
     err = sos_map_page(PROCESS_IPC_BUFFER,
-                       tty_test_process.vroot,
-                       tty_test_process.addrspace,
-                       &tty_test_process.ipc_buffer_addr,
-		       &tty_test_process.ipc_buffer_cap);
+                       &tty_test_process.ipc_buffer_addr);
+    tty_test_process.ipc_buffer_cap = get_cap(tty_test_process.ipc_buffer_addr);
     conditional_panic(err, "No memory for ipc buffer");
     /* TODO dud asid number
     err = get_app_cap(tty_test_process.ipc_buffer_addr,

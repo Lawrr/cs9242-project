@@ -65,13 +65,8 @@ int console_write(struct vnode *vnode, struct uio *uio) {
 
         /* Though we can assume the buffer is mapped because it is a write operation,
          * we still use sos_map_page to find the mapping address if it is already mapped */
-        seL4_CPtr app_cap;
-        seL4_CPtr sos_vaddr;
-        int err = sos_map_page(uaddr,
-                tty_test_process.vroot,
-                tty_test_process.addrspace,
-                &sos_vaddr,
-                &app_cap);
+        seL4_Word sos_vaddr;
+        int err = sos_map_page(uaddr, &sos_vaddr);
         if (err && err != ERR_ALREADY_MAPPED) {
             return 1;
         }
@@ -109,13 +104,8 @@ int console_read(struct vnode *vnode, struct uio *uio) {
             size = curr_size;
         }
 
-        seL4_CPtr app_cap;
         seL4_CPtr sos_vaddr;
-        int err = sos_map_page(curr_uaddr,
-                tty_test_process.vroot,
-                tty_test_process.addrspace,
-                &sos_vaddr,
-                &app_cap);
+        int err = sos_map_page(curr_uaddr, &sos_vaddr);
 
         curr_size -= size;
         curr_uaddr = uaddr_next;
