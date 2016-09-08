@@ -154,10 +154,14 @@ int elf_load(seL4_ARM_PageDirectory dest_pd, struct app_addrspace *dest_as, char
 
         /* Copy it across into the vspace. */
         dprintf(1, " * Loading segment %08x-->%08x\n", (int)vaddr, (int)(vaddr + segment_size));
+
+        /* Define region */
         err = as_define_region(dest_as, vaddr, segment_size, get_sel4_rights_from_elf(flags) & seL4_AllRights);
         if (err) {
             return err;
         }
+
+        /* Load segment */
         err = load_segment_into_vspace(dest_pd, dest_as, source_addr, segment_size, file_size, vaddr, get_sel4_rights_from_elf(flags) & seL4_AllRights);
         if (err) {
             return err;

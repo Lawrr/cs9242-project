@@ -81,9 +81,11 @@ void frame_init(seL4_Word high, seL4_Word low) {
     for (uint64_t i = 0; i < frame_table_size; i += PAGE_SIZE) {
         seL4_CPtr cap;
 
+        /* Get untyped memory */
         ft_section_paddr = ut_alloc(seL4_PageBits);
         seL4_Word ft_section_vaddr = i + PROCESS_VMEM_START;
 
+        /* Retype to frame */
         err = cspace_ut_retype_addr(ft_section_paddr,
                 seL4_ARM_SmallPageObject,
                 seL4_PageBits,
@@ -91,6 +93,7 @@ void frame_init(seL4_Word high, seL4_Word low) {
                 &cap);
         conditional_panic(err, "Failed to allocate frame table cap");
 
+        /* Map to address space */
         err = map_page(cap,
                 seL4_CapInitThreadPD,
                 ft_section_vaddr,
@@ -101,6 +104,7 @@ void frame_init(seL4_Word high, seL4_Word low) {
         /* Set pointer to head of frame_table and keep track of caps */
         struct frame_table_cap *cap_holder = malloc(sizeof(struct frame_table_cap));
         cap_holder->cap = cap;
+
         if (i == 0) {
             frame_table = ft_section_vaddr;
             cap_holder->next = NULL;
@@ -113,6 +117,7 @@ void frame_init(seL4_Word high, seL4_Word low) {
         memset(ft_section_vaddr, 0, PAGE_SIZE);
         base_addr += PAGE_SIZE;
     }
+
     /* Init free index */
     free_index = -1;
 }
@@ -120,15 +125,19 @@ void frame_init(seL4_Word high, seL4_Word low) {
 int32_t frame_alloc(seL4_Word *vaddr) {
     int err;
     seL4_Word frame_vaddr;
+
     if (free_index == -1) {
         /* Free list is empty but there is still memory */
-        seL4_Word frame_cap;
+
+        /* Get untyped memory */
         seL4_Word frame_paddr = ut_alloc(seL4_PageBits);
         if (frame_paddr == NULL) {
             *vaddr = NULL;
             return 1;
         }
+
         /* Retype to frame */
+        seL4_Word frame_cap;
         err = cspace_ut_retype_addr(frame_paddr,
                 seL4_ARM_SmallPageObject,
                 seL4_PageBits,
@@ -158,14 +167,17 @@ int32_t frame_alloc(seL4_Word *vaddr) {
         int index = (frame_paddr - base_addr) >> INDEX_ADDR_OFFSET;
 
         frame_table[index].cap = frame_cap;
+
     } else {
+        /* Reuse a frame in the free list */
         frame_vaddr = ((free_index << INDEX_ADDR_OFFSET) + base_addr - low_addr + PROCESS_VMEM_START);
         free_index = frame_table[free_index].next_index;
-        memset(frame_vaddr, 0, PAGE_SIZE);
     }
 
-    *vaddr = frame_vaddr;
+    /* Clear frame */
     memset(frame_vaddr, 0, PAGE_SIZE);
+
+    *vaddr = frame_vaddr;
     return 0;
 }
 
@@ -211,9 +223,10 @@ ut_free(stack_paddr, seL4_PageBits);
 int32_t frame_free(seL4_Word vaddr) {
     uint32_t index = (vaddr - PROCESS_VMEM_START + low_addr - base_addr) >> INDEX_ADDR_OFFSET;
 
-    //The frame is not yet allocated
+    /* Check that the frame was previously allocated */
     if (frame_table[index].cap == seL4_CapNull) return -1;
 
+    /* Set free list index */
     frame_table[index].next_index = free_index;
     free_index = index;
 
@@ -227,22 +240,32 @@ seL4_CPtr get_cap(seL4_Word vaddr) {
 
 static struct app_cap *app_cap_new(seL4_CPtr cap, struct page_table_entry *pte) {
     struct app_cap *new_app_cap = malloc(sizeof(struct app_cap));
-    if (new_app_cap == NULL) return NULL;
+    if (new_app_cap == NULL) {
+        return NULL;
+    }
+
+    /* Initialise variables */
     new_app_cap->next = NULL;
     new_app_cap->pte = pte;
     new_app_cap->cap = cap;
+
     return new_app_cap;
 }
 
 int32_t insert_app_cap(seL4_Word vaddr, seL4_CPtr cap, struct page_table_entry *pte) {
     uint32_t index = (vaddr - PROCESS_VMEM_START + low_addr - base_addr) >> INDEX_ADDR_OFFSET;
+
+    /* Check that the frame exists */
     if (frame_table[index].cap == seL4_CapNull) return -1;
 
+    /* Create new app cap */
     struct app_cap *copied_cap = app_cap_new(cap, pte);
     if (copied_cap == NULL) return -1;
 
+    /* Insert into list of app caps for the frame */
     copied_cap->next = frame_table[index].app_cap_list;
     frame_table[index].app_cap_list = copied_cap;
+
     return 0;
 }
 

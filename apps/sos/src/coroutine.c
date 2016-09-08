@@ -1,21 +1,30 @@
-#include "coroutine.h"
 #include <setjmp.h>
 #include <cspace/cspace.h>
 #include <alloca.h>
+#include <sys/panic.h>
+
+#include "coroutine.h"
 #include "frametable.h"
+
 #define NUM_COROUTINES 8
 
+/* jmp_buf for syscall loop */
 extern jmp_buf syscall_loop_entry;
 
 int curr_coroutine_id = 0;
 
+/* Number of current tasks */
 static int num_tasks = 0;
-static int next_yield_id = -1;
+/* Next task to resume to */
+static int next_resume_id = -1;
 
+/* Coroutine slots */
 static jmp_buf coroutines[NUM_COROUTINES];
+/* List of free coroutine slots */
 static int free_list[NUM_COROUTINES];
-//slot for storing arguments passed to callback
-static seL4_Word routine_arguments[NUM_COROUTINES][5];
+
+/* Slots for storing args passed to callback */
+static seL4_Word routine_args[NUM_COROUTINES][5];
 
 void coroutine_init() {
     for (int i = 0; i < NUM_COROUTINES; i++) {
@@ -27,31 +36,36 @@ yield() {
     int id = setjmp(coroutines[curr_coroutine_id]);
 
     if (id == 0) {
+        /* First time */
         longjmp(syscall_loop_entry, 1);
     } else {
-        return;//when jump bakc use return value as err code
+        /* Returning to coroutine's function */
+        return;
     }
 
     /* Never reached */
 }
 
 void resume() {
-    if (next_yield_id != -1) {
-        int tar = next_yield_id;
-        curr_coroutine_id = tar;
-        next_yield_id = -1;
-        longjmp(coroutines[tar], 1);
+    if (next_resume_id != -1) {
+        /* Resume back to coroutine */
+        int resume_id = next_resume_id;
+        curr_coroutine_id = resume_id;
+        next_resume_id = -1;
+
+        longjmp(coroutines[resume_id], 1);
     }
+
+    /* Nothing to resume to */
     return;
 }
 
-
 void set_resume(int id) {
-    next_yield_id = id;
+    next_resume_id = id;
 }
 
-int start_coroutine(void (*task)(seL4_Word badge, int num_args),
-        void *data) {
+int start_coroutine(void (*task)(seL4_Word badge, int num_args), void *data) {
+    /* Check reached max coroutines */
     if (num_tasks == NUM_COROUTINES) return 1;
 
     num_tasks++;
@@ -67,8 +81,10 @@ int start_coroutine(void (*task)(seL4_Word badge, int num_args),
     /* Allocate new stack frame */
     char *sptr;
     int err = frame_alloc((seL4_Word *) &sptr);
+    conditional_panic(err, "Could not allocate frame\n");
+    
+    /* Move stack ptr up by a frame (since stack grows down) */
     sptr += 4096;
-    /* conditional_panic(err, "Could not allocate frame\n"); */
 
     /* Add stuff to the new stack */
     void *sptr_new = sptr;
@@ -85,23 +101,23 @@ int start_coroutine(void (*task)(seL4_Word badge, int num_args),
     /* Run task */
     task(((seL4_Word *) data_new)[0], ((seL4_Word *) data_new)[1]);
 
+    /* Task finished - clean up */
     frame_free(sptr_new);
-
     free_list[task_id] = 1;
-
     num_tasks--;
 
+    /* Return to main loop */
     longjmp(syscall_loop_entry, 1);
 
     /* Never reached */
 }
 
-seL4_Word get_routine_argument(int id, int i) {
-    return routine_arguments[id][i];
+seL4_Word get_routine_arg(int id, int i) {
+    return routine_args[id][i];
 }
 
-void set_routine_argument(int id, int i, seL4_Word arg) {
-    routine_arguments[id][i] = arg;
+void set_routine_arg(int id, int i, seL4_Word arg) {
+    routine_args[id][i] = arg;
 }
 
 

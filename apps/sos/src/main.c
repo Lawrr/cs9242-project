@@ -65,22 +65,18 @@
 #define EPIT_REGISTERS 5
 
 #define NFS_TIMEOUT_INTERVAL 100000 /* Microseconds */
-//sys name
-char *sys_name[9]={
+
+char *sys_name[9] = {
     "Sos write",
     "Sos read",
     "Sos open",
     "Sos close",
     "Sos brk",
-    "Sos unsleep",
+    "Sos sleep",
     "Sos timestampe",
     "Sos getdirent",
     "Sos stat"
-
 };
-
-
-
 
 /* The linker will link this symbol to the start address  *
  * of an archive of attached applications.                */

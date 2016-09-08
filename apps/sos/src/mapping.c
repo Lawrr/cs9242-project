@@ -239,7 +239,8 @@ sos_map_page(seL4_Word vaddr_unaligned, seL4_Word *sos_vaddr_ret) {
 int get_sos_vaddr(seL4_Word uaddr, struct app_addrspace*as) {
     seL4_Word index1 = uaddr >> INDEX1_SHIFT;
     seL4_Word index2 = (uaddr & INDEX2_MASK) >> PAGE_BITS_4K;
-    if (as->page_table[index1][index2].sos_vaddr|PTE_VALID) {
+
+    if (as->page_table[index1][index2].sos_vaddr | PTE_VALID) {
         return as->page_table[index1][index2].sos_vaddr;
     } else {
         return 0;

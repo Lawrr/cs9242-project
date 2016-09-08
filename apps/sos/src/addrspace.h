@@ -6,8 +6,8 @@
 
 struct app_addrspace {
     seL4_Word asid;
-    /*Higher 16 bit:fd count
-     *Lower 16 bit:free_fd*/
+    /* Higher 16 bit: fd count
+     * Lower 16 bit: free_fd */
     seL4_Word fdt_status;
     struct region *regions;
     struct fdt_entry *fd_table;
@@ -41,8 +41,8 @@ struct page_table_entry {
 struct app_addrspace *as_new();
 
 int as_define_region(struct app_addrspace *as,
-        seL4_Word vroot,
-        seL4_Word size,
-        seL4_Word permissions);
+                     seL4_Word vroot,
+                     seL4_Word size,
+                     seL4_Word permissions);
 
 #endif /* _ADDRSPACE_H_ */

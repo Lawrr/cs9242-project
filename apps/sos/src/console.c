@@ -13,18 +13,17 @@
 #include <sys/debug.h>
 #include <sys/panic.h>
 
-extern struct PCB tty_test_process;
 extern int curr_coroutine_id;
-int my_coroutine_id;
+
 static struct serial *serial_handle;
 static struct vnode *console_vnode;
 static struct uio *console_uio;
 
+static int my_coroutine_id;
+
 static void console_serial_handler(struct serial *serial, char c) {
     /* Return if we do not currently need to read */
-    if (console_uio == NULL ||
-            console_uio->addr == NULL ||
-            console_uio->remaining == 0) return;
+    if (console_uio == NULL || console_uio->remaining == 0) return;
 
     seL4_Word *vnode_data = (seL4_Word *) (console_vnode->data);
 
@@ -33,8 +32,8 @@ static void console_serial_handler(struct serial *serial, char c) {
     seL4_Word index2 = ((seL4_Word) console_uio->addr << 10) >> 22;
     struct page_table_entry **page_table = (struct page_table **) vnode_data[1];
 
+    /* Align and add offset */
     char *sos_vaddr = PAGE_ALIGN_4K(page_table[index1][index2].sos_vaddr);
-    /* Add offset */
     sos_vaddr = ((seL4_Word) sos_vaddr) | ((seL4_Word) console_uio->addr & PAGE_MASK_4K);
 
     /* Write into buffer */

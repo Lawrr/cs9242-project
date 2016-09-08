@@ -6,7 +6,6 @@
 #define MAX_OPEN_FILE 255
 #define MAX_PROCESS 255
 
-//#define STDIN 0
 #define STDOUT 0
 
 struct oft_entry {

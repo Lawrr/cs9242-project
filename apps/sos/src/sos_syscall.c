@@ -13,7 +13,7 @@
 #include "process.h"
 #include "vnode.h"
 
-extern struct PCB tty_test_process;
+extern struct PCB *curproc;
 extern struct oft_entry of_table[MAX_OPEN_FILE];
 extern seL4_Word ofd_count;
 extern seL4_Word curr_free_ofd;
@@ -21,7 +21,7 @@ extern seL4_Word curr_free_ofd;
 /* Checks that user pointer range is a valid in userspace */
 static int legal_uaddr(seL4_Word base, uint32_t size) {
     /* Check valid region */
-    struct region *curr = tty_test_process.addrspace->regions;
+    struct region *curr = curproc->addrspace->regions;
     while (curr != NULL) {
         if (base >= curr->baseaddr &&
                 base + size < curr->baseaddr + curr->size) {
@@ -149,7 +149,7 @@ void syscall_brk(seL4_CPtr reply_cap) {
     uintptr_t newbrk = seL4_GetMR(1);
 
     /* Find heap region */
-    struct region *curr_region = tty_test_process.addrspace->regions;
+    struct region *curr_region = curproc->addrspace->regions;
     while (curr_region != NULL &&
             curr_region->baseaddr != PROCESS_HEAP_START) {
         curr_region = curr_region->next;
@@ -284,7 +284,7 @@ void syscall_write(seL4_CPtr reply_cap) {
     int fd = seL4_GetMR(1);
     seL4_Word uaddr = seL4_GetMR(2);
     seL4_Word ubuf_size = seL4_GetMR(3);
-    int ofd = tty_test_process.addrspace->fd_table[fd].ofd;
+    int ofd = curproc->addrspace->fd_table[fd].ofd;
 
     if (validate_buffer_size(reply_cap, ubuf_size)) return;
     if (validate_uaddr(reply_cap, uaddr, ubuf_size)) return;
@@ -323,7 +323,7 @@ void syscall_read(seL4_CPtr reply_cap) {
     int fd = seL4_GetMR(1);
     seL4_Word uaddr = seL4_GetMR(2);
     seL4_Word ubuf_size = seL4_GetMR(3);
-    int ofd = tty_test_process.addrspace->fd_table[fd].ofd;
+    int ofd = curproc->addrspace->fd_table[fd].ofd;
 
     if (validate_buffer_size(reply_cap, ubuf_size)) return;
     if (validate_uaddr(reply_cap, uaddr, ubuf_size)) return;
@@ -341,7 +341,7 @@ void syscall_read(seL4_CPtr reply_cap) {
         .offset = entry->offset
     };
 
-    struct page_table_entry **page_table = tty_test_process.addrspace->page_table;
+    struct page_table_entry **page_table = curproc->addrspace->page_table;
 
     /* Set page table pointer and reply cap as data */
     seL4_Word *data = malloc(2 * sizeof(seL4_Word));
@@ -369,7 +369,7 @@ void syscall_read(seL4_CPtr reply_cap) {
 
 
 void syscall_open(seL4_CPtr reply_cap) {
-    seL4_Word fdt_status = tty_test_process.addrspace->fdt_status;
+    seL4_Word fdt_status = curproc->addrspace->fdt_status;
     seL4_Word free_fd = fdt_status & LOWER_TWO_BYTE_MASK;
     seL4_Word fd_count = fdt_status >> TWO_BYTE_BITS;
 
@@ -415,7 +415,7 @@ void syscall_open(seL4_CPtr reply_cap) {
         of_table[curr_free_ofd].file_info.st_fmode = sos_access_mode;
         of_table[curr_free_ofd].ref_count++;
 
-        tty_test_process.addrspace->fd_table[free_fd].ofd = curr_free_ofd;
+        curproc->addrspace->fd_table[free_fd].ofd = curr_free_ofd;
 
         ofd_count++;
         if (ofd_count != MAX_OPEN_FILE) {
@@ -432,14 +432,14 @@ void syscall_open(seL4_CPtr reply_cap) {
         seL4_SetMR(0, free_fd);
 
         if (fd_count != PROCESS_MAX_FILES) {
-            while (tty_test_process.addrspace->fd_table[free_fd].ofd != -1) {
+            while (curproc->addrspace->fd_table[free_fd].ofd != -1) {
                 free_fd = (free_fd + 1) % PROCESS_MAX_FILES;
             }
         } else {
             free_fd = 0;
         }
 
-        tty_test_process.addrspace->fdt_status = (fd_count << TWO_BYTE_BITS) | free_fd;
+        curproc->addrspace->fdt_status = (fd_count << TWO_BYTE_BITS) | free_fd;
     }
     /* Reply */
     send_reply(reply_cap);
@@ -447,16 +447,16 @@ void syscall_open(seL4_CPtr reply_cap) {
 
 void syscall_close(seL4_CPtr reply_cap) {
     int fd = seL4_GetMR(1);
-    seL4_Word ofd = tty_test_process.addrspace->fd_table[fd].ofd;
+    seL4_Word ofd = curproc->addrspace->fd_table[fd].ofd;
 
     if (validate_fd(reply_cap, fd)) return;
     if (validate_ofd(reply_cap, ofd)) return;
 
-    tty_test_process.addrspace->fd_table[fd].ofd = -1;
+    curproc->addrspace->fd_table[fd].ofd = -1;
 
-    seL4_Word fdt_status = tty_test_process.addrspace->fdt_status;
+    seL4_Word fdt_status = curproc->addrspace->fdt_status;
     seL4_Word fd_count = (fdt_status >> TWO_BYTE_BITS) - 1;
-    tty_test_process.addrspace->fdt_status = (fd_count << TWO_BYTE_BITS) | fd;
+    curproc->addrspace->fdt_status = (fd_count << TWO_BYTE_BITS) | fd;
 
     of_table[ofd].ref_count--;
 
