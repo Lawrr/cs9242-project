@@ -1,0 +1,43 @@
+apps/sos/src/console.c:28:    seL4_Word *vnode_data = (seL4_Word *) (console_vnode->data);
+apps/sos/src/console.c:123:    if (vnode->read_count == 1 && (mode & FM_READ) != 0) {
+apps/sos/src/sos_syscall.c:222:    if (vnode->ops->vop_getdirent == NULL) {
+apps/sos/src/sos_syscall.c:225:        err = vnode->ops->vop_getdirent(vnode, &uio);
+apps/sos/src/sos_syscall.c:266:    err = vnode->ops->vop_stat(vnode, ustat_buf);
+apps/sos/src/sos_syscall.c:306:    if (vnode->ops->vop_write == NULL) {
+apps/sos/src/sos_syscall.c:309:        err = vnode->ops->vop_write(vnode, &uio);
+apps/sos/src/sos_syscall.c:350:    vnode->data = (void *) data;
+apps/sos/src/sos_syscall.c:353:    if (vnode->ops->vop_read == NULL) {
+apps/sos/src/sos_syscall.c:356:        err = vnode->ops->vop_read(vnode, &uio);
+apps/sos/src/vnode.c:181:    vnode->path = malloc(strlen(path + 1));
+apps/sos/src/vnode.c:182:    if (vnode->path == NULL) {
+apps/sos/src/vnode.c:186:    strcpy(vnode->path, path);
+apps/sos/src/vnode.c:187:    vnode->read_count = 0;
+apps/sos/src/vnode.c:188:    vnode->write_count = 0;
+apps/sos/src/vnode.c:189:    vnode->data = NULL;
+apps/sos/src/vnode.c:190:    vnode->fh = NULL;
+apps/sos/src/vnode.c:191:    vnode->fattr = NULL;
+apps/sos/src/vnode.c:197:        vnode->ops = dev_list[dev_id].ops;
+apps/sos/src/vnode.c:200:        vnode->ops = &default_ops;
+apps/sos/src/vnode.c:238:    err = vnode->ops->vop_open(vnode, mode);
+apps/sos/src/vnode.c:246:        vnode->read_count++;
+apps/sos/src/vnode.c:249:        vnode->write_count++;
+apps/sos/src/vnode.c:259:        vnode->read_count--;
+apps/sos/src/vnode.c:262:        vnode->write_count--;
+apps/sos/src/vnode.c:265:    vnode->ops->vop_close(vnode);
+apps/sos/src/vnode.c:267:    if (vnode->read_count + vnode->write_count == 0) {
+apps/sos/src/vnode.c:269:        hashtable_remove(vnode_table, vnode->path);
+apps/sos/src/vnode.c:271:        if (vnode->fh != NULL) free(vnode->fh);
+apps/sos/src/vnode.c:272:        if (vnode->fattr != NULL) free(vnode->fattr);
+apps/sos/src/vnode.c:274:        free(vnode->path);
+apps/sos/src/vnode.c:308:    nfs_lookup(&mnt_point, vnode->path, (nfs_lookup_cb_t) vnode_stat_cb, curr_coroutine_id);
+apps/sos/src/vnode.c:387:    nfs_create(&mnt_point, vnode->path, &sattr, (nfs_create_cb_t) vnode_create_cb, curr_coroutine_id);
+apps/sos/src/vnode.c:393:    if (vnode->fh != NULL) return 0;
+apps/sos/src/vnode.c:395:    nfs_lookup(&mnt_point, vnode->path, (nfs_lookup_cb_t) vnode_open_cb, curr_coroutine_id);
+apps/sos/src/vnode.c:401:        vnode->fh = (fhandle_t *) arg[1];
+apps/sos/src/vnode.c:402:        vnode->fattr = (fattr_t *) arg[2];
+apps/sos/src/vnode.c:411:            vnode->fh = (fhandle_t *) arg[1];
+apps/sos/src/vnode.c:412:            vnode->fattr = (fattr_t *) arg[2];
+apps/sos/src/vnode.c:455:        err = nfs_read(vnode->fh, uio->offset, size, (nfs_read_cb_t) vnode_read_cb, curr_coroutine_id);
+apps/sos/src/vnode.c:482:        if (uio->offset >= vnode->fattr->size) {
+apps/sos/src/vnode.c:542:                err = nfs_write(vnode->fh, uio->offset + 1024 * req_id, 1024, sos_vaddr, &vnode_write_cb, token);
+apps/sos/src/vnode.c:547:                err = nfs_write(vnode->fh, uio->offset + 1024 * req_id, size, sos_vaddr, &vnode_write_cb, token);

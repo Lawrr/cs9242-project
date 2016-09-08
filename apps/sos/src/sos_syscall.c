@@ -355,6 +355,7 @@ void syscall_read(seL4_CPtr reply_cap) {
     } else {
         err = vnode->ops->vop_read(vnode, &uio);
         entry->offset = uio.offset;
+        free(data);
     }
     if (err) {
         send_err(reply_cap, ERR_INTERNAL_ERROR);

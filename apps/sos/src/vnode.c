@@ -59,14 +59,16 @@ static void vnode_readdir_cb(uintptr_t token, enum nfs_stat status,
     arg[1] = nfscookie;
 
     struct uio *uio = get_routine_arg((int) token, 0);
+
     if (uio->offset == 0 && num_files == 0) {
+        /* Valid next pos NULL */
         uio->addr = "\0";
-        uio->offset = 0;
+
     } else if (uio->offset < num_files) {
         /* Check if we need to map a second page */
         int len = strlen(file_names[uio->offset]);
         if (len > uio->size) {
-            arg[1] = 0; /*hard set to stop it */
+            arg[1] = 0; /* Hard set to stop it continuing */
         }
 
         seL4_Word uaddr = uio->addr;
@@ -180,6 +182,7 @@ static struct vnode *vnode_new(char *path) {
     if (vnode->path == NULL) {
         return NULL;
     }
+
     strcpy(vnode->path, path);
     vnode->read_count = 0;
     vnode->write_count = 0;
@@ -208,12 +211,9 @@ int vfs_get(char *path, struct vnode **ret_vnode) {
     if (entry == NULL) {
         /* New vnode */
         vnode = vnode_new(path);
-        if (vnode == NULL) {
-            return -1;
-        }
+        if (vnode == NULL) return -1;
 
         hashtable_insert(vnode_table, path, vnode);
-
     } else {
         /* Already exists */
         vnode = (struct vnode *) entry->value;
@@ -227,16 +227,12 @@ int vfs_open(char *path, int mode, struct vnode **ret_vnode) {
     /* Get vnode */
     struct vnode *vnode;
     int err = vfs_get(path, &vnode);
-    if (err) {
-        return err;
-    }
+    if (err) return err;
 
     /* Open the vnode */
     err = vnode->ops->vop_open(vnode, mode);
     /* Check for errors, include single read */
-    if (err) {
-        return err;
-    }
+    if (err) return err;
 
     /* Inc ref counts */
     if ((mode & FM_READ) != 0) {
@@ -275,10 +271,7 @@ int vfs_close(struct vnode *vnode, int mode) {
     return 0;
 }
 
-static void vnode_open_cb(uintptr_t token,
-                          nfs_stat_t status,
-                          fhandle_t *fh,
-                          fattr_t *fattr) {
+static void vnode_open_cb(uintptr_t token, nfs_stat_t status, fhandle_t *fh, fattr_t *fattr) {
     arg[0] = (seL4_Word) status;
     arg[1] = (seL4_Word) malloc(sizeof(fhandle_t));
     arg[2] = (seL4_Word) malloc(sizeof(fattr_t));
@@ -309,7 +302,7 @@ int vnode_stat(struct vnode *vnode, sos_stat_t *stat) {
     yield();
 
     int err = (int) arg[0];
-    fattr_t *fattr = (fattr_t*) arg[1];
+    fattr_t *fattr = (fattr_t *) arg[1];
 
     int ret = 0;
 
@@ -317,7 +310,7 @@ int vnode_stat(struct vnode *vnode, sos_stat_t *stat) {
         seL4_Word sos_vaddr;
         seL4_Word uaddr = (seL4_Word) stat;
         int err = sos_map_page(uaddr, &sos_vaddr);
-
+        /* Add offset */
         sos_vaddr = PAGE_ALIGN_4K(sos_vaddr);
         sos_vaddr |= (uaddr & PAGE_MASK_4K);
 
@@ -326,7 +319,7 @@ int vnode_stat(struct vnode *vnode, sos_stat_t *stat) {
         if (PAGE_ALIGN_4K(uaddr + sizeof(stat)) != PAGE_ALIGN_4K(uaddr)) {
             buffer = malloc(sizeof(sos_stat_t));
         } else {
-            buffer = (seL4_Word*) sos_vaddr;
+            buffer = (seL4_Word *) sos_vaddr;
         }
 
         buffer[0] = fattr->type;
@@ -343,6 +336,7 @@ int vnode_stat(struct vnode *vnode, sos_stat_t *stat) {
 
             seL4_Word first_half = (PAGE_ALIGN_4K(uaddr + sizeof(stat)) - (seL4_Word) stat);
 
+            /* Boundary */
             memcpy(sos_vaddr, buffer, first_half);
             memcpy(sos_vaddr_next, buffer + first_half, sizeof(stat) - first_half);
 
@@ -369,6 +363,26 @@ static void vnode_create_cb(uintptr_t token, nfs_stat_t status, fhandle_t *fh, f
     set_resume(token);
 }
 
+static int file_create(struct vnode *vnode) {
+    uint64_t timestamp = time_stamp();
+    timeval_t curr_time;
+    curr_time.seconds = timestamp / 1000;
+    curr_time.useconds = (timestamp - curr_time.seconds * 1000) / 10000000;
+
+    sattr_t sattr = {
+        .mode = S_IROTH | S_IWOTH,
+        .uid = 1000,
+        .gid = 1000,
+        .size = 0,
+        .atime = curr_time,
+        .mtime = curr_time
+    };
+
+    nfs_create(&mnt_point, vnode->path, &sattr, (nfs_create_cb_t) vnode_create_cb, curr_coroutine_id);
+
+    yield();
+}
+
 static int vnode_open(struct vnode *vnode, fmode_t mode) {
     if (vnode->fh != NULL) return 0;
 
@@ -378,30 +392,18 @@ static int vnode_open(struct vnode *vnode, fmode_t mode) {
     int err = (int) arg[0];
 
     if (err == NFS_OK) {
-        vnode->fh = (fhandle_t*) arg[1];
-        vnode->fattr = (fattr_t*) arg[2];
+        vnode->fh = (fhandle_t *) arg[1];
+        vnode->fattr = (fattr_t *) arg[2];
 
     } else if (err == NFSERR_NOENT) {
         /* Create new file */
-        sattr_t sattr;
-        sattr.mode = S_IROTH|S_IWOTH;
-        sattr.uid = 1000;
-        sattr.gid = 1000;
-        sattr.size = 0;
-        uint64_t timestamp = time_stamp();
-        timeval_t time;
-        time.seconds = timestamp / 1000;
-        time.useconds = (timestamp - time.seconds * 1000) / 10000000;
-        sattr.atime = time;
-        sattr.mtime = time;
-        nfs_create(&mnt_point, vnode->path, &sattr, (nfs_create_cb_t) vnode_create_cb, curr_coroutine_id);
-        yield();
+        file_create(vnode);
 
         err = (int) arg[0];
 
         if (err == NFS_OK) {
-            vnode->fh = (fhandle_t*)arg[1];
-            vnode->fattr = (fattr_t*)arg[2];
+            vnode->fh = (fhandle_t *) arg[1];
+            vnode->fattr = (fattr_t *) arg[2];
         } else {
             conditional_panic(err, "failed create");
         }
@@ -433,7 +435,6 @@ static int vnode_read(struct vnode *vnode, struct uio *uio) {
     char *uaddr = (char *) uio->addr;
     seL4_Word ubuf_size = uio->size;
     seL4_Word end_uaddr = (seL4_Word) uaddr + ubuf_size;
-    seL4_Word bytes_read = 0;
     int err = 0;
 
     while (ubuf_size > 0) {
@@ -459,20 +460,24 @@ static int vnode_read(struct vnode *vnode, struct uio *uio) {
         sos_vaddr = PAGE_ALIGN_4K(sos_vaddr);
         sos_vaddr |= ((seL4_Word) uaddr & PAGE_MASK_4K);
         set_routine_arg(curr_coroutine_id, 0, sos_vaddr);
+
         yield();
 
         conditional_panic(arg[0], "failed read in end phrase");
 
-        bytes_read += (seL4_Word)arg[1];
-        uio->remaining -= (seL4_Word) arg[1];
-        ubuf_size -= (seL4_Word) arg[1];
-        uaddr += (seL4_Word) arg[1];
-        uio->offset += (seL4_Word) arg[1];
+        seL4_Word count = arg[1];
+
+        ubuf_size -= count;
+        uaddr += count;
+
+        uio->remaining -= count;
+        uio->offset += count;
 
         if (uio->offset >= vnode->fattr->size) {
             return 0;
         }
     }
+
     return 0;
 }
 
@@ -483,12 +488,13 @@ static void vnode_write_cb(uintptr_t token, enum nfs_stat status, fattr_t *fattr
 
     seL4_Word req_mask = get_routine_arg(al[0], 0) & (~(1 << al[1]));
     set_routine_arg(al[0], 0, req_mask);
-    seL4_Word cumulative_count = count+get_routine_arg(al[0], 1);
+    seL4_Word cumulative_count = count + get_routine_arg(al[0], 1);
 
     set_routine_arg(al[0], 1, cumulative_count);
-    if ( req_mask == 0) {
+    if (req_mask == 0) {
         set_resume(al[0]);
     }
+
     free(al);
 }
 
@@ -496,7 +502,6 @@ static int vnode_write(struct vnode *vnode, struct uio *uio) {
     char *uaddr = (char *) uio->addr;
     seL4_Word ubuf_size = uio->size;
     seL4_Word end_uaddr = (seL4_Word) uaddr + ubuf_size;
-    seL4_Word bytes_sent = 0;
     int err = 0;
 
     seL4_CPtr sos_vaddr = get_sos_vaddr(uaddr, curproc->addrspace);
@@ -536,7 +541,7 @@ static int vnode_write(struct vnode *vnode, struct uio *uio) {
                 err = nfs_write(vnode->fh, uio->offset + 1024 * req_id, size, sos_vaddr, &vnode_write_cb, token);
                 size = 0;
 
-                set_routine_arg(curr_coroutine_id, 0, (1<<(req_id+1))-1);
+                set_routine_arg(curr_coroutine_id, 0, (1 << (req_id + 1)) - 1);
                 set_routine_arg(curr_coroutine_id, 1, 0);
 
                 conditional_panic(err, "fail write in send phrase");
@@ -554,11 +559,11 @@ static int vnode_write(struct vnode *vnode, struct uio *uio) {
         yield();
 
         seL4_Word count = get_routine_arg(curr_coroutine_id, 1);
-        bytes_sent += count;
-        uio->remaining -= count;
 
         ubuf_size -= count;
         uaddr += count;
+
+        uio->remaining -= count;
         uio->offset += count;
     }
 
