@@ -25,7 +25,12 @@ static int vnode_write(struct vnode *vnode, struct uio *uio);
 static int vnode_stat(struct vnode *vnode, sos_stat_t *stat);
 static int vnode_getdirent(struct vnode *vnode, struct uio *uio);
 
+static int vnode_swap_in(struct vnode *vnode, struct uio *uio);
+static int vnode_swap_out(struct vnode *vnode, struct uio *uio);
+
 static void dev_list_init();
+
+static void vnode_write_cb(uintptr_t token, enum nfs_stat status, fattr_t *fattr, int count);
 
 static struct dev dev_list[MAX_DEV_NUM];
 static struct hashtable *vnode_table;
@@ -53,8 +58,8 @@ static const struct vnode_ops default_ops = {
 };
 
 static void vnode_readdir_cb(uintptr_t token, enum nfs_stat status,
-                             int num_files, char *file_names[],
-                             nfscookie_t nfscookie) {
+        int num_files, char *file_names[],
+        nfscookie_t nfscookie) {
     arg[0] = (seL4_Word) status;
     arg[1] = nfscookie;
 
@@ -198,6 +203,10 @@ static struct vnode *vnode_new(char *path) {
     } else {
         /* Handle file */
         vnode->ops = &default_ops;
+        if (strcmp(path, "swpf")) {
+            vnode->ops->vop_read = &vnode_swap_in;
+            vnode->ops->vop_write = &vnode_swap_out;
+        }
     }
 
     return vnode;
@@ -478,6 +487,40 @@ static int vnode_read(struct vnode *vnode, struct uio *uio) {
         }
     }
 
+    return 0;
+}
+
+static int vnode_swap_out(struct vnode *vnode, struct uio *uio) {
+    for (int i = 0 ; i < 4; i++) {
+        seL4_Word *token = malloc(2 * sizeof(seL4_Word));
+        token[0] = curr_coroutine_id;
+        token[1] = i;
+        int err = nfs_write(vnode->fh, uio->offset, 1024, uio->addr, &vnode_write_cb, token);
+        if (err != NFS_OK) {
+            return -1;
+        }
+    }
+    set_routine_arg(curr_coroutine_id, 0, (1<<4)-1);
+
+    yield();
+    int count =get_routine_arg(curr_coroutine_id, 1);
+    if (count != PAGE_SIZE_4K) {
+        return -1;
+    }
+    return 0;
+}
+
+static int vnode_swap_in(struct vnode *vnode, struct uio *uio) {
+    int err = nfs_read(vnode->fh, uio->offset, PAGE_SIZE_4K, (nfs_read_cb_t)(vnode_read_cb), curr_coroutine_id);
+    set_routine_arg(curr_coroutine_id, 0, uio -> addr);
+    if (err != NFS_OK) {
+        return -1;
+    }
+
+    yield();
+    if (arg[1] != PAGE_SIZE_4K) {
+        return -1;
+    }
     return 0;
 }
 

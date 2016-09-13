@@ -89,6 +89,8 @@ extern fhandle_t mnt_point;
 
 const seL4_BootInfo* _boot_info;
 
+jmp_buf syscall_loop_entry;
+
 struct PCB tty_test_process;
 
 struct PCB *curproc = &tty_test_process;
@@ -174,8 +176,38 @@ void handle_syscall(seL4_Word badge, int num_args) {
     }
 }
 
-jmp_buf syscall_loop_entry;
+static void vm_fault_handler(seL4_Word badge, int num_args) {
+    int err;
 
+    seL4_Word sos_vaddr, map_vaddr;
+
+    /* Check whether instruction fault or data fault */
+    if (seL4_GetMR(2)) {
+        /* Instruction fault */
+        map_vaddr = seL4_GetMR(0);
+    } else {
+        /* Data fault */
+        map_vaddr = seL4_GetMR(1);
+    }
+
+    int index1 = map_vaddr >> 22;
+    int index2 = (map_vaddr << 10) >> 22;
+    sos_vaddr = curproc->addrspace->page_table[index1][index2].sos_vaddr;
+    if (sos_vaddr & PTE_SWAP) {
+        //TODO
+        swap_in(0);
+    } else {
+        err = sos_map_page(map_vaddr, &sos_vaddr);
+        conditional_panic(err, "Fail to map the page to the application\n"); 
+
+        /* Save the caller */
+        seL4_CPtr reply_cap = cspace_save_reply_cap(cur_cspace);
+        assert(reply_cap != CSPACE_NULL);
+
+        seL4_MessageInfo_t reply = seL4_MessageInfo_new(0, 0, 0, 0);
+        seL4_Send(reply_cap, reply);
+    }
+}
 
 void syscall_loop(seL4_CPtr ep) {
     seL4_Word badge;
@@ -198,32 +230,8 @@ void syscall_loop(seL4_CPtr ep) {
 
         } else if (label == seL4_VMFault) {
             /* Page fault */
-            dprintf(0, "vm fault at 0x%08x, pc = 0x%08x, %s\n", 
-                    seL4_GetMR(1),
-                    seL4_GetMR(0),
-                    seL4_GetMR(2) ? "Instruction Fault" : "Data fault");
-            int err;
-            
-            seL4_Word sos_vaddr, map_vaddr;
-
-            /* Check whether instruction fault or data fault */
-            if (seL4_GetMR(2)) {
-                /* Instruction fault */
-                map_vaddr = seL4_GetMR(0);
-            } else {
-                /* Data fault */
-                map_vaddr = seL4_GetMR(1);
-            }
-
-            err = sos_map_page(map_vaddr, &sos_vaddr);
-            conditional_panic(err, "Fail to map the page to the application\n"); 
-
-            /* Save the caller */
-            seL4_CPtr reply_cap = cspace_save_reply_cap(cur_cspace);
-            assert(reply_cap != CSPACE_NULL);
-
-            seL4_MessageInfo_t reply = seL4_MessageInfo_new(0, 0, 0, 0);
-            seL4_Send(reply_cap, reply);
+            //TODO change to start coroutine
+            vm_fault_handler(badge, seL4_MessageInfo_get_length(message) - 1);
 
         } else if (label == seL4_NoFault) {
             /* System call */
@@ -236,7 +244,6 @@ void syscall_loop(seL4_CPtr ep) {
         }
     }
 }
-
 
 static void print_bootinfo(const seL4_BootInfo* info) {
     int i;

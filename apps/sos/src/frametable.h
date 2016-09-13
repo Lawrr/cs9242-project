@@ -11,4 +11,7 @@ seL4_CPtr get_cap(seL4_Word vaddr);
 
 int32_t insert_app_cap(seL4_Word vaddr, seL4_CPtr cap, struct page_table_entry *pte);
 
+int32_t swap_in(int offset);
+int32_t swap_out();
+
 #endif /* _FRAMETABLE_H_ */

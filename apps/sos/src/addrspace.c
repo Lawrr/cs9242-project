@@ -4,7 +4,10 @@
 #include "addrspace.h"
 #include "ut_manager/ut.h"
 #include "frametable.h"
+#include "process.h"
 #include "sos.h"
+
+extern struct PCB *curproc;
 
 struct app_addrspace *as_new() {
     struct app_addrspace *as = malloc(sizeof(struct app_addrspace));
@@ -84,4 +87,17 @@ int as_free(struct app_addrspace *as) {
     }
 
     return 0;
+}
+
+struct region *get_region(seL4_Word uaddr) {
+    struct region *curr_region = curproc->addrspace->regions;
+    while (curr_region != NULL) {
+        if (curr_region->baseaddr <= uaddr &&
+            curr_region->baseaddr + curr_region->size > uaddr) {
+            return curr_region;
+        }
+        curr_region = curr_region->next;
+    }
+
+    return NULL;
 }

@@ -25,6 +25,10 @@ struct fdt_entry {
     seL4_Word ofd;
 };
 
+struct swap_table_entry {
+    seL4_Word swap_index;
+};
+
 /*
  *VFN|UNUSED|S|V|P|
  *S:Swap bit
@@ -41,8 +45,10 @@ struct page_table_entry {
 struct app_addrspace *as_new();
 
 int as_define_region(struct app_addrspace *as,
-                     seL4_Word vroot,
-                     seL4_Word size,
-                     seL4_Word permissions);
+        seL4_Word vroot,
+        seL4_Word size,
+        seL4_Word permissions);
+
+struct region *get_region(seL4_Word uaddr);
 
 #endif /* _ADDRSPACE_H_ */

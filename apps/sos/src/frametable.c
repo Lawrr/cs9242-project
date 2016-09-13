@@ -4,19 +4,33 @@
 #include <string.h>
 #include <vmem_layout.h>
 #include <cspace/cspace.h>
+#include <utils/page.h>
+#include <fcntl.h>
 
 #include "ut_manager/ut.h"
 #include "mapping.h"
+#include "vnode.h"
 
 #include <sys/panic.h>
+
 #define PAGE_TABLE_MASK (0xFFF00000)
 #define PAGE_SIZE 4096lu /* Bytes */
 #define INDEX_ADDR_OFFSET 12 /* Bits to shift */
 
+#define FRAME_REFERENCE (1 << 2)
+#define FRAME_SWAPABLE (1 << 1)
+#define FRAME_VALID (1 << 0)
+/* val swapable | valid
+ * XXXXXX| R | S | V |
+ * R:reference bit which used for second chance replacement
+ * S:Swappable bit because some frame is allocated as coroutine stack
+ * V:frame that is valid , which can be swaped if swap bit is on
+ */
 static struct frame_entry {
     seL4_CPtr cap;
     struct app_cap *app_cap_list;
     int32_t next_index;
+    uint32_t mask;
 };
 
 static struct frame_table_cap {
@@ -35,9 +49,14 @@ static struct frame_entry *frame_table;
 
 /* Untyped region after end of frame table */
 static uint64_t base_addr;
-
 static int32_t low_addr;
 static int32_t high_addr;
+
+static uint32_t num_frames;
+
+/* Swapping */
+static struct vnode *swap_vnode;
+static uint32_t curr_swap_offset = 0;
 
 /* -1 no free_list but memory is not full
    -2 no free_list and memory is full (swapping later)*/
@@ -71,6 +90,7 @@ void frame_init(seL4_Word high, seL4_Word low) {
     uint64_t num_entries = frame_table_size / entry_size;
     uint64_t num_pages = high64 - base_addr / PAGE_SIZE;
     /* Make sure num_entries >= num_pages */
+    num_frames = num_entries;
     if (num_entries < num_pages) {
         frame_table_size += entry_size;
     }
@@ -122,6 +142,66 @@ void frame_init(seL4_Word high, seL4_Word low) {
     free_index = -1;
 }
 
+/* get free frame from list */
+static seL4_Word get_free_frame() {
+    seL4_Word frame_vaddr = ((free_index << INDEX_ADDR_OFFSET) + base_addr - low_addr + PROCESS_VMEM_START);
+    frame_table[free_index].mask = FRAME_SWAPABLE | FRAME_VALID | FRAME_REFERENCE;
+    free_index = frame_table[free_index].next_index;
+    memset(frame_vaddr, 0, PAGE_SIZE);
+    return frame_vaddr;
+}
+
+int32_t stack_alloc(seL4_Word *vaddr) {
+    int err = frame_alloc(vaddr);
+    if (err) return err;
+    int index = (*vaddr + low_addr - PROCESS_VMEM_START) >> INDEX_ADDR_OFFSET;
+    frame_table[index].mask &= (~FRAME_SWAPABLE);
+    return err;
+}
+
+int32_t stack_free(seL4_Word *vaddr) {
+    return frame_free(vaddr);
+}
+
+int32_t swap_out() {
+    //TODO unmap
+    for (int i = 0; i < num_frames; i++) {
+        if ((frame_table[i].mask & FRAME_VALID) && (frame_table[i].mask & FRAME_SWAPABLE)) {
+            if (frame_table[i].mask & FRAME_REFERENCE) {
+                //clear reference
+                frame_table[i].mask &= (~FRAME_REFERENCE);
+            } else {
+                seL4_Word frame_vaddr = (i << INDEX_ADDR_OFFSET) + base_addr - low_addr + PROCESS_VMEM_START;
+                if (swap_vnode == NULL) {
+                    vfs_open("swpf", FM_READ|FM_WRITE, &swap_vnode);
+                }
+                struct uio uio = {
+                    .offset = curr_swap_offset,
+                    .addr = frame_vaddr
+                };
+
+                int err = swap_vnode->ops->vop_write(swap_vnode, &uio);
+                if (err) return err;
+                free_index = i;
+                return err;
+            }
+        }
+    }
+}
+
+int32_t swap_in(int file_offset) {
+    seL4_Word sos_vaddr;
+    int err = frame_alloc(&sos_vaddr);
+    if (err) return err;
+    struct uio uio = {
+        .offset = curr_swap_offset,
+        .addr = PAGE_ALIGN_4K(sos_vaddr)
+    };
+    err = swap_vnode->ops->vop_read(swap_vnode, &uio);
+    //TODO remap
+    return err;
+}
+
 int32_t frame_alloc(seL4_Word *vaddr) {
     int err;
     seL4_Word frame_vaddr;
@@ -133,7 +213,9 @@ int32_t frame_alloc(seL4_Word *vaddr) {
         seL4_Word frame_paddr = ut_alloc(seL4_PageBits);
         if (frame_paddr == NULL) {
             *vaddr = NULL;
-            return 1;
+            swap_out();
+            *vaddr = get_free_frame();
+            return 0;
         }
 
         /* Retype to frame */
@@ -166,12 +248,12 @@ int32_t frame_alloc(seL4_Word *vaddr) {
         /* Calculate index of frame in the frame table */
         int index = (frame_paddr - base_addr) >> INDEX_ADDR_OFFSET;
 
+        frame_table[index].mask = FRAME_SWAPABLE | FRAME_VALID | FRAME_REFERENCE;
         frame_table[index].cap = frame_cap;
 
     } else {
         /* Reuse a frame in the free list */
-        frame_vaddr = ((free_index << INDEX_ADDR_OFFSET) + base_addr - low_addr + PROCESS_VMEM_START);
-        free_index = frame_table[free_index].next_index;
+        frame_vaddr = get_free_frame();
     }
 
     /* Clear frame */
@@ -227,6 +309,7 @@ int32_t frame_free(seL4_Word vaddr) {
     if (frame_table[index].cap == seL4_CapNull) return -1;
 
     /* Set free list index */
+    frame_table[index].mask = 0; 
     frame_table[index].next_index = free_index;
     free_index = index;
 
