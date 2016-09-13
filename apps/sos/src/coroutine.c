@@ -2,6 +2,7 @@
 #include <cspace/cspace.h>
 #include <alloca.h>
 #include <sys/panic.h>
+#include <utils/page.h>
 
 #include "coroutine.h"
 #include "frametable.h"
@@ -25,10 +26,14 @@ static int free_list[NUM_COROUTINES];
 
 /* Slots for storing args passed to callback */
 static seL4_Word routine_args[NUM_COROUTINES][5];
+static char *routine_frames[NUM_COROUTINES];
 
 void coroutine_init() {
+    int err;
     for (int i = 0; i < NUM_COROUTINES; i++) {
         free_list[i] = 1;
+        err = unswappable_alloc((seL4_Word *) &routine_frames[i]);
+        conditional_panic(err, "Could not initialise coroutines\n");
     }
 }
 
@@ -79,9 +84,7 @@ int start_coroutine(void (*task)(seL4_Word badge, int num_args), void *data) {
     curr_coroutine_id = task_id;
 
     /* Allocate new stack frame */
-    char *sptr;
-    int err = frame_alloc((seL4_Word *) &sptr);
-    conditional_panic(err, "Could not allocate frame\n");
+    char *sptr = routine_frames[curr_coroutine_id];
     
     /* Move stack ptr up by a frame (since stack grows down) */
     sptr += 4096;
@@ -102,7 +105,7 @@ int start_coroutine(void (*task)(seL4_Word badge, int num_args), void *data) {
     task(((seL4_Word *) data_new)[0], ((seL4_Word *) data_new)[1]);
 
     /* Task finished - clean up */
-    frame_free(sptr_new);
+    memset(PAGE_ALIGN_4K((seL4_Word) sptr_new), 0, PAGE_SIZE_4K);
     free_list[task_id] = 1;
     num_tasks--;
 

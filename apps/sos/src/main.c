@@ -116,14 +116,25 @@ static void of_table_init() {
     of_table[STDOUT].file_info.st_fmode = FM_WRITE;
 }
 
+void thrash() {
+    int *addr;
+    int err;
+    for (int i = 0; i < 5; i++) {
+        err = frame_alloc((seL4_Word *) &addr);
+        conditional_panic(err, "Thrash fail\n");
+        addr[0] = i;
+    }
+    //TODO dont know how to test this shit...
+}
+
 void handle_syscall(seL4_Word badge, int num_args) {
     seL4_Word syscall_number;
     seL4_CPtr reply_cap;
 
     syscall_number = seL4_GetMR(0);
 
-    //printf("Syscall :%s  -- received from user application\n",
-     //      sys_name[syscall_number]);
+    printf("Syscall :%s  -- received from user application\n",
+           sys_name[syscall_number]);
 
     /* Save the caller */
     reply_cap = cspace_save_reply_cap(cur_cspace);
@@ -133,6 +144,7 @@ void handle_syscall(seL4_Word badge, int num_args) {
     switch (syscall_number) {
         case SOS_WRITE_SYSCALL:
             syscall_write(reply_cap);
+            thrash();
             break;
          
         case SOS_READ_SYSCALL:
@@ -177,6 +189,7 @@ void handle_syscall(seL4_Word badge, int num_args) {
 }
 
 static void vm_fault_handler(seL4_Word badge, int num_args) {
+    printf("In vm_fault_handler\n");
     int err;
 
     seL4_Word sos_vaddr, map_vaddr;
@@ -199,11 +212,17 @@ static void vm_fault_handler(seL4_Word badge, int num_args) {
         conditional_panic(err, "Fail to map the page to the application\n"); 
     } else {
         sos_vaddr = curproc->addrspace->page_table[index1][index2].sos_vaddr;
+        printf("Sos_vaddr: %p\n", sos_vaddr);
         if (sos_vaddr & PTE_SWAP) {
+            // TODO this sometimes enters this code when its not supposed to?
+            printf("Swapping in\n");
             swap_in(map_vaddr);
         } else {
             err = sos_map_page(map_vaddr, &sos_vaddr);
-            conditional_panic(err, "Fail to map the page to the application\n"); 
+            // TODO change err handling
+            if (err && err != ERR_ALREADY_MAPPED) { 
+                conditional_panic(err, "Fail to map the page to the application\n"); 
+            }
         }
     }
 
@@ -213,6 +232,7 @@ static void vm_fault_handler(seL4_Word badge, int num_args) {
 
     seL4_MessageInfo_t reply = seL4_MessageInfo_new(0, 0, 0, 0);
     seL4_Send(reply_cap, reply);
+    //TODO do we have to free reply?
 }
 
 void syscall_loop(seL4_CPtr ep) {
@@ -236,11 +256,15 @@ void syscall_loop(seL4_CPtr ep) {
 
         } else if (label == seL4_VMFault) {
             /* Page fault */
-            //TODO change to start coroutine
-            vm_fault_handler(badge, seL4_MessageInfo_get_length(message) - 1);
+            //TODO change to start proper coroutine
+            seL4_Word data[2];
+            data[0] = badge;
+            data[1] = seL4_MessageInfo_get_length(message) - 1;
+            start_coroutine(&vm_fault_handler, data);
 
         } else if (label == seL4_NoFault) {
             /* System call */
+            // TODO change data[x]
             seL4_Word data[2];
             data[0] = badge;
             data[1] = seL4_MessageInfo_get_length(message) - 1;
@@ -509,8 +533,6 @@ static void nfs_timeout_callback(uint32_t id, void *data) {
     register_timer(NFS_TIMEOUT_INTERVAL, nfs_timeout_callback, NULL);
     nfs_timeout();
 }
-
-
 
 /*
  * Main entry point - called by crt.

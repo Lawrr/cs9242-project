@@ -17,6 +17,7 @@
 extern struct PCB *curproc;
 extern int curr_coroutine_id;
 extern fhandle_t mnt_point;
+extern const char *swapfile;
 
 static int vnode_open(struct vnode *vnode, int mode);
 static int vnode_close(struct vnode *vnode);
@@ -71,7 +72,7 @@ static void vnode_readdir_cb(uintptr_t token, enum nfs_stat status,
 
     } else if (uio->offset < num_files) {
         /* Check if we need to map a second page */
-        int len = strlen(file_names[uio->offset]);
+        int len = strlen(file_names[uio->offset]) + 1;
         if (len > uio->size) {
             arg[1] = 0; /* Hard set to stop it continuing */
         }
@@ -97,7 +98,10 @@ static void vnode_readdir_cb(uintptr_t token, enum nfs_stat status,
             strcpy(sos_vaddr_next, ((char *) file_names[uio->offset]) + uaddr_next - uaddr);
         } else {
             /* All on same page */
-            strncpy(sos_vaddr, file_names[uio->offset], uio->size);
+            /* Note: safe to use strcpy since file name is
+             * guaranteed to be null terminated and we already
+             * know it is all on the same page */
+            strcpy(sos_vaddr, file_names[uio->offset]);
         }
 
         uio->remaining = uio->size - len;
@@ -203,7 +207,9 @@ static struct vnode *vnode_new(char *path) {
     } else {
         /* Handle file */
         vnode->ops = &default_ops;
-        if (!strcmp(path, "swpf")) {
+
+        /* Check if it is the swapfile */
+        if (!strcmp(path, swapfile)) {
             vnode->ops->vop_read = &vnode_swap_in;
             vnode->ops->vop_write = &vnode_swap_out;
         }

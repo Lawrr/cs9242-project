@@ -26,6 +26,8 @@
 
 extern struct PCB *curproc;
 
+const char *swapfile = "pagefile";
+
 /* val swapable | valid
  * XXXXXX| R | S | V |
  * R:reference bit which used for second chance replacement
@@ -56,6 +58,7 @@ static uint32_t num_frames;
 
 /* Swapping */
 static struct vnode *swap_vnode;
+uint32_t swap_victim_index = 0;
 uint32_t curr_swap_offset = 0;
 
 /* -1 no free_list but memory is not full
@@ -163,30 +166,45 @@ int32_t unswappable_alloc(seL4_Word *vaddr) {
 }
 
 int32_t swap_out() {
+    printf("Swapping out1\n");
+    // TODO round robin starting from victim index
+    int victim = swap_victim_index;
     for (int i = 0; i < num_frames; i++) {
         if ((frame_table[i].mask & FRAME_VALID) && (frame_table[i].mask & FRAME_SWAPABLE)) {
             if (frame_table[i].mask & FRAME_REFERENCE) {
-                //clear reference
+                /* Clear reference */
                 frame_table[i].mask &= (~FRAME_REFERENCE);
             } else {
-                seL4_Word frame_vaddr = (i << INDEX_ADDR_OFFSET) + base_addr - low_addr + PROCESS_VMEM_START;
-                if (swap_vnode == NULL) {
-                    vfs_open("swpf", FM_READ|FM_WRITE, &swap_vnode);
-                }
-                struct uio uio = {
-                    .offset = curr_swap_offset,
-                    .addr = frame_vaddr
-                };
-
-                int err = swap_vnode->ops->vop_write(swap_vnode, &uio);
-                conditional_panic(err, "Could not write\n");
-                err = sos_unmap_page(frame_vaddr);
-                conditional_panic(err, "Could not unmap\n");
-                free_index = i;
-                return err;
+                victim = i;
+                break;
             }
         }
     }
+
+    printf("Victim: %d\n", victim);
+    seL4_Word frame_vaddr = (victim << INDEX_ADDR_OFFSET) + base_addr - low_addr + PROCESS_VMEM_START;
+    printf("Check null\n");
+    if (swap_vnode == NULL) {
+        printf("Opening\n");
+        vfs_open(swapfile, FM_READ | FM_WRITE, &swap_vnode);
+    }
+    struct uio uio = {
+        .offset = curr_swap_offset,
+        .addr = frame_vaddr
+    };
+
+    printf("Victim: %d, %p\n", victim, frame_vaddr);
+    printf("Writing\n");
+    int err = swap_vnode->ops->vop_write(swap_vnode, &uio);
+    conditional_panic(err, "Could not write\n");
+    printf("Unmapping\n");
+    err = sos_unmap_page(frame_vaddr);
+    printf("Done\n");
+    conditional_panic(err, "Could not unmap\n");
+    free_index = victim;
+    return err;
+
+    return 1;
 }
 
 int32_t swap_in(seL4_Word uaddr) {
@@ -210,6 +228,10 @@ int32_t swap_in(seL4_Word uaddr) {
     return err;
 }
 
+#define LIMIT_FRAMES 1
+#ifdef LIMIT_FRAMES
+int frames_to_alloc = 0;
+#endif
 int32_t frame_alloc(seL4_Word *vaddr) {
     int err;
     seL4_Word frame_vaddr;
@@ -219,9 +241,22 @@ int32_t frame_alloc(seL4_Word *vaddr) {
 
         /* Get untyped memory */
         seL4_Word frame_paddr = ut_alloc(seL4_PageBits);
+#ifdef LIMIT_FRAMES
+        num_frames = 1100;
+        frames_to_alloc++;
+        printf("Frames allocd: %d, num frames: %d\n", frames_to_alloc, num_frames);
+        if (frames_to_alloc > num_frames || frame_paddr == NULL) {
+            *vaddr = NULL;
+            err = swap_out();
+            conditional_panic(err, "Swap out failed\n");
+            *vaddr = get_free_frame();
+            return 0;
+        }
+#endif
         if (frame_paddr == NULL) {
             *vaddr = NULL;
-            swap_out();
+            err = swap_out();
+            conditional_panic(err, "Swap out failed\n");
             *vaddr = get_free_frame();
             return 0;
         }
