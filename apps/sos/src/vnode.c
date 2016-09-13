@@ -441,7 +441,6 @@ static void vnode_read_cb(uintptr_t token, nfs_stat_t status, fattr_t *fattr, in
 }
 
 static int vnode_read(struct vnode *vnode, struct uio *uio) {
-    printf("Reading1\n");
     char *uaddr = (char *) uio->addr;
     seL4_Word ubuf_size = uio->size;
     seL4_Word end_uaddr = (seL4_Word) uaddr + ubuf_size;
@@ -492,7 +491,6 @@ static int vnode_read(struct vnode *vnode, struct uio *uio) {
 }
 
 static int vnode_swap_out(struct vnode *vnode, struct uio *uio) {
-    printf("Hello1\n");
     for (int i = 0 ; i < 4; i++) {
         seL4_Word *token = malloc(2 * sizeof(seL4_Word));
         token[0] = curr_coroutine_id;
@@ -513,7 +511,6 @@ static int vnode_swap_out(struct vnode *vnode, struct uio *uio) {
 }
 
 static int vnode_swap_in(struct vnode *vnode, struct uio *uio) {
-    printf("Hello2\n");
     int err = nfs_read(vnode->fh, uio->offset, PAGE_SIZE_4K, (nfs_read_cb_t)(vnode_read_cb), curr_coroutine_id);
     set_routine_arg(curr_coroutine_id, 0, uio -> addr);
     if (err != NFS_OK) {
@@ -545,7 +542,6 @@ static void vnode_write_cb(uintptr_t token, enum nfs_stat status, fattr_t *fattr
 }
 
 static int vnode_write(struct vnode *vnode, struct uio *uio) {
-    printf("Writing1\n");
     char *uaddr = (char *) uio->addr;
     seL4_Word ubuf_size = uio->size;
     seL4_Word end_uaddr = (seL4_Word) uaddr + ubuf_size;

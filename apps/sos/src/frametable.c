@@ -88,12 +88,15 @@ void frame_init(seL4_Word high, seL4_Word low) {
     /* Calculate frame table size */
     uint64_t frame_table_size = base_addr - low64;
     uint64_t num_entries = frame_table_size / entry_size;
-    uint64_t num_pages = high64 - base_addr / PAGE_SIZE;
+    uint64_t num_pages = (high64 - base_addr) / PAGE_SIZE;
     /* Make sure num_entries >= num_pages */
     num_frames = num_entries;
+    printf("Base: %llu, oldbase: %llu\n", base_addr, low64 + frame_table_size);
+    printf("entries: %llu, pages: %llu\n", num_entries, num_pages);
     if (num_entries < num_pages) {
         frame_table_size += entry_size;
     }
+    printf("Base: %llu, newbase: %llu\n", base_addr, low64 + frame_table_size);
     base_addr = low;
 
     /* Allocated each section of frame table */
