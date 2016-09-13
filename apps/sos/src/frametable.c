@@ -159,16 +159,12 @@ static seL4_Word get_free_frame() {
     return frame_vaddr;
 }
 
-int32_t stack_alloc(seL4_Word *vaddr) {
+int32_t unswappable_alloc(seL4_Word *vaddr) {
     int err = frame_alloc(vaddr);
     if (err) return err;
     int index = (*vaddr + low_addr - PROCESS_VMEM_START) >> INDEX_ADDR_OFFSET;
     frame_table[index].mask &= (~FRAME_SWAPABLE);
     return err;
-}
-
-int32_t stack_free(seL4_Word *vaddr) {
-    return frame_free(vaddr);
 }
 
 int32_t swap_out() {
@@ -270,45 +266,6 @@ int32_t frame_alloc(seL4_Word *vaddr) {
     *vaddr = frame_vaddr;
     return 0;
 }
-
-/*
-   int32_t stack_alloc(seL4_Word *stack_vaddr) {
-   seL4_Word stack_cap;
-   seL4_Word stack_paddr = ut_alloc(seL4_PageBits);
-   if (frame_paddr == NULL) {
- *vaddr = NULL;
- return 1;
- }
-// Retype to stack
-err = cspace_ut_retype_addr(stack_paddr,
-seL4_ARM_SmallPageObject,
-seL4_PageBits,
-cur_cspace,
-&stack_cap);
-if (err) {
-ut_free(frame_paddr, seL4_PageBits);
- *vaddr = NULL;
- return 2;
- }
-
-// Map to address space
-stack_vaddr = stack_paddr - low_addr + PROCESS_VMEM_START;
-err = map_page(frame_cap,
-seL4_CapInitThreadPD,
-frame_vaddr,
-seL4_AllRights,
-seL4_ARM_Default_VMAttributes);
-if (err) {
-cspace_delete_cap(cur_cspace, stack_cap);
-ut_free(stack_paddr, seL4_PageBits);
- *vaddr = NULL;
- return 3;
- }
- *vaddr = frame_vaddr;
- int index = (stack_paddr - base_addr) >> INDEX_ADDR_OFFSET;
- frame_table[index].cap = frame_cap;
- }*/
-
 
 int32_t frame_free(seL4_Word vaddr) {
     uint32_t index = (vaddr - PROCESS_VMEM_START + low_addr - base_addr) >> INDEX_ADDR_OFFSET;
