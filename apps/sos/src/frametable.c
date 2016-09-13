@@ -312,7 +312,7 @@ int32_t frame_free(seL4_Word vaddr) {
     if (frame_table[index].cap == seL4_CapNull) return -1;
 
     /* Set free list index */
-    frame_table[index].mask = 0; 
+    frame_table[index].mask = 0;
     frame_table[index].next_index = free_index;
     free_index = index;
 
@@ -355,22 +355,22 @@ int32_t insert_app_cap(seL4_Word vaddr, seL4_CPtr cap, struct page_table_entry *
     return 0;
 }
 
-//Assume we don't need to traverse the list to find the corrsponding app_cap
-/*
-   int32_t get_app_cap(seL4_Word vaddr, struct page_table_entry **page_table, seL4_CPtr *cap_ret) {
-   uint32_t index = (vaddr - PROCESS_VMEM_START + low_addr - base_addr) >> INDEX_ADDR_OFFSET;
-   if (frame_table[index].cap == seL4_CapNull) return -1;
+int32_t get_app_cap(seL4_Word vaddr, struct app_cap **cap_ret) {
+    struct page_table_entry **page_table = curproc->addrspace->page_table;
 
-   struct app_cap *curr_cap = frame_table[index].app_cap_list;
-   while (curr_cap != NULL) {
-   if ((curr_cap->pte->sos_vaddr & PAGE_TABLE_MASK) == page_table) break;
-   printf("%x----%x\n", curr_cap->pte->sos_vaddr, page_table);
-   curr_cap = curr_cap->next;
-   }
-   if (curr_cap == NULL) {
-   return -1;
-   } else {
- *cap_ret = curr_cap->cap;
- return 0;
- }
- }*/
+    uint32_t index = (vaddr - PROCESS_VMEM_START + low_addr - base_addr) >> INDEX_ADDR_OFFSET;
+    if (frame_table[index].cap == seL4_CapNull) return -1;
+
+    struct app_cap *curr_cap = frame_table[index].app_cap_list;
+    while (curr_cap != NULL) {
+        if ((curr_cap->pte->sos_vaddr & PAGE_TABLE_MASK) == page_table) break;
+        printf("%x----%x\n", curr_cap->pte->sos_vaddr, page_table);
+        curr_cap = curr_cap->next;
+    }
+    if (curr_cap == NULL) {
+        return -1;
+    } else {
+        *cap_ret = curr_cap;
+        return 0;
+    }
+}

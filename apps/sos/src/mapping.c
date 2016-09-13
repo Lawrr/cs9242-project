@@ -115,16 +115,19 @@ map_device(void *paddr, int size) {
     return (void*)vstart;
 }
 
-/*
-   int sos_ummap_page(seL4_Word vaddr, seL4_Word asid) {
-   seL4_CPtr cap;
-   int err = get_app_cap((vaddr>>PAGE_BITS_4K) << PAGE_BITS_4K, asid, &cap);
-   if (err != 0) return err;
-   err = seL4_ARM_Page_Unmap(cap);
-   if (err != 0) return err;
-   cspace_delete_cap(cur_cspace, cap);
-   return err;
-   }*/
+int sos_ummap_page(seL4_Word vaddr) {
+    struct app_cap *cap;
+
+    int err = get_app_cap((vaddr >> PAGE_BITS_4K) << PAGE_BITS_4K, &cap);
+    if (err != 0) return err;
+
+    err = seL4_ARM_Page_Unmap(cap);
+    if (err != 0) return err;
+
+    cspace_delete_cap(cur_cspace, cap);
+
+    return err;
+}
 
 int
 get_uaddr(seL4_Word sos_vaddr,
