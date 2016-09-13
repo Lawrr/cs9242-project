@@ -200,8 +200,7 @@ static void vm_fault_handler(seL4_Word badge, int num_args) {
     } else {
         sos_vaddr = curproc->addrspace->page_table[index1][index2].sos_vaddr;
         if (sos_vaddr & PTE_SWAP) {
-            //TODO
-            swap_in(0);
+            swap_in(map_vaddr);
         } else {
             err = sos_map_page(map_vaddr, &sos_vaddr);
             conditional_panic(err, "Fail to map the page to the application\n"); 

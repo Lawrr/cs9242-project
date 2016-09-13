@@ -11,6 +11,8 @@
 #include "mapping.h"
 #include "process.h"
 #include "vnode.h"
+#include "frametable.h"
+#include "mapping.h"
 
 #include <sys/panic.h>
 
@@ -23,13 +25,6 @@
 #define FRAME_VALID (1 << 0)
 
 extern struct PCB *curproc;
-
-static struct app_cap {
-    struct page_table_entry pte;
-    struct swap_table_entry ste;
-    seL4_CPtr cap;
-    struct app_cap *next;
-};
 
 /* val swapable | valid
  * XXXXXX| R | S | V |
@@ -61,7 +56,7 @@ static uint32_t num_frames;
 
 /* Swapping */
 static struct vnode *swap_vnode;
-static uint32_t curr_swap_offset = 0;
+uint32_t curr_swap_offset = 0;
 
 /* -1 no free_list but memory is not full
    -2 no free_list and memory is full (swapping later)*/
@@ -168,7 +163,6 @@ int32_t unswappable_alloc(seL4_Word *vaddr) {
 }
 
 int32_t swap_out() {
-    //TODO unmap
     for (int i = 0; i < num_frames; i++) {
         if ((frame_table[i].mask & FRAME_VALID) && (frame_table[i].mask & FRAME_SWAPABLE)) {
             if (frame_table[i].mask & FRAME_REFERENCE) {
@@ -185,7 +179,9 @@ int32_t swap_out() {
                 };
 
                 int err = swap_vnode->ops->vop_write(swap_vnode, &uio);
-                if (err) return err;
+                conditional_panic(err, "Could not write\n");
+                err = sos_unmap_page(frame_vaddr);
+                conditional_panic(err, "Could not unmap\n");
                 free_index = i;
                 return err;
             }
@@ -193,16 +189,24 @@ int32_t swap_out() {
     }
 }
 
-int32_t swap_in(int file_offset) {
+int32_t swap_in(seL4_Word uaddr) {
+    //TODO error checking
+    int index1 = uaddr >> 22;
+    int index2 = (uaddr << 10) >> 22;
+    
     seL4_Word sos_vaddr;
     int err = frame_alloc(&sos_vaddr);
     if (err) return err;
     struct uio uio = {
-        .offset = curr_swap_offset,
+        .offset = curproc->addrspace->swap_table[index1][index2].swap_index,
         .addr = PAGE_ALIGN_4K(sos_vaddr)
     };
     err = swap_vnode->ops->vop_read(swap_vnode, &uio);
-    //TODO remap
+    conditional_panic(err, "Could not read\n");
+
+    err = sos_remap(uaddr, sos_vaddr, curproc->addrspace);
+    conditional_panic(err, "Could not remap\n");
+
     return err;
 }
 

@@ -30,6 +30,7 @@
 
 extern const seL4_BootInfo *_boot_info;
 extern struct PCB *curproc;
+extern uint32_t curr_swap_offset;
 
 /**
  * Maps a page table into the root servers page directory
@@ -115,7 +116,7 @@ map_device(void *paddr, int size) {
     return (void*)vstart;
 }
 
-int sos_ummap_page(seL4_Word vaddr) {
+int sos_unmap_page(seL4_Word vaddr) {
     struct app_cap *cap;
 
     int err = get_app_cap((vaddr >> PAGE_BITS_4K) << PAGE_BITS_4K, &cap);
@@ -123,6 +124,9 @@ int sos_ummap_page(seL4_Word vaddr) {
 
     err = seL4_ARM_Page_Unmap(cap);
     if (err != 0) return err;
+
+    cap->pte.sos_vaddr |= PTE_SWAP;
+    cap->ste.swap_index = curr_swap_offset;
 
     cspace_delete_cap(cur_cspace, cap);
 
