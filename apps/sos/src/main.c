@@ -192,21 +192,28 @@ static void vm_fault_handler(seL4_Word badge, int num_args) {
 
     int index1 = map_vaddr >> 22;
     int index2 = (map_vaddr << 10) >> 22;
-    sos_vaddr = curproc->addrspace->page_table[index1][index2].sos_vaddr;
-    if (sos_vaddr & PTE_SWAP) {
-        //TODO
-        swap_in(0);
-    } else {
+
+    if (curproc->addrspace->page_table == NULL || 
+            curproc->addrspace->page_table[index1] == NULL) {
         err = sos_map_page(map_vaddr, &sos_vaddr);
         conditional_panic(err, "Fail to map the page to the application\n"); 
-
-        /* Save the caller */
-        seL4_CPtr reply_cap = cspace_save_reply_cap(cur_cspace);
-        assert(reply_cap != CSPACE_NULL);
-
-        seL4_MessageInfo_t reply = seL4_MessageInfo_new(0, 0, 0, 0);
-        seL4_Send(reply_cap, reply);
+    } else {
+        sos_vaddr = curproc->addrspace->page_table[index1][index2].sos_vaddr;
+        if (sos_vaddr & PTE_SWAP) {
+            //TODO
+            swap_in(0);
+        } else {
+            err = sos_map_page(map_vaddr, &sos_vaddr);
+            conditional_panic(err, "Fail to map the page to the application\n"); 
+        }
     }
+
+    /* Save the caller */
+    seL4_CPtr reply_cap = cspace_save_reply_cap(cur_cspace);
+    assert(reply_cap != CSPACE_NULL);
+
+    seL4_MessageInfo_t reply = seL4_MessageInfo_new(0, 0, 0, 0);
+    seL4_Send(reply_cap, reply);
 }
 
 void syscall_loop(seL4_CPtr ep) {
