@@ -9,6 +9,7 @@
 
 #include "ut_manager/ut.h"
 #include "mapping.h"
+#include "process.h"
 #include "vnode.h"
 
 #include <sys/panic.h>
@@ -20,6 +21,16 @@
 #define FRAME_REFERENCE (1 << 2)
 #define FRAME_SWAPABLE (1 << 1)
 #define FRAME_VALID (1 << 0)
+
+extern struct PCB *curproc;
+
+static struct app_cap {
+    struct page_table_entry pte;
+    struct swap_table_entry ste;
+    seL4_CPtr cap;
+    struct app_cap *next;
+};
+
 /* val swapable | valid
  * XXXXXX| R | S | V |
  * R:reference bit which used for second chance replacement
@@ -28,7 +39,7 @@
  */
 static struct frame_entry {
     seL4_CPtr cap;
-    struct app_cap *app_cap_list;
+    struct app_cap app_caps;
     int32_t next_index;
     uint32_t mask;
 };
@@ -37,12 +48,6 @@ static struct frame_table_cap {
     int ref;
     seL4_CPtr cap;
     struct frame_table_cap *next;
-};
-
-struct app_cap {
-    struct page_table_entry *pte;
-    seL4_CPtr cap;
-    struct app_cap *next;
 };
 
 static struct frame_entry *frame_table;
@@ -332,7 +337,8 @@ static struct app_cap *app_cap_new(seL4_CPtr cap, struct page_table_entry *pte) 
 
     /* Initialise variables */
     new_app_cap->next = NULL;
-    new_app_cap->pte = pte;
+    new_app_cap->pte = *pte;
+    new_app_cap->ste = (struct swap_table_entry){0};
     new_app_cap->cap = cap;
 
     return new_app_cap;
@@ -344,13 +350,28 @@ int32_t insert_app_cap(seL4_Word vaddr, seL4_CPtr cap, struct page_table_entry *
     /* Check that the frame exists */
     if (frame_table[index].cap == seL4_CapNull) return -1;
 
-    /* Create new app cap */
-    struct app_cap *copied_cap = app_cap_new(cap, pte);
-    if (copied_cap == NULL) return -1;
+    struct app_cap *copied_cap;
+    /* Note: First app cap is not malloc'd */
+    if (frame_table[index].app_caps.cap == seL4_CapNull) {
+        /* First app cap */
+        copied_cap = &frame_table[index].app_caps;
+        copied_cap->next = NULL;
+        copied_cap->pte = *pte;
+        copied_cap->ste = (struct swap_table_entry){0};
+        copied_cap->cap = cap;
+    } else {
+        /* Create new app cap */
+        copied_cap = app_cap_new(cap, pte);
+        if (copied_cap == NULL) return -1;
 
-    /* Insert into list of app caps for the frame */
-    copied_cap->next = frame_table[index].app_cap_list;
-    frame_table[index].app_cap_list = copied_cap;
+        /* Insert into list of app caps for the frame */
+        //TODO just insert to head
+        struct app_cap *curr_cap = copied_cap;
+        while (curr_cap->next != NULL) {
+            curr_cap = curr_cap->next;
+        }
+        curr_cap->next = copied_cap;
+    }
 
     return 0;
 }
@@ -361,10 +382,10 @@ int32_t get_app_cap(seL4_Word vaddr, struct app_cap **cap_ret) {
     uint32_t index = (vaddr - PROCESS_VMEM_START + low_addr - base_addr) >> INDEX_ADDR_OFFSET;
     if (frame_table[index].cap == seL4_CapNull) return -1;
 
-    struct app_cap *curr_cap = frame_table[index].app_cap_list;
+    struct app_cap *curr_cap = &frame_table[index].app_caps;
     while (curr_cap != NULL) {
-        if ((curr_cap->pte->sos_vaddr & PAGE_TABLE_MASK) == page_table) break;
-        printf("%x----%x\n", curr_cap->pte->sos_vaddr, page_table);
+        if ((curr_cap->pte.sos_vaddr & PAGE_TABLE_MASK) == page_table) break;
+        printf("%x----%x\n", curr_cap->pte.sos_vaddr, page_table);
         curr_cap = curr_cap->next;
     }
     if (curr_cap == NULL) {
