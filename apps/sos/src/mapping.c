@@ -120,11 +120,14 @@ int sos_unmap_page(seL4_Word vaddr) {
     struct app_cap *cap;
 
     int err = get_app_cap((vaddr >> PAGE_BITS_4K) << PAGE_BITS_4K, &cap);
+    printf("unmap1.0\n");
     if (err != 0) return err;
 
+    printf("unmpa1.1\n");
     err = seL4_ARM_Page_Unmap(cap);
     if (err != 0) return err;
 
+    printf("unmap1.2\n");
     cap->pte.sos_vaddr |= PTE_SWAP;
     cap->ste.swap_index = curr_swap_offset;
 

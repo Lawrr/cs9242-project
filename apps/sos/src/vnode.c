@@ -241,14 +241,18 @@ int vfs_get(char *path, struct vnode **ret_vnode) {
 int vfs_open(char *path, int mode, struct vnode **ret_vnode) {
     /* Get vnode */
     struct vnode *vnode;
+    
+    printf("before vfs\n");
     int err = vfs_get(path, &vnode);
     if (err) return err;
 
+    printf("after vfs\n");
     /* Open the vnode */
     err = vnode->ops->vop_open(vnode, mode);
     /* Check for errors, include single read */
     if (err) return err;
 
+    printf("after open\n");
     /* Inc ref counts */
     if ((mode & FM_READ) != 0) {
         vnode->read_count++;
@@ -291,9 +295,10 @@ static void vnode_open_cb(uintptr_t token, nfs_stat_t status, fhandle_t *fh, fat
     arg[1] = (seL4_Word) malloc(sizeof(fhandle_t));
     arg[2] = (seL4_Word) malloc(sizeof(fattr_t));
 
+    printf("inopne cb\n");
     memcpy(arg[1], fh, sizeof(fhandle_t));
     memcpy(arg[2], fattr, sizeof(fattr_t));
-
+    printf("after memcoy\n");
     /* 0 has special meaning for setjmp returns, so map 0 to -1 */
     if (status == 0) status = -1;
 
@@ -402,8 +407,9 @@ static int vnode_open(struct vnode *vnode, fmode_t mode) {
     if (vnode->fh != NULL) return 0;
 
     nfs_lookup(&mnt_point, vnode->path, (nfs_lookup_cb_t) vnode_open_cb, curr_coroutine_id);
+    printf("inopen\n");
     yield();
-
+    printf("after yield\n");
     int err = (int) arg[0];
 
     if (err == NFS_OK) {
@@ -498,11 +504,18 @@ static int vnode_read(struct vnode *vnode, struct uio *uio) {
 
 static int vnode_swap_out(struct vnode *vnode, struct uio *uio) {
     for (int i = 0 ; i < 4; i++) {
-        seL4_Word *token = malloc(2 * sizeof(seL4_Word));
+        printf("swapout loop%d\n",i);
+	seL4_Word *token = malloc(2 * sizeof(seL4_Word));
         token[0] = curr_coroutine_id;
         token[1] = i;
-        int err = nfs_write(vnode->fh, uio->offset, 1024, uio->addr, &vnode_write_cb, token);
-        if (err != NFS_OK) {
+	printf("%d.1\n",i);
+        printf("%x\n",vnode);
+	printf("%X\n",vnode->fh);
+	printf("%x\n",uio);
+	
+	int err = nfs_write(vnode->fh, uio->offset, 1024, uio->addr, &vnode_write_cb, token);
+        printf("hahha\n");
+	if (err != NFS_OK) {
             return -1;
         }
     }

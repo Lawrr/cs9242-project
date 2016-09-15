@@ -144,7 +144,7 @@ void handle_syscall(seL4_Word badge, int num_args) {
     switch (syscall_number) {
         case SOS_WRITE_SYSCALL:
             syscall_write(reply_cap);
-            thrash();
+            //thrash();
             break;
          
         case SOS_READ_SYSCALL:
