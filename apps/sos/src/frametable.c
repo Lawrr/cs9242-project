@@ -161,7 +161,7 @@ int32_t unswappable_alloc(seL4_Word *vaddr) {
     int err = frame_alloc(vaddr);
     printf("unswapable alloc\n");
     if (err) return err;
-    int index = (*vaddr + low_addr - PROCESS_VMEM_START) >> INDEX_ADDR_OFFSET;
+    uint32_t index = (*vaddr - PROCESS_VMEM_START + low_addr - base_addr) >> INDEX_ADDR_OFFSET;
     frame_table[index].mask &= (~FRAME_SWAPABLE);
     return err;
 }
