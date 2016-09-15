@@ -210,7 +210,11 @@ int32_t swap_out() {
     
     //Mark it swapped
     frame_table[victim].app_caps.pte.sos_vaddr &= PTE_SWAP;
+    //TODO check if the swap_table is null(2 level checking)
     frame_table[victim].app_caps.ste.swap_index = curr_swap_offset;
+    
+    
+    
     free_index = victim;
     return 0;
 }
