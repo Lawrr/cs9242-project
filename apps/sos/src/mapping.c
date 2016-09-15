@@ -224,6 +224,7 @@ sos_map_page(seL4_Word vaddr_unaligned, seL4_Word *sos_vaddr_ret) {
             cap,
             seL4_AllRights);
 
+    printf("newcap%x",copied_cap);
     err = map_page(copied_cap,
             pd,
             vaddr,
