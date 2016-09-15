@@ -176,8 +176,9 @@ int32_t swap_out() {
                 /* Clear reference */
                 frame_table[i].mask &= (~FRAME_REFERENCE);
             } else {
-		printf("mask:%x\n",frame_table[i].mask);
+                printf("mask:%x\n",frame_table[i].mask);
                 victim = i;
+                swap_victim_index = (victim+1)%num_frames;
                 break;
             }
         }
