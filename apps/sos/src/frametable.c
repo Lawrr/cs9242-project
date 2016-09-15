@@ -208,11 +208,15 @@ int32_t swap_out() {
     err = sos_unmap_page(frame_vaddr);
     printf("Done\n");
     conditional_panic(err, "Could not unmap\n");
-    
+   
+    seL4_Word uaddr = frame_table[victim].app_caps.uaddr;
+    int index1 = uaddr >> 22;
+    int index2 = (uaddr << 10) >> 22;
+ 
     //Mark it swapped
-    frame_table[victim].app_caps.pte.sos_vaddr &= PTE_SWAP;
+    frame_table[victim].app_caps.addrspace->page_table[index1][index2].sos_vaddr &= PTE_SWAP;
     //TODO check if the swap_table is null(2 level checking)
-    frame_table[victim].app_caps.ste.swap_index = curr_swap_offset;
+    frame_table[victim].app_caps.addrspace->swap_table[index1][index2].swap_index = curr_swap_offset;
     
     
     
@@ -342,7 +346,7 @@ seL4_CPtr get_cap(seL4_Word vaddr) {
     return frame_table[index].cap;
 }
 
-static struct app_cap *app_cap_new(seL4_CPtr cap, struct page_table_entry *pte) {
+static struct app_cap *app_cap_new(seL4_CPtr cap, struct app_addrspace *addrspace, seL4_Word uaddr) {
     struct app_cap *new_app_cap = malloc(sizeof(struct app_cap));
     if (new_app_cap == NULL) {
         return NULL;
@@ -350,14 +354,14 @@ static struct app_cap *app_cap_new(seL4_CPtr cap, struct page_table_entry *pte) 
 
     /* Initialise variables */
     new_app_cap->next = NULL;
-    new_app_cap->pte = *pte;
-    new_app_cap->ste = (struct swap_table_entry){0};
+    new_app_cap->addrspace = addrspace;
+    new_app_cap->uaddr = uaddr;
     new_app_cap->cap = cap;
 
     return new_app_cap;
 }
 
-int32_t insert_app_cap(seL4_Word vaddr, seL4_CPtr cap, struct page_table_entry *pte) {
+int32_t insert_app_cap(seL4_Word vaddr, seL4_CPtr cap, struct app_addrspace *addrspace, seL4_Word uaddr) {
     uint32_t index = (vaddr - PROCESS_VMEM_START + low_addr - base_addr) >> INDEX_ADDR_OFFSET;
     
     printf("Inserting app cap for %x-----%x\n",vaddr,cap);
@@ -371,13 +375,12 @@ int32_t insert_app_cap(seL4_Word vaddr, seL4_CPtr cap, struct page_table_entry *
         /* First app cap */
         copied_cap = &frame_table[index].app_caps;
         copied_cap->next = NULL;
-        copied_cap->pte = *pte;
-	//TODO logic is wrong
-        copied_cap->ste = (struct swap_table_entry){0};
+        copied_cap->addrspace = addrspace;
+        copied_cap->uaddr = uaddr;
         copied_cap->cap = cap;
     } else {
         /* Create new app cap */
-        copied_cap = app_cap_new(cap, pte);
+        copied_cap = app_cap_new(cap, addrspace,uaddr);
         if (copied_cap == NULL) return -1;
 
         /* Insert into list of app caps for the frame */

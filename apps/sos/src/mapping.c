@@ -128,11 +128,10 @@ int sos_unmap_page(seL4_Word vaddr) {
     if (err != 0) return err;
 
     printf("unmap1.2\n");
-    printf("cap->pte.sos_vaddr%x\n",cap);
-    printf("cap->ste.swap_index%x\n",cap);
-    cap->pte.sos_vaddr |= PTE_SWAP;
-    cap->ste.swap_index = curr_swap_offset;
-    
+    /*should be done in swap out
+    cap->pte->sos_vaddr |= PTE_SWAP;
+    cap->ste->swap_index = curr_swap_offset;
+    */
     printf("deleting\n");
     printf("cap:%x\n",cap->cap);
     cspace_delete_cap(cur_cspace, cap);
@@ -227,7 +226,7 @@ sos_map_page(seL4_Word vaddr_unaligned, seL4_Word *sos_vaddr_ret) {
 
     err = map_page(copied_cap,
             pd,
-            (vaddr >> PAGE_BITS_4K) << PAGE_BITS_4K,
+            vaddr,
             curr_region->permissions,
             seL4_ARM_Default_VMAttributes);
     if (err) {
@@ -239,7 +238,8 @@ sos_map_page(seL4_Word vaddr_unaligned, seL4_Word *sos_vaddr_ret) {
     /* Book keeping the copied caps */
     insert_app_cap(PAGE_ALIGN_4K(sos_vaddr),
             copied_cap,
-            &(*page_table_vaddr)[index1][index2]);
+            curproc->addrspace,
+	    vaddr);
 
     /* Book keeping in our own page table */
     struct page_table_entry pte = {PAGE_ALIGN_4K(sos_vaddr) |
@@ -273,7 +273,7 @@ int sos_remap(seL4_Word uaddr, seL4_Word sos_vaddr, struct app_addrspace *as) {
     seL4_Word index2 = (uaddr & INDEX2_MASK) >> PAGE_BITS_4K;
 
     /* Book keeping the copied caps */
-    insert_app_cap(PAGE_ALIGN_4K(sos_vaddr), copied_cap, &(*page_table_vaddr)[index1][index2]);
+    insert_app_cap(PAGE_ALIGN_4K(sos_vaddr), copied_cap, curproc->addrspace,uaddr);
 
     /* Book keeping in our own page table */
     struct page_table_entry pte = {PAGE_ALIGN_4K(sos_vaddr) |
