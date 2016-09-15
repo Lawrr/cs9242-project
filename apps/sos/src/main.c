@@ -77,7 +77,6 @@ char *sys_name[9] = {
     "Sos getdirent",
     "Sos stat"
 };
-
 /* The linker will link this symbol to the start address  *
  * of an archive of attached applications.                */
 extern char _cpio_archive[];
@@ -241,7 +240,7 @@ void syscall_loop(seL4_CPtr ep) {
     seL4_MessageInfo_t message;
     while (1) {
         setjmp(syscall_loop_entry);
-        message = seL4_Wait(ep, &badge);
+	message = seL4_Wait(ep, &badge);
         label = seL4_MessageInfo_get_label(message);
         /* printf("sysscall_loop\n"); */
 	if (badge & IRQ_EP_BADGE) {

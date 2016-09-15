@@ -159,6 +159,7 @@ static seL4_Word get_free_frame() {
 
 int32_t unswappable_alloc(seL4_Word *vaddr) {
     int err = frame_alloc(vaddr);
+    printf("unswapable alloc\n");
     if (err) return err;
     int index = (*vaddr + low_addr - PROCESS_VMEM_START) >> INDEX_ADDR_OFFSET;
     frame_table[index].mask &= (~FRAME_SWAPABLE);
@@ -218,7 +219,8 @@ int32_t swap_in(seL4_Word uaddr) {
     //TODO error checking
     int index1 = uaddr >> 22;
     int index2 = (uaddr << 10) >> 22;
-    
+   
+    printf("swaping\n"); 
     seL4_Word sos_vaddr;
     int err = frame_alloc(&sos_vaddr);
     if (err) return err;
@@ -250,7 +252,7 @@ int32_t frame_alloc(seL4_Word *vaddr) {
         /* Get untyped memory */
         seL4_Word frame_paddr = ut_alloc(seL4_PageBits);
 #ifdef LIMIT_FRAMES
-        num_frames = 220;
+        num_frames = 1058;
         frames_to_alloc++;
         printf("Frames allocd: %d, num frames: %d", frames_to_alloc, num_frames);
         if (frames_to_alloc > num_frames || frame_paddr == NULL) {
@@ -352,6 +354,8 @@ static struct app_cap *app_cap_new(seL4_CPtr cap, struct page_table_entry *pte) 
 
 int32_t insert_app_cap(seL4_Word vaddr, seL4_CPtr cap, struct page_table_entry *pte) {
     uint32_t index = (vaddr - PROCESS_VMEM_START + low_addr - base_addr) >> INDEX_ADDR_OFFSET;
+    
+    printf("Inserting app cap for %x-----%x\n",vaddr,cap);
 
     /* Check that the frame exists */
     if (frame_table[index].cap == seL4_CapNull) return -1;

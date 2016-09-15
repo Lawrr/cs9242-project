@@ -149,7 +149,6 @@ int
 sos_map_page(seL4_Word vaddr_unaligned, seL4_Word *sos_vaddr_ret) {
     seL4_ARM_PageDirectory pd = curproc->vroot;
     struct app_addrspace *as = curproc->addrspace;
-
     int err;
 
     seL4_Word vaddr = PAGE_ALIGN_4K(vaddr_unaligned);
@@ -182,20 +181,20 @@ sos_map_page(seL4_Word vaddr_unaligned, seL4_Word *sos_vaddr_ret) {
     /* No page table yet */
     if (*page_table_vaddr == NULL) {
         /* First level */
-        err = frame_alloc((seL4_Word *) page_table_vaddr);
+        err = unswappable_alloc((seL4_Word *) page_table_vaddr);
         if (err) {
             return ERR_NO_MEMORY;
         }
 
         /* Second level */
-        err = frame_alloc((seL4_Word *) &(*page_table_vaddr)[index1]);
+        err = unswappable_alloc((seL4_Word *) &(*page_table_vaddr)[index1]);
         if (err) {
             return ERR_NO_MEMORY;
         }
 
     } else if ((*page_table_vaddr)[index1] == NULL) {
         /* Second level */
-        err = frame_alloc((seL4_Word *) &(*page_table_vaddr)[index1]);
+        err = unswappable_alloc((seL4_Word *) &(*page_table_vaddr)[index1]);
         if (err) {
             return ERR_NO_MEMORY;
         }

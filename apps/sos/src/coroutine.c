@@ -1,4 +1,3 @@
-#include <setjmp.h>
 #include <cspace/cspace.h>
 #include <alloca.h>
 #include <sys/panic.h>
@@ -27,6 +26,11 @@ static int free_list[NUM_COROUTINES];
 /* Slots for storing args passed to callback */
 static seL4_Word routine_args[NUM_COROUTINES][5];
 static char *routine_frames[NUM_COROUTINES];
+print_jmpbuf(jmp_buf t){
+   for (int i = 0;i < 32; i++){
+      printf("jmp_buf[%d]=%d\n",i,t[i]);
+   }
+}
 
 void coroutine_init() {
     int err;
@@ -39,7 +43,7 @@ void coroutine_init() {
 
 yield() {
     int id = setjmp(coroutines[curr_coroutine_id]);
-
+//    print_jmpbuf(syscall_loop_entry); 
     if (id == 0) {
         /* First time */
         longjmp(syscall_loop_entry, 1);
@@ -50,6 +54,8 @@ yield() {
 
     /* Never reached */
 }
+
+
 
 void resume() {
     if (next_resume_id != -1) {
