@@ -170,7 +170,7 @@ int32_t swap_out() {
     printf("Swapping out1\n");
     // TODO round robin starting from victim index
     int victim = swap_victim_index;
-    for (int i = victim;; i=(i+1)%num_frames) {
+    for (int i = victim ; ;i = (i+1)%num_frames) {
         if ((frame_table[i].mask & FRAME_VALID) && (frame_table[i].mask & FRAME_SWAPABLE)) {
             if (frame_table[i].mask & FRAME_REFERENCE) {
                 /* Clear reference */
@@ -372,6 +372,7 @@ int32_t insert_app_cap(seL4_Word vaddr, seL4_CPtr cap, struct page_table_entry *
         copied_cap = &frame_table[index].app_caps;
         copied_cap->next = NULL;
         copied_cap->pte = *pte;
+	//TODO logic is wrong
         copied_cap->ste = (struct swap_table_entry){0};
         copied_cap->cap = cap;
     } else {
@@ -413,7 +414,7 @@ int32_t get_app_cap(seL4_Word vaddr, struct app_cap **cap_ret) {
         return -1;
     } else {
 	printf("app_cap%x\n",curr_cap->cap);
-        *cap_ret = curr_cap->cap;
+        *cap_ret = curr_cap;
         return 0;
     }
 }

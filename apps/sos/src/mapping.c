@@ -128,10 +128,15 @@ int sos_unmap_page(seL4_Word vaddr) {
     if (err != 0) return err;
 
     printf("unmap1.2\n");
+    printf("cap->pte.sos_vaddr%x\n",cap);
+    printf("cap->ste.swap_index%x\n",cap);
     cap->pte.sos_vaddr |= PTE_SWAP;
     cap->ste.swap_index = curr_swap_offset;
-
+    
+    printf("deleting\n");
+    printf("cap:%x\n",cap->cap);
     cspace_delete_cap(cur_cspace, cap);
+    printf("deleting finished\n");
 
     return err;
 }
