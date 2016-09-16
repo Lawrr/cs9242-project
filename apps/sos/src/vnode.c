@@ -520,15 +520,22 @@ static int vnode_swap_out(struct vnode *vnode, struct uio *uio) {
 
 static int vnode_swap_in(struct vnode *vnode, struct uio *uio) {
     int err = nfs_read(vnode->fh, uio->offset, PAGE_SIZE_4K, (nfs_read_cb_t)(vnode_read_cb), curr_coroutine_id);
-    set_routine_arg(curr_coroutine_id, 0, uio -> addr);
+
+    set_routine_arg(curr_coroutine_id, 0, uio->addr);
+
     if (err != NFS_OK) {
+        printf("Not NFS_OK\n");
         return -1;
     }
 
     yield();
-    if (arg[1] != PAGE_SIZE_4K) {
-        return -1;
-    }
+
+    // TODO
+    /* if (arg[1] != PAGE_SIZE_4K) { */
+    /*     printf("PAGE_SIZE_4K == %d\n", arg[1]); */
+    /*     return -1; */
+    /* } */
+
     return 0;
 }
 

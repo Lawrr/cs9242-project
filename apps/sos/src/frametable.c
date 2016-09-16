@@ -159,7 +159,6 @@ static seL4_Word get_free_frame() {
 
 int32_t unswappable_alloc(seL4_Word *vaddr) {
     int err = frame_alloc(vaddr);
-    printf("unswappable alloc\n");
     if (err) return err;
     uint32_t index = (*vaddr - PROCESS_VMEM_START + low_addr - base_addr) >> INDEX_ADDR_OFFSET;
     frame_table[index].mask &= (~FRAME_SWAPABLE);
@@ -167,7 +166,6 @@ int32_t unswappable_alloc(seL4_Word *vaddr) {
 }
 
 int32_t swap_out() {
-    printf("Swapping out1\n");
     // TODO round robin starting from victim index
     int victim = swap_victim_index;
     for (int i = victim ; ;i = (i+1)%num_frames) {
@@ -176,7 +174,6 @@ int32_t swap_out() {
                 /* Clear reference */
                 frame_table[i].mask &= (~FRAME_REFERENCE);
             } else {
-                printf("mask:%x\n", frame_table[i].mask);
                 victim = i;
                 swap_victim_index = (victim+1)%num_frames;
                 break;
@@ -184,17 +181,13 @@ int32_t swap_out() {
         }
     }
 
-    printf("Victim: %d\n", victim);
     seL4_Word frame_vaddr = (victim << INDEX_ADDR_OFFSET) + base_addr - low_addr + PROCESS_VMEM_START;
-    printf("Check null\n");
     if (swap_vnode == NULL) {
         printf("Opening\n");
         vfs_open(swapfile, FM_READ | FM_WRITE, &swap_vnode);
         printf("Opening finish\n");
     }
 
-    printf("address:%x\n", frame_vaddr);
-    printf("accessing%d\n", *(seL4_Word*)frame_vaddr);
     struct uio uio = {
         .offset = curr_swap_offset,
         .addr = frame_vaddr
@@ -225,9 +218,11 @@ int32_t swap_in(seL4_Word uaddr) {
     int index1 = uaddr >> 22;
     int index2 = (uaddr << 10) >> 22;
 
-    printf("swaping\n");
     seL4_Word sos_vaddr;
-    int err = frame_alloc(&sos_vaddr);
+    /* int err = frame_alloc(&sos_vaddr); */
+    /* if (err) return err; */
+
+    int err = sos_map_page(uaddr, &sos_vaddr);
     if (err) return err;
 
     struct uio uio = {
@@ -237,8 +232,8 @@ int32_t swap_in(seL4_Word uaddr) {
     err = swap_vnode->ops->vop_read(swap_vnode, &uio);
     conditional_panic(err, "Could not read\n");
 
-    err = sos_remap(uaddr, sos_vaddr, curproc->addrspace);
-    conditional_panic(err, "Could not remap\n");
+    /* err = sos_remap(uaddr, sos_vaddr, curproc->addrspace); */
+    /* conditional_panic(err, "Could not remap\n"); */
 
     return err;
 }
@@ -252,7 +247,6 @@ int32_t frame_alloc(seL4_Word *vaddr) {
     seL4_Word frame_vaddr;
 
     if (free_index == -1) {
-    printf("IN frame alloc1\n");
         /* Free list is empty but there is still memory */
 
         /* Get untyped memory */
@@ -311,7 +305,7 @@ int32_t frame_alloc(seL4_Word *vaddr) {
         frame_table[index].cap = frame_cap;
 
     } else {
-    printf("IN frame alloc2\n");
+        printf("IN frame - freelist exists\n");
         /* Reuse a frame in the free list */
         frame_vaddr = get_free_frame();
     }
@@ -398,7 +392,6 @@ int32_t get_app_cap(seL4_Word vaddr, struct app_cap **cap_ret) {
 
     uint32_t index = (vaddr - PROCESS_VMEM_START + low_addr - base_addr) >> INDEX_ADDR_OFFSET;
     if (frame_table[index].cap == seL4_CapNull) {
-        printf("frame is allocated\n");
         return -1;
     }
 

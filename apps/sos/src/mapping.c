@@ -121,11 +121,9 @@ int sos_unmap_page(seL4_Word vaddr) {
 
     int err = get_app_cap(PAGE_ALIGN_4K(vaddr), &cap);
     if (err != 0) return err;
-    printf("Err 1, %d\n", cap->cap);
 
     err = seL4_ARM_Page_Unmap(cap->cap);
     if (err != 0) return err;
-    printf("Err 2\n");
 
     /*should be done in swap out
     cap->pte->sos_vaddr |= PTE_SWAP;
@@ -221,14 +219,17 @@ sos_map_page(seL4_Word vaddr_unaligned, seL4_Word *sos_vaddr_ret) {
         }
     }
 
-    if ((seL4_Word *) (*page_table_vaddr)[index1][index2].sos_vaddr != NULL) {
-        /* Already mapped */
-        *sos_vaddr_ret = (*page_table_vaddr)[index1][index2].sos_vaddr;
-        return ERR_ALREADY_MAPPED;
+    seL4_Word sos_vaddr = (*page_table_vaddr)[index1][index2].sos_vaddr;
+    if ((seL4_Word *) sos_vaddr != NULL) {
+        if ((sos_vaddr & PTE_SWAP) == 0) {
+            /* Already mapped */
+            *sos_vaddr_ret = (*page_table_vaddr)[index1][index2].sos_vaddr;
+            return ERR_ALREADY_MAPPED;
+        }
     }
 
     /* Call the internal kernel page mapping */
-    seL4_Word sos_vaddr;
+    //TODO reused same variable for different things...
     err = frame_alloc(&sos_vaddr);
     if (err) {
         return ERR_NO_MEMORY;
@@ -236,42 +237,40 @@ sos_map_page(seL4_Word vaddr_unaligned, seL4_Word *sos_vaddr_ret) {
 
     seL4_CPtr cap = get_cap(sos_vaddr);
     struct app_cap *app_cap;
-    printf("Get app cap\n");
     err = get_app_cap(sos_vaddr, &app_cap);
-    printf("Done get app cap\n");
+    seL4_CPtr copied_cap;
     if (app_cap->cap == CSPACE_NULL) {
-        printf("App cap null\n");
-        seL4_Word copied_cap = cspace_copy_cap(cur_cspace,
+        copied_cap = cspace_copy_cap(cur_cspace,
                 cur_cspace,
                 cap,
                 seL4_AllRights);
-
-        err = map_page(copied_cap,
-                pd,
-                vaddr,
-                curr_region->permissions,
-                seL4_ARM_Default_VMAttributes);
-        if (err) {
-            cspace_delete_cap(cur_cspace, copied_cap);
-            frame_free(sos_vaddr);
-            return ERR_INTERNAL_MAP_ERROR;
-        }
 
         /* Book keeping the copied caps */
         insert_app_cap(PAGE_ALIGN_4K(sos_vaddr),
                 copied_cap,
                 curproc->addrspace,
             vaddr);
+    } else {
+        copied_cap = app_cap->cap;
     }
 
-    printf("Do bookkeeping\n");
+    err = map_page(copied_cap,
+            pd,
+            vaddr,
+            curr_region->permissions,
+            seL4_ARM_Default_VMAttributes);
+    if (err) {
+        /* cspace_delete_cap(cur_cspace, copied_cap); */
+        frame_free(sos_vaddr);
+        return ERR_INTERNAL_MAP_ERROR;
+    }
+
     /* Book keeping in our own page table */
     struct page_table_entry pte = {PAGE_ALIGN_4K(sos_vaddr) |
         (curr_region->permissions | PTE_VALID)};
     (*page_table_vaddr)[index1][index2] = pte;
 
     *sos_vaddr_ret = sos_vaddr;
-    printf("Returning\n");
     return 0;
 }
 

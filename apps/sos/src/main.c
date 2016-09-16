@@ -163,9 +163,7 @@ void handle_syscall(seL4_Word badge, int num_args) {
             break;
 
         case SOS_USLEEP_SYSCALL:
-            printf("Thrash\n");
             thrash();
-            printf("Thrash done\n");
             syscall_usleep(reply_cap);
             break;
 
@@ -220,8 +218,10 @@ static void vm_fault_handler(seL4_Word badge, int num_args) {
         sos_vaddr = curproc->addrspace->page_table[index1][index2].sos_vaddr;
         if (sos_vaddr & PTE_SWAP) {
             // TODO this sometimes enters this code when its not supposed to?
-            printf("Swapping in\n");
-            swap_in(map_vaddr);
+            err = swap_in(map_vaddr);
+            if (err && err != ERR_ALREADY_MAPPED) { 
+                conditional_panic(err, "Fail to map the page to the application\n"); 
+            }
         } else {
             err = sos_map_page(map_vaddr, &sos_vaddr);
             // TODO change err handling
