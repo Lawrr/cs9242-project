@@ -498,23 +498,24 @@ static int vnode_read(struct vnode *vnode, struct uio *uio) {
 static int vnode_swap_out(struct vnode *vnode, struct uio *uio) {
     for (int i = 0 ; i < 4; i++) {
         printf("swapout loop%d\n",i);
-	seL4_Word *token = malloc(2 * sizeof(seL4_Word));
+        seL4_Word *token = malloc(2 * sizeof(seL4_Word));
         token[0] = curr_coroutine_id;
         token[1] = i;
-	printf("%d.1\n",i);
-        printf("%x\n",vnode);
-	printf("%X\n",vnode->fh);
-	printf("%x\n",uio);
-	
-	int err = nfs_write(vnode->fh, uio->offset, 1024, uio->addr, &vnode_write_cb, token);
-        printf("hahha\n");
-	if (err != NFS_OK) {
+
+        printf("Calling nfs_write\n");
+        int err = nfs_write(vnode->fh, uio->offset, 1024, uio->addr, &vnode_write_cb, token);
+        printf("Done calling nfs_write\n");
+        if (err != NFS_OK) {
             return -1;
         }
     }
+    
     set_routine_arg(curr_coroutine_id, 0, (1<<4)-1);
-
+    set_routine_arg(curr_coroutine_id, 1, 0);
+    
+    printf("Yielding\n");
     yield();
+    printf("Done Yielding\n");
     int count =get_routine_arg(curr_coroutine_id, 1);
     if (count != PAGE_SIZE_4K) {
         return -1;
@@ -537,6 +538,7 @@ static int vnode_swap_in(struct vnode *vnode, struct uio *uio) {
 }
 
 static void vnode_write_cb(uintptr_t token, enum nfs_stat status, fattr_t *fattr, int count) {
+    printf("Write cb\n");
     seL4_Word * al = (seL4_Word*) token;
     seL4_Word sos_vaddr = get_routine_arg(al[0], 0);
     conditional_panic(status, "nfs_write fail in end phase");
