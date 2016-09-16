@@ -119,7 +119,7 @@ map_device(void *paddr, int size) {
 int sos_unmap_page(seL4_Word vaddr) {
     struct app_cap *cap;
 
-    int err = get_app_cap((vaddr >> PAGE_BITS_4K) << PAGE_BITS_4K, &cap);
+    int err = get_app_cap(PAGE_ALIGN_4K(vaddr), &cap);
     printf("unmap1.0\n");
     if (err != 0) return err;
 
@@ -132,10 +132,10 @@ int sos_unmap_page(seL4_Word vaddr) {
     cap->pte->sos_vaddr |= PTE_SWAP;
     cap->ste->swap_index = curr_swap_offset;
     */
-    printf("deleting\n");
-    printf("cap:%x\n",cap->cap);
-    cspace_delete_cap(cur_cspace, cap);
-    printf("deleting finished\n");
+    /* printf("deleting\n"); */
+    /* printf("cap:%x\n",cap->cap); */
+    /* cspace_delete_cap(cur_cspace, cap); */
+    /* printf("deleting finished\n"); */
 
     return err;
 }
@@ -253,19 +253,21 @@ sos_map_page(seL4_Word vaddr_unaligned, seL4_Word *sos_vaddr_ret) {
 
 int sos_remap(seL4_Word uaddr, seL4_Word sos_vaddr, struct app_addrspace *as) {
     struct region *curr_region = get_region(uaddr);
-    seL4_Word cap = get_cap(sos_vaddr);
-    seL4_Word copied_cap = cspace_copy_cap(cur_cspace,
-            cur_cspace,
-            cap,
-            seL4_AllRights);
+    seL4_CPtr copied_cap;
+    int err = get_app_cap(PAGE_ALIGN_4K(sos_vaddr), &copied_cap);
+    /* seL4_Word cap = get_cap(sos_vaddr); */
+    /* seL4_Word copied_cap = cspace_copy_cap(cur_cspace, */
+    /*         cur_cspace, */
+    /*         cap, */
+    /*         seL4_AllRights); */
     struct page_table_entry ***page_table_vaddr = &(as->page_table);
-    int err = map_page(copied_cap,
+    err = map_page(copied_cap,
             curproc->vroot,
             (uaddr >> PAGE_BITS_4K) << PAGE_BITS_4K,
             curr_region->permissions,
             seL4_ARM_Default_VMAttributes);
     if (err) {
-        cspace_delete_cap(cur_cspace, copied_cap);
+        /* cspace_delete_cap(cur_cspace, copied_cap); */
         frame_free(sos_vaddr);
         return ERR_INTERNAL_MAP_ERROR;
     }
@@ -274,7 +276,7 @@ int sos_remap(seL4_Word uaddr, seL4_Word sos_vaddr, struct app_addrspace *as) {
     seL4_Word index2 = (uaddr & INDEX2_MASK) >> PAGE_BITS_4K;
 
     /* Book keeping the copied caps */
-    insert_app_cap(PAGE_ALIGN_4K(sos_vaddr), copied_cap, curproc->addrspace,uaddr);
+    /* insert_app_cap(PAGE_ALIGN_4K(sos_vaddr), copied_cap, curproc->addrspace,uaddr); */
 
     /* Book keeping in our own page table */
     struct page_table_entry pte = {PAGE_ALIGN_4K(sos_vaddr) |

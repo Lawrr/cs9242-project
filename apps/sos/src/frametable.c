@@ -176,7 +176,7 @@ int32_t swap_out() {
                 /* Clear reference */
                 frame_table[i].mask &= (~FRAME_REFERENCE);
             } else {
-                printf("mask:%x\n",frame_table[i].mask);
+                printf("mask:%x\n", frame_table[i].mask);
                 victim = i;
                 swap_victim_index = (victim+1)%num_frames;
                 break;
@@ -193,8 +193,8 @@ int32_t swap_out() {
         printf("Opening finish\n");
     }
 
-    printf("address:%x\n",frame_vaddr);
-    printf("accessing%d\n",*(seL4_Word*)frame_vaddr);
+    printf("address:%x\n", frame_vaddr);
+    printf("accessing%d\n", *(seL4_Word*)frame_vaddr);
     struct uio uio = {
         .offset = curr_swap_offset,
         .addr = frame_vaddr
@@ -208,11 +208,11 @@ int32_t swap_out() {
     err = sos_unmap_page(frame_vaddr);
     printf("Done\n");
     conditional_panic(err, "Could not unmap\n");
-   
+
     seL4_Word uaddr = frame_table[victim].app_caps.uaddr;
     int index1 = uaddr >> 22;
     int index2 = (uaddr << 10) >> 22;
- 
+
     //Mark it swapped
     frame_table[victim].app_caps.addrspace->page_table[index1][index2].sos_vaddr &= PTE_SWAP;
     //TODO check if the swap_table is null(2 level checking)
@@ -244,9 +244,9 @@ int32_t swap_out() {
     
     
     frame_table[victim].app_caps.addrspace->swap_table[index1][index2].swap_index = curr_swap_offset;
-    
-    
-    
+
+
+
     free_index = victim;
     return 0;
 }
@@ -255,12 +255,12 @@ int32_t swap_in(seL4_Word uaddr) {
     //TODO error checking
     int index1 = uaddr >> 22;
     int index2 = (uaddr << 10) >> 22;
-   
-    printf("swaping\n"); 
+
+    printf("swaping\n");
     seL4_Word sos_vaddr;
     int err = frame_alloc(&sos_vaddr);
     if (err) return err;
-    
+
     struct uio uio = {
         .offset = curproc->addrspace->swap_table[index1][index2].swap_index,
         .addr = PAGE_ALIGN_4K(sos_vaddr)
@@ -296,7 +296,7 @@ int32_t frame_alloc(seL4_Word *vaddr) {
             err = swap_out();
             conditional_panic(err, "Swap out failed\n");
             *vaddr = get_free_frame();
-	    printf(", sos_vaddr:%x\n",*vaddr);
+            printf(", sos_vaddr:%x\n", *vaddr);
             return 0;
         }
 #endif
@@ -337,7 +337,7 @@ int32_t frame_alloc(seL4_Word *vaddr) {
 
         /* Calculate index of frame in the frame table */
         int index = (frame_paddr - base_addr) >> INDEX_ADDR_OFFSET;
-        printf("actual index:%d",index);
+        printf("actual index:%d", index);
         frame_table[index].mask = FRAME_SWAPABLE | FRAME_VALID | FRAME_REFERENCE;
         frame_table[index].cap = frame_cap;
 
@@ -348,7 +348,7 @@ int32_t frame_alloc(seL4_Word *vaddr) {
 
     /* Clear frame */
     memset(frame_vaddr, 0, PAGE_SIZE);
-    printf(", sos_vaddr:%x\n",frame_vaddr);
+    printf(", sos_vaddr:%x\n", frame_vaddr);
 
     *vaddr = frame_vaddr;
     return 0;
@@ -390,8 +390,8 @@ static struct app_cap *app_cap_new(seL4_CPtr cap, struct app_addrspace *addrspac
 
 int32_t insert_app_cap(seL4_Word vaddr, seL4_CPtr cap, struct app_addrspace *addrspace, seL4_Word uaddr) {
     uint32_t index = (vaddr - PROCESS_VMEM_START + low_addr - base_addr) >> INDEX_ADDR_OFFSET;
-    
-    printf("Inserting app cap for %x-----%x\n",vaddr,cap);
+
+    printf("Inserting app cap for %x-----%x\n", vaddr, cap);
 
     /* Check that the frame exists */
     if (frame_table[index].cap == seL4_CapNull) return -1;
@@ -406,17 +406,18 @@ int32_t insert_app_cap(seL4_Word vaddr, seL4_CPtr cap, struct app_addrspace *add
         copied_cap->uaddr = uaddr;
         copied_cap->cap = cap;
     } else {
-        /* Create new app cap */
-        copied_cap = app_cap_new(cap, addrspace,uaddr);
-        if (copied_cap == NULL) return -1;
+        conditional_panic(1, "Does not currently support shared pages\n");
+        /* /1* Create new app cap *1/ */
+        /* copied_cap = app_cap_new(cap, addrspace, uaddr); */
+        /* if (copied_cap == NULL) return -1; */
 
-        /* Insert into list of app caps for the frame */
-        //TODO just insert to head
-        struct app_cap *curr_cap = copied_cap;
-        while (curr_cap->next != NULL) {
-            curr_cap = curr_cap->next;
-        }
-        curr_cap->next = copied_cap;
+        /* /1* Insert into list of app caps for the frame *1/ */
+        /* //TODO just insert to head */
+        /* struct app_cap *curr_cap = copied_cap; */
+        /* while (curr_cap->next != NULL) { */
+        /*     curr_cap = curr_cap->next; */
+        /* } */
+        /* curr_cap->next = copied_cap; */
     }
 
     return 0;
@@ -427,23 +428,23 @@ int32_t get_app_cap(seL4_Word vaddr, struct app_cap **cap_ret) {
 
     uint32_t index = (vaddr - PROCESS_VMEM_START + low_addr - base_addr) >> INDEX_ADDR_OFFSET;
     if (frame_table[index].cap == seL4_CapNull) {
-	printf("frame is allocated\n");    
-	return -1;
+        printf("frame is allocated\n");
+        return -1;
     }
 
     struct app_cap *curr_cap = &frame_table[index].app_caps;
     /*Doesn't support shared pages right now
      * while (curr_cap != NULL) {
-        if ((curr_cap->pte.sos_vaddr & PAGE_TABLE_MASK) == page_table) breaki;
-        printf("%x----%x\n", curr_cap->pte.sos_vaddr, page_table);
-        curr_cap = curr_cap->next;
-    }
-    */
-    printf("app_cap%x\n",curr_cap->cap);
+     if ((curr_cap->pte.sos_vaddr & PAGE_TABLE_MASK) == page_table) breaki;
+     printf("%x----%x\n", curr_cap->pte.sos_vaddr, page_table);
+     curr_cap = curr_cap->next;
+     }
+     */
+    printf("app_cap%x\n", curr_cap->cap);
     if (curr_cap == NULL) {
         return -1;
     } else {
-	printf("app_cap%x\n",curr_cap->cap);
+        printf("app_cap%x\n", curr_cap->cap);
         *cap_ret = curr_cap;
         return 0;
     }
