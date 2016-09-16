@@ -123,7 +123,6 @@ void thrash() {
         conditional_panic(err, "Thrash fail\n");
         addr[0] = i;
     }
-    //TODO dont know how to test this shit...
 }
 
 void handle_syscall(seL4_Word badge, int num_args) {
@@ -133,19 +132,19 @@ void handle_syscall(seL4_Word badge, int num_args) {
     syscall_number = seL4_GetMR(0);
 
     printf("Syscall :%s  -- received from user application\n",
-           sys_name[syscall_number]);
+            sys_name[syscall_number]);
 
     /* Save the caller */
     reply_cap = cspace_save_reply_cap(cur_cspace);
     assert(reply_cap != CSPACE_NULL);
-    
+
     /* Process system call */
     switch (syscall_number) {
         case SOS_WRITE_SYSCALL:
             syscall_write(reply_cap);
             thrash();
             break;
-         
+
         case SOS_READ_SYSCALL:
             syscall_read(reply_cap);
             break;
@@ -240,14 +239,13 @@ void syscall_loop(seL4_CPtr ep) {
     seL4_MessageInfo_t message;
     while (1) {
         setjmp(syscall_loop_entry);
-	message = seL4_Wait(ep, &badge);
+        message = seL4_Wait(ep, &badge);
         label = seL4_MessageInfo_get_label(message);
         /* printf("sysscall_loop\n"); */
-	if (badge & IRQ_EP_BADGE) {
+        if (badge & IRQ_EP_BADGE) {
             /* Interrupt */
             if (badge & IRQ_BADGE_NETWORK) {
                 network_irq();
-                resume();
             }
             if (badge & IRQ_BADGE_TIMER) {
                 timer_interrupt();
@@ -271,6 +269,8 @@ void syscall_loop(seL4_CPtr ep) {
         } else {
             printf("Rootserver got an unknown message\n");
         }
+
+        resume();
     }
 }
 
