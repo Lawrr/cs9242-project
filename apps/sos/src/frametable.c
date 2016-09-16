@@ -216,6 +216,33 @@ int32_t swap_out() {
     //Mark it swapped
     frame_table[victim].app_caps.addrspace->page_table[index1][index2].sos_vaddr &= PTE_SWAP;
     //TODO check if the swap_table is null(2 level checking)
+    if (frame_table[victim].app_caps.addrspace->swap_table == NULL){
+       seL4_Word sos_vaddr;
+       err = unswappable_alloc(&sos_vaddr);
+       
+       if (err) return err;
+       
+       frame_table[victim].app_caps.addrspace->swap_table = sos_vaddr;       
+       err = unswappable_alloc(&sos_vaddr);
+       
+       if (err) {
+           frame_free(frame_table[victim].app_caps.addrspace->swap_table);
+           return  err;
+       }
+       frame_table[victim].app_caps.addrspace->swap_table = sos_vaddr;
+
+    } else if (frame_table[victim].app_caps.addrspace->swap_table[index1] == NULL){
+       seL4_Word sos_vaddr;
+       err = unswappable_alloc(&sos_vaddr);
+       
+       if (err) {
+           frame_free(frame_table[victim].app_caps.addrspace->swap_table);
+           return  err;
+       }
+       frame_table[victim].app_caps.addrspace->swap_table = sos_vaddr;
+    } 
+    
+    
     frame_table[victim].app_caps.addrspace->swap_table[index1][index2].swap_index = curr_swap_offset;
     
     
