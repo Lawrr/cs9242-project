@@ -200,36 +200,21 @@ static void vm_fault_handler(seL4_Word badge, int num_args) {
     /* Check whether instruction fault or data fault */
     if (seL4_GetMR(2)) {
         /* Instruction fault */
+        printf("Instruction fault - ");
         map_vaddr = seL4_GetMR(0);
     } else {
         /* Data fault */
+        printf("Data fault - ");
         map_vaddr = seL4_GetMR(1);
     }
-    printf("In vm_fault_handler for uaddr: %p\n", map_vaddr);
+    printf("In vm_fault_handler for uaddr: %p, instr: %p\n", map_vaddr, seL4_GetMR(0));
 
     int index1 = map_vaddr >> 22;
     int index2 = (map_vaddr << 10) >> 22;
 
-    if (curproc->addrspace->page_table == NULL || 
-            curproc->addrspace->page_table[index1] == NULL) {
-        err = sos_map_page(map_vaddr, &sos_vaddr);
-        conditional_panic(err, "Fail to map the page to the application\n"); 
-    } else {
-        sos_vaddr = curproc->addrspace->page_table[index1][index2].sos_vaddr;
-        if (sos_vaddr & PTE_SWAP) {
-            // TODO this sometimes enters this code when its not supposed to?
-            err = swap_in(map_vaddr);
-            if (err && err != ERR_ALREADY_MAPPED) { 
-                conditional_panic(err, "Fail to map the page to the application\n"); 
-            }
-        } else {
-            err = sos_map_page(map_vaddr, &sos_vaddr);
-            // TODO change err handling
-            if (err && err != ERR_ALREADY_MAPPED) { 
-                conditional_panic(err, "Fail to map the page to the application\n"); 
-            }
-        }
-    }
+    err = sos_map_page(map_vaddr, &sos_vaddr);
+    printf("ERR: %d\n", err);
+    conditional_panic(err, "Could not map page\n");
 
     seL4_MessageInfo_t reply = seL4_MessageInfo_new(0, 0, 0, 0);
     seL4_Send(reply_cap, reply);

@@ -22,7 +22,7 @@ int32_t insert_app_cap(seL4_Word vaddr, seL4_CPtr cap, struct app_addrspace *add
 
 int32_t get_app_cap(seL4_Word vaddr, struct app_cap **cap_ret);
 
-int32_t swap_in(seL4_Word uaddr);
+int32_t swap_in(seL4_Word uaddr, seL4_Word sos_vaddr);
 int32_t swap_out();
 
 #endif /* _FRAMETABLE_H_ */

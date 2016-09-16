@@ -496,12 +496,14 @@ static int vnode_read(struct vnode *vnode, struct uio *uio) {
 }
 
 static int vnode_swap_out(struct vnode *vnode, struct uio *uio) {
+    printf("Out offset: %d, vaddr: %p\n", uio->offset, uio->addr);
     for (int i = 0 ; i < 4; i++) {
         seL4_Word *token = malloc(2 * sizeof(seL4_Word));
         token[0] = curr_coroutine_id;
         token[1] = i;
 
-        int err = nfs_write(vnode->fh, uio->offset, 1024, uio->addr, &vnode_write_cb, token);
+        int offset = 1024 * i;
+        int err = nfs_write(vnode->fh, uio->offset + offset, 1024, uio->addr + offset, &vnode_write_cb, token);
         if (err != NFS_OK) {
             return -1;
         }
@@ -519,6 +521,7 @@ static int vnode_swap_out(struct vnode *vnode, struct uio *uio) {
 }
 
 static int vnode_swap_in(struct vnode *vnode, struct uio *uio) {
+    printf("In offset: %d, vaddr: %p\n", uio->offset, uio->addr);
     int err = nfs_read(vnode->fh, uio->offset, PAGE_SIZE_4K, (nfs_read_cb_t)(vnode_read_cb), curr_coroutine_id);
 
     set_routine_arg(curr_coroutine_id, 0, uio->addr);
@@ -530,11 +533,9 @@ static int vnode_swap_in(struct vnode *vnode, struct uio *uio) {
 
     yield();
 
-    // TODO
-    /* if (arg[1] != PAGE_SIZE_4K) { */
-    /*     printf("PAGE_SIZE_4K == %d\n", arg[1]); */
-    /*     return -1; */
-    /* } */
+    if (arg[1] != PAGE_SIZE_4K) {
+        return -1;
+    }
 
     return 0;
 }
