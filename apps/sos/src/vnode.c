@@ -533,7 +533,6 @@ static int vnode_swap_in(struct vnode *vnode, struct uio *uio) {
 }
 
 static void vnode_write_cb(uintptr_t token, enum nfs_stat status, fattr_t *fattr, int count) {
-    printf("Write cb\n");
     seL4_Word * al = (seL4_Word*) token;
     seL4_Word sos_vaddr = get_routine_arg(al[0], 0);
     conditional_panic(status, "nfs_write fail in end phase");

@@ -152,16 +152,14 @@ void frame_init(seL4_Word high, seL4_Word low) {
 static seL4_Word get_free_frame() {
     seL4_Word frame_vaddr = ((free_index << INDEX_ADDR_OFFSET) + base_addr - low_addr + PROCESS_VMEM_START);
     frame_table[free_index].mask = FRAME_SWAPABLE | FRAME_VALID | FRAME_REFERENCE;
-    printf("Frame vaddr: %p, %d\n", frame_vaddr, free_index);
     free_index = frame_table[free_index].next_index;
     memset(frame_vaddr, 0, PAGE_SIZE);
-    printf("Done memset\n");
     return frame_vaddr;
 }
 
 int32_t unswappable_alloc(seL4_Word *vaddr) {
     int err = frame_alloc(vaddr);
-    printf("unswapable alloc\n");
+    printf("unswappable alloc\n");
     if (err) return err;
     uint32_t index = (*vaddr - PROCESS_VMEM_START + low_addr - base_addr) >> INDEX_ADDR_OFFSET;
     frame_table[index].mask &= (~FRAME_SWAPABLE);
@@ -203,15 +201,13 @@ int32_t swap_out() {
     };
 
     printf("Victim: %d, %p\n", victim, frame_vaddr);
-    printf("Writing\n");
     int err = swap_vnode->ops->vop_write(swap_vnode, &uio);
     conditional_panic(err, "Could not write\n");
-    printf("Unmapping\n");
     err = sos_unmap_page(frame_vaddr);
-    printf("Done\n");
     conditional_panic(err, "Could not unmap\n");
 
     seL4_Word uaddr = frame_table[victim].app_caps.uaddr;
+    printf("Swapping out uaddr: %p, vaddr: %p\n", uaddr, frame_vaddr);
     int index1 = uaddr >> 22;
     int index2 = (uaddr << 10) >> 22;
 
@@ -293,13 +289,12 @@ int32_t frame_alloc(seL4_Word *vaddr) {
 #ifdef LIMIT_FRAMES
         num_frames = 1070;
         frames_to_alloc++;
-        printf("Frames allocd: %d, num frames: %d", frames_to_alloc, num_frames);
+        printf("Frames allocd: %d, num frames: %d\n", frames_to_alloc, num_frames);
         if (frames_to_alloc > num_frames || frame_paddr == NULL) {
             *vaddr = NULL;
             err = swap_out();
             conditional_panic(err, "Swap out failed\n");
             *vaddr = get_free_frame();
-            printf(", sos_vaddr:%x\n", *vaddr);
             return 0;
         }
 #endif
@@ -340,7 +335,7 @@ int32_t frame_alloc(seL4_Word *vaddr) {
 
         /* Calculate index of frame in the frame table */
         int index = (frame_paddr - base_addr) >> INDEX_ADDR_OFFSET;
-        printf("actual index:%d", index);
+        printf("actual index: %d\n", index);
         frame_table[index].mask = FRAME_SWAPABLE | FRAME_VALID | FRAME_REFERENCE;
         frame_table[index].cap = frame_cap;
 
@@ -352,7 +347,6 @@ int32_t frame_alloc(seL4_Word *vaddr) {
 
     /* Clear frame */
     memset(frame_vaddr, 0, PAGE_SIZE);
-    printf(", sos_vaddr:%x\n", frame_vaddr);
 
     *vaddr = frame_vaddr;
     return 0;
@@ -445,11 +439,9 @@ int32_t get_app_cap(seL4_Word vaddr, struct app_cap **cap_ret) {
      curr_cap = curr_cap->next;
      }
      */
-    printf("app_cap%x\n", curr_cap->cap);
     if (curr_cap == NULL) {
         return -1;
     } else {
-        printf("app_cap%x\n", curr_cap->cap);
         *cap_ret = curr_cap;
         return 0;
     }

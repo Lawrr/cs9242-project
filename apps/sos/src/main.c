@@ -163,10 +163,10 @@ void handle_syscall(seL4_Word badge, int num_args) {
             break;
 
         case SOS_USLEEP_SYSCALL:
-            syscall_usleep(reply_cap);
             printf("Thrash\n");
             thrash();
             printf("Thrash done\n");
+            syscall_usleep(reply_cap);
             break;
 
         case SOS_TIME_STAMP_SYSCALL:
@@ -194,6 +194,10 @@ static void vm_fault_handler(seL4_Word badge, int num_args) {
     printf("In vm_fault_handler\n");
     int err;
 
+    /* Save the caller */
+    seL4_CPtr reply_cap = cspace_save_reply_cap(cur_cspace);
+    assert(reply_cap != CSPACE_NULL);
+
     seL4_Word sos_vaddr, map_vaddr;
 
     /* Check whether instruction fault or data fault */
@@ -210,7 +214,9 @@ static void vm_fault_handler(seL4_Word badge, int num_args) {
 
     if (curproc->addrspace->page_table == NULL || 
             curproc->addrspace->page_table[index1] == NULL) {
+        printf("sos_map_pag1\n");
         err = sos_map_page(map_vaddr, &sos_vaddr);
+        printf("sos_map_pag1 done\n");
         conditional_panic(err, "Fail to map the page to the application\n"); 
     } else {
         sos_vaddr = curproc->addrspace->page_table[index1][index2].sos_vaddr;
@@ -220,7 +226,9 @@ static void vm_fault_handler(seL4_Word badge, int num_args) {
             printf("Swapping in\n");
             swap_in(map_vaddr);
         } else {
+        printf("sos_map_pag2\n");
             err = sos_map_page(map_vaddr, &sos_vaddr);
+        printf("sos_map_pag2 done\n");
             // TODO change err handling
             if (err && err != ERR_ALREADY_MAPPED) { 
                 conditional_panic(err, "Fail to map the page to the application\n"); 
@@ -228,13 +236,12 @@ static void vm_fault_handler(seL4_Word badge, int num_args) {
         }
     }
 
-    /* Save the caller */
-    seL4_CPtr reply_cap = cspace_save_reply_cap(cur_cspace);
-    assert(reply_cap != CSPACE_NULL);
-
+    printf("Replying\n");
     seL4_MessageInfo_t reply = seL4_MessageInfo_new(0, 0, 0, 0);
     seL4_Send(reply_cap, reply);
-    //TODO do we have to free reply?
+
+    /* Free the saved reply cap */
+    cspace_free_slot(cur_cspace, reply_cap);
 }
 
 void syscall_loop(seL4_CPtr ep) {
