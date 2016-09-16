@@ -212,36 +212,7 @@ int32_t swap_out() {
     int index2 = (uaddr << 10) >> 22;
 
     //Mark it swapped
-    frame_table[victim].app_caps.addrspace->page_table[index1][index2].sos_vaddr &= PTE_SWAP;
-    //TODO DELETE BELOW SWAPTABLE CHECKING
-    if (frame_table[victim].app_caps.addrspace->swap_table == NULL) {
-        printf("SHOULDNT GO IN HERE\n");
-        seL4_Word sos_vaddr;
-        err = unswappable_alloc(&sos_vaddr);
-
-        if (err) return err;
-
-        frame_table[victim].app_caps.addrspace->swap_table = sos_vaddr;
-        err = unswappable_alloc(&sos_vaddr);
-
-        if (err) {
-            frame_free(frame_table[victim].app_caps.addrspace->swap_table);
-            return err;
-        }
-        frame_table[victim].app_caps.addrspace->swap_table = sos_vaddr;
-
-    } else if (frame_table[victim].app_caps.addrspace->swap_table[index1] == NULL) {
-        printf("SHOULDNT GO IN HERE 2\n");
-        seL4_Word sos_vaddr;
-        err = unswappable_alloc(&sos_vaddr);
-
-        if (err) {
-            frame_free(frame_table[victim].app_caps.addrspace->swap_table);
-            return err;
-        }
-        frame_table[victim].app_caps.addrspace->swap_table = sos_vaddr;
-    }
-
+    frame_table[victim].app_caps.addrspace->page_table[index1][index2].sos_vaddr |= PTE_SWAP;
 
     frame_table[victim].app_caps.addrspace->swap_table[index1][index2].swap_index = curr_swap_offset;
 

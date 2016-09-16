@@ -191,7 +191,6 @@ void handle_syscall(seL4_Word badge, int num_args) {
 }
 
 static void vm_fault_handler(seL4_Word badge, int num_args) {
-    printf("In vm_fault_handler\n");
     int err;
 
     /* Save the caller */
@@ -208,27 +207,23 @@ static void vm_fault_handler(seL4_Word badge, int num_args) {
         /* Data fault */
         map_vaddr = seL4_GetMR(1);
     }
+    printf("In vm_fault_handler for uaddr: %p\n", map_vaddr);
 
     int index1 = map_vaddr >> 22;
     int index2 = (map_vaddr << 10) >> 22;
 
     if (curproc->addrspace->page_table == NULL || 
             curproc->addrspace->page_table[index1] == NULL) {
-        printf("sos_map_pag1\n");
         err = sos_map_page(map_vaddr, &sos_vaddr);
-        printf("sos_map_pag1 done\n");
         conditional_panic(err, "Fail to map the page to the application\n"); 
     } else {
         sos_vaddr = curproc->addrspace->page_table[index1][index2].sos_vaddr;
-        printf("Sos_vaddr: %p\n", sos_vaddr);
         if (sos_vaddr & PTE_SWAP) {
             // TODO this sometimes enters this code when its not supposed to?
             printf("Swapping in\n");
             swap_in(map_vaddr);
         } else {
-        printf("sos_map_pag2\n");
             err = sos_map_page(map_vaddr, &sos_vaddr);
-        printf("sos_map_pag2 done\n");
             // TODO change err handling
             if (err && err != ERR_ALREADY_MAPPED) { 
                 conditional_panic(err, "Fail to map the page to the application\n"); 
@@ -236,7 +231,6 @@ static void vm_fault_handler(seL4_Word badge, int num_args) {
         }
     }
 
-    printf("Replying\n");
     seL4_MessageInfo_t reply = seL4_MessageInfo_new(0, 0, 0, 0);
     seL4_Send(reply_cap, reply);
 
@@ -252,7 +246,7 @@ void syscall_loop(seL4_CPtr ep) {
         setjmp(syscall_loop_entry);
         message = seL4_Wait(ep, &badge);
         label = seL4_MessageInfo_get_label(message);
-        /* printf("sysscall_loop %llu\n", timestamp()); */
+        /* printf("sysscall_loop\n"); */
         if (badge & IRQ_EP_BADGE) {
             /* Interrupt */
             if (badge & IRQ_BADGE_NETWORK) {
