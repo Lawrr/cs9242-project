@@ -152,8 +152,10 @@ void frame_init(seL4_Word high, seL4_Word low) {
 static seL4_Word get_free_frame() {
     seL4_Word frame_vaddr = ((free_index << INDEX_ADDR_OFFSET) + base_addr - low_addr + PROCESS_VMEM_START);
     frame_table[free_index].mask = FRAME_SWAPABLE | FRAME_VALID | FRAME_REFERENCE;
+    printf("Frame vaddr: %p, %d\n", frame_vaddr, free_index);
     free_index = frame_table[free_index].next_index;
     memset(frame_vaddr, 0, PAGE_SIZE);
+    printf("Done memset\n");
     return frame_vaddr;
 }
 
@@ -215,39 +217,39 @@ int32_t swap_out() {
 
     //Mark it swapped
     frame_table[victim].app_caps.addrspace->page_table[index1][index2].sos_vaddr &= PTE_SWAP;
-    //TODO check if the swap_table is null(2 level checking)
-    if (frame_table[victim].app_caps.addrspace->swap_table == NULL){
-       seL4_Word sos_vaddr;
-       err = unswappable_alloc(&sos_vaddr);
-       
-       if (err) return err;
-       
-       frame_table[victim].app_caps.addrspace->swap_table = sos_vaddr;       
-       err = unswappable_alloc(&sos_vaddr);
-       
-       if (err) {
-           frame_free(frame_table[victim].app_caps.addrspace->swap_table);
-           return  err;
-       }
-       frame_table[victim].app_caps.addrspace->swap_table = sos_vaddr;
+    //TODO DELETE BELOW SWAPTABLE CHECKING
+    if (frame_table[victim].app_caps.addrspace->swap_table == NULL) {
+        printf("SHOULDNT GO IN HERE\n");
+        seL4_Word sos_vaddr;
+        err = unswappable_alloc(&sos_vaddr);
 
-    } else if (frame_table[victim].app_caps.addrspace->swap_table[index1] == NULL){
-       seL4_Word sos_vaddr;
-       err = unswappable_alloc(&sos_vaddr);
-       
-       if (err) {
-           frame_free(frame_table[victim].app_caps.addrspace->swap_table);
-           return  err;
-       }
-       frame_table[victim].app_caps.addrspace->swap_table = sos_vaddr;
-    } 
-    
-    
+        if (err) return err;
+
+        frame_table[victim].app_caps.addrspace->swap_table = sos_vaddr;
+        err = unswappable_alloc(&sos_vaddr);
+
+        if (err) {
+            frame_free(frame_table[victim].app_caps.addrspace->swap_table);
+            return err;
+        }
+        frame_table[victim].app_caps.addrspace->swap_table = sos_vaddr;
+
+    } else if (frame_table[victim].app_caps.addrspace->swap_table[index1] == NULL) {
+        printf("SHOULDNT GO IN HERE 2\n");
+        seL4_Word sos_vaddr;
+        err = unswappable_alloc(&sos_vaddr);
+
+        if (err) {
+            frame_free(frame_table[victim].app_caps.addrspace->swap_table);
+            return err;
+        }
+        frame_table[victim].app_caps.addrspace->swap_table = sos_vaddr;
+    }
+
+
     frame_table[victim].app_caps.addrspace->swap_table[index1][index2].swap_index = curr_swap_offset;
 
-
-
-    free_index = victim;
+    frame_free(frame_vaddr);
     return 0;
 }
 
@@ -283,12 +285,13 @@ int32_t frame_alloc(seL4_Word *vaddr) {
     seL4_Word frame_vaddr;
 
     if (free_index == -1) {
+    printf("IN frame alloc1\n");
         /* Free list is empty but there is still memory */
 
         /* Get untyped memory */
         seL4_Word frame_paddr = ut_alloc(seL4_PageBits);
 #ifdef LIMIT_FRAMES
-        num_frames = 1100;
+        num_frames = 1070;
         frames_to_alloc++;
         printf("Frames allocd: %d, num frames: %d", frames_to_alloc, num_frames);
         if (frames_to_alloc > num_frames || frame_paddr == NULL) {
@@ -342,6 +345,7 @@ int32_t frame_alloc(seL4_Word *vaddr) {
         frame_table[index].cap = frame_cap;
 
     } else {
+    printf("IN frame alloc2\n");
         /* Reuse a frame in the free list */
         frame_vaddr = get_free_frame();
     }
@@ -364,6 +368,7 @@ int32_t frame_free(seL4_Word vaddr) {
     frame_table[index].mask = 0;
     frame_table[index].next_index = free_index;
     free_index = index;
+    printf("Frame freed ########################################\n");
 
     return 0;
 }
@@ -407,15 +412,15 @@ int32_t insert_app_cap(seL4_Word vaddr, seL4_CPtr cap, struct app_addrspace *add
         copied_cap->cap = cap;
     } else {
         conditional_panic(1, "Does not currently support shared pages\n");
-        /* /1* Create new app cap *1/ */
+        /* /1 *Create new app cap *1/ */
         /* copied_cap = app_cap_new(cap, addrspace, uaddr); */
         /* if (copied_cap == NULL) return -1; */
 
-        /* /1* Insert into list of app caps for the frame *1/ */
+        /* /1 *Insert into list of app caps for the frame *1/ */
         /* //TODO just insert to head */
         /* struct app_cap *curr_cap = copied_cap; */
         /* while (curr_cap->next != NULL) { */
-        /*     curr_cap = curr_cap->next; */
+        /* curr_cap = curr_cap->next; */
         /* } */
         /* curr_cap->next = copied_cap; */
     }

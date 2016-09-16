@@ -119,9 +119,11 @@ void thrash() {
     int *addr;
     int err;
     for (int i = 0; i < 5; i++) {
+        printf("Thrash %d\n", i);
         err = unswappable_alloc((seL4_Word *) &addr);
         conditional_panic(err, "Thrash fail\n");
         addr[0] = i;
+        printf("Thrash %d done\n", i);
     }
 }
 
@@ -142,7 +144,6 @@ void handle_syscall(seL4_Word badge, int num_args) {
     switch (syscall_number) {
         case SOS_WRITE_SYSCALL:
             syscall_write(reply_cap);
-            thrash();
             break;
 
         case SOS_READ_SYSCALL:
@@ -163,6 +164,9 @@ void handle_syscall(seL4_Word badge, int num_args) {
 
         case SOS_USLEEP_SYSCALL:
             syscall_usleep(reply_cap);
+            printf("Thrash\n");
+            thrash();
+            printf("Thrash done\n");
             break;
 
         case SOS_TIME_STAMP_SYSCALL:
@@ -241,7 +245,7 @@ void syscall_loop(seL4_CPtr ep) {
         setjmp(syscall_loop_entry);
         message = seL4_Wait(ep, &badge);
         label = seL4_MessageInfo_get_label(message);
-        /* printf("sysscall_loop\n"); */
+        /* printf("sysscall_loop %llu\n", timestamp()); */
         if (badge & IRQ_EP_BADGE) {
             /* Interrupt */
             if (badge & IRQ_BADGE_NETWORK) {

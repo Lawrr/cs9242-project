@@ -158,7 +158,7 @@ sos_map_page(seL4_Word vaddr_unaligned, seL4_Word *sos_vaddr_ret) {
     seL4_Word vaddr = PAGE_ALIGN_4K(vaddr_unaligned);
     /* Get the addr to simplify later implementation */
     struct page_table_entry ***page_table_vaddr = &(as->page_table);
-
+    struct swap_table_entry ***swap_table_vaddr = &(as->swap_table);
     /* Invalid mapping NULL */
     if (((void *) vaddr) == NULL) {
         return ERR_INVALID_ADDR;
@@ -186,20 +186,38 @@ sos_map_page(seL4_Word vaddr_unaligned, seL4_Word *sos_vaddr_ret) {
     if (*page_table_vaddr == NULL) {
         /* First level */
         err = unswappable_alloc((seL4_Word *) page_table_vaddr);
+        if (err) return ERR_NO_MEMORY;
+
+        err = unswappable_alloc((seL4_Word *) swap_table_vaddr);
         if (err) {
+            frame_free(page_table_vaddr);
             return ERR_NO_MEMORY;
         }
 
         /* Second level */
         err = unswappable_alloc((seL4_Word *) &(*page_table_vaddr)[index1]);
         if (err) {
+            frame_free(page_table_vaddr);
+            frame_free(swap_table_vaddr);
+            return ERR_NO_MEMORY;
+        }
+
+        err = unswappable_alloc((seL4_Word *) &(*swap_table_vaddr)[index1]);
+        if (err) {
+            frame_free(page_table_vaddr);
+            frame_free(swap_table_vaddr);
+            frame_free(&(*page_table_vaddr)[index1]);
             return ERR_NO_MEMORY;
         }
 
     } else if ((*page_table_vaddr)[index1] == NULL) {
         /* Second level */
         err = unswappable_alloc((seL4_Word *) &(*page_table_vaddr)[index1]);
+        if (err) return ERR_NO_MEMORY;
+
+        err = unswappable_alloc((seL4_Word *) &(*swap_table_vaddr)[index1]);
         if (err) {
+            frame_free(&(*page_table_vaddr)[index1]);
             return ERR_NO_MEMORY;
         }
     }
