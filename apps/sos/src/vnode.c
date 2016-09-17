@@ -200,18 +200,26 @@ static struct vnode *vnode_new(char *path) {
     vnode->fattr = NULL;
 
     if (dev_id != -1) {
-        /* Handle device */
-
+        /* Handle device */ 
         /* Set device's ops */
         vnode->ops = dev_list[dev_id].ops;
     } else {
         /* Handle file */
-        vnode->ops = &default_ops;
 
         /* Check if it is the swapfile */
         if (!strcmp(path, swapfile)) {
-            vnode->ops->vop_read = &vnode_swap_in;
-            vnode->ops->vop_write = &vnode_swap_out;
+            struct vnode_ops *ops = malloc(sizeof(struct vnode_ops));
+            ops->vop_read = &vnode_swap_in;
+            ops->vop_write = &vnode_swap_out;
+            ops->vop_open = &vnode_open;
+            ops->vop_close = &vnode_close;
+            ops->vop_stat = &vnode_stat;
+            ops->vop_getdirent = &vnode_getdirent;
+            vnode->ops = ops;
+            vnode->data = ops;
+        } else {
+            /* Normal file ops */
+            vnode->ops = &default_ops;
         }
     }
 
@@ -279,6 +287,7 @@ int vfs_close(struct vnode *vnode, int mode) {
 
         if (vnode->fh != NULL) free(vnode->fh);
         if (vnode->fattr != NULL) free(vnode->fattr);
+        if (vnode->data != NULL) free(vnode->data);
 
         free(vnode->path);
         free(vnode);

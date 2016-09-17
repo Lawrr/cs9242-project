@@ -30,7 +30,7 @@ static void console_serial_handler(struct serial *serial, char c) {
     /* Take uaddr and turn it into sos_vaddr */
     seL4_Word index1 = ((seL4_Word) console_uio->addr >> 22);
     seL4_Word index2 = ((seL4_Word) console_uio->addr << 10) >> 22;
-    struct page_table_entry **page_table = (struct page_table **) vnode_data[1];
+    struct page_table_entry **page_table = (struct page_table **) vnode_data[0];
 
     /* Align and add offset */
     char *sos_vaddr = PAGE_ALIGN_4K(page_table[index1][index2].sos_vaddr);
@@ -112,9 +112,12 @@ int console_read(struct vnode *vnode, struct uio *uio) {
 
     console_vnode = vnode;
     console_uio = uio;
+
     yield();
+
     console_vnode = NULL;
     console_uio = NULL;
+
     return 0;
 }
 

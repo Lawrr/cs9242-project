@@ -347,9 +347,8 @@ void syscall_read(seL4_CPtr reply_cap) {
     struct page_table_entry **page_table = curproc->addrspace->page_table;
 
     /* Set page table pointer and reply cap as data */
-    seL4_Word *data = malloc(2 * sizeof(seL4_Word));
-    data[0] = (seL4_Word) reply_cap;
-    data[1] = (seL4_Word) page_table;
+    seL4_Word *data = malloc(sizeof(seL4_Word));
+    data[0] = (seL4_Word) page_table;
     vnode->data = (void *) data;
 
     int err;
@@ -358,6 +357,7 @@ void syscall_read(seL4_CPtr reply_cap) {
     } else {
         err = vnode->ops->vop_read(vnode, &uio);
         entry->offset = uio.offset;
+        vnode->data = NULL;
         free(data);
     }
     if (err) {
