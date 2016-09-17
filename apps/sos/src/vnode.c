@@ -497,16 +497,18 @@ static int vnode_read(struct vnode *vnode, struct uio *uio) {
 
 static int vnode_swap_out(struct vnode *vnode, struct uio *uio) {
     printf("Out offset: %d, vaddr: %p, data[1]:%d, data[2]:%d data[3]:%d\n", uio->offset, uio->addr,
-		    ((seL4_Word*)uio->addr)[1],
-		    ((seL4_Word*)uio->addr)[2],
-		    ((seL4_Word*)uio->addr)[3]);
+		    ((seL4_Word*)uio->addr)[1022],
+		    ((seL4_Word*)uio->addr)[1023],
+		    ((seL4_Word*)uio->addr)[1024]);
+    int initoffset = uio->offset;
     for (int i = 0 ; i < 4; i++) {
         seL4_Word *token = malloc(2 * sizeof(seL4_Word));
         token[0] = curr_coroutine_id;
         token[1] = i;
 
         int offset = 1024 * i;
-        int err = nfs_write(vnode->fh, uio->offset + offset, 1024, uio->addr + offset, &vnode_write_cb, token);
+        printf("offset%x addr%x",uio->offset+offset,uio->addr+offset);
+	int err = nfs_write(vnode->fh, uio->offset + offset, 1024, uio->addr + offset, &vnode_write_cb, token);
         if (err != NFS_OK) {
             return -1;
         }
@@ -516,10 +518,24 @@ static int vnode_swap_out(struct vnode *vnode, struct uio *uio) {
     set_routine_arg(curr_coroutine_id, 1, 0);
     
     yield();
+
+    
+
     int count =get_routine_arg(curr_coroutine_id, 1);
     if (count != PAGE_SIZE_4K) {
         return -1;
     }
+    /*
+    char mybuffer[4096];
+    printf("1.1\n");
+    nfs_read(vnode->fh,initoffset,4096,&vnode_read_cb,curr_coroutine_id);
+    printf("01.2\n");
+    set_routine_arg(curr_coroutine_id, 0, mybuffer);
+    printf("1.3\n");
+    yield();
+    printf("1.4\n");
+    printf("buffer[1]:%d buffer[2]:%d, buffer[3]:%d\n",mybuffer[1022],mybuffer[1023],mybuffer[1024]); 
+    */
     return 0;
 }
 
@@ -537,22 +553,22 @@ static int vnode_swap_in(struct vnode *vnode, struct uio *uio) {
     
     printf("In offset: %d, vaddr: %p", uio->offset, uio->addr);
     printf(" data[1]:%d, data[2]:%d data[3]:%d\n",
-		    ((seL4_Word*)uio->addr)[1],
-		    ((seL4_Word*)uio->addr)[2],
-		    ((seL4_Word*)uio->addr)[3]);
+		    ((seL4_Word*)uio->addr)[1022],
+		    ((seL4_Word*)uio->addr)[1023],
+		    ((seL4_Word*)uio->addr)[1024]);
 
     if (arg[1] != PAGE_SIZE_4K) {
         return -1;
     }
     
     //Violently find the data which cause the faut
-    if (uio->offset == 12288){
+    //if (uio->offset == 12288){
 	for (int i = 0 ;i < 4096;i++){
              if (((seL4_Word*)uio->addr)[i] == 0xe8d8){
-                printf("fucking sos_addr%x",uio->addr+i);
+                printf("###fucking sos_addr%x",uio->addr+i);
 	     }	     
 	}
-    }
+    //}
     return 0;
 }
 
@@ -561,6 +577,7 @@ static void vnode_write_cb(uintptr_t token, enum nfs_stat status, fattr_t *fattr
     seL4_Word sos_vaddr = get_routine_arg(al[0], 0);
     conditional_panic(status, "nfs_write fail in end phase");
 
+    printf("write cb\n");
     seL4_Word req_mask = get_routine_arg(al[0], 0) & (~(1 << al[1]));
     set_routine_arg(al[0], 0, req_mask);
     seL4_Word cumulative_count = count + get_routine_arg(al[0], 1);
