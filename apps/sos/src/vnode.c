@@ -496,18 +496,21 @@ static int vnode_read(struct vnode *vnode, struct uio *uio) {
 }
 
 static int vnode_swap_out(struct vnode *vnode, struct uio *uio) {
-    printf("Out offset: %d, vaddr: %p, data[1]:%d, data[2]:%d data[3]:%d\n", uio->offset, uio->addr,
-		    ((seL4_Word*)uio->addr)[0],
-		    ((seL4_Word*)uio->addr)[1023],
-		    ((seL4_Word*)uio->addr)[1024]);
+    
     int initoffset = uio->offset;
     for (int i = 0 ; i < 4; i++) {
         seL4_Word *token = malloc(2 * sizeof(seL4_Word));
         token[0] = curr_coroutine_id;
         token[1] = i;
-
+        printf("Out offset: %d, vaddr: %p,addr %x data[1]:%d,addr %x data[1023]:%d, addr %x data[1025]:%d\n", uio->offset, uio->addr,
+		    uio->addr,
+		    *((seL4_Word*)(uio->addr)),
+		    uio->addr+1023,
+		    *((seL4_Word*)(uio->addr+1023)),
+		    uio->addr+1025,
+		    *((seL4_Word*)(uio->addr+1025)));
         int offset = 1024 * i;
-        printf("offset%x addr%x data%d ",uio->offset+offset,uio->addr+offset,((seL4_Word*)(uio->addr+offset))[0]);
+        printf("offset%x addr%x data%d \n",uio->offset+offset,uio->addr+offset,((seL4_Word*)(uio->addr+offset))[0]);
 	int err = nfs_write(vnode->fh, uio->offset + offset, 1024, uio->addr + offset, &vnode_write_cb, token);
         if (err != NFS_OK) {
             return -1;
@@ -553,9 +556,9 @@ static int vnode_swap_in(struct vnode *vnode, struct uio *uio) {
     
     printf("In offset: %d, vaddr: %p", uio->offset, uio->addr);
     printf(" data[1]:%d, data[2]:%d data[3]:%d\n",
-		    ((seL4_Word*)uio->addr)[0],
-		    ((seL4_Word*)uio->addr)[1023],
-		    ((seL4_Word*)uio->addr)[1024]);
+		     *(seL4_Word*)(uio->addr),
+		    *(seL4_Word*)(uio->addr+1023),
+		    *(seL4_Word *)(uio->addr+1025));
 
     if (arg[1] != PAGE_SIZE_4K) {
         return -1;

@@ -210,12 +210,13 @@ int32_t swap_out() {
     frame_table[victim].app_caps.addrspace->swap_table[index1][index2].swap_index = curr_swap_offset++;
 
     frame_free(frame_vaddr);
+    
+    seL4_ARM_Page_Unify_Instruction(get_cap(frame_vaddr), 0, PAGE_SIZE_4K);
     return 0;
 }
 
 int32_t swap_in(seL4_Word uaddr, seL4_Word sos_vaddr) {
     printf("Swapping in uaddr: %p, vaddr: %p\n", uaddr, sos_vaddr);
-
     //TODO error checking
     int index1 = uaddr >> 22;
     int index2 = (uaddr << 10) >> 22;
@@ -234,12 +235,13 @@ int32_t swap_in(seL4_Word uaddr, seL4_Word sos_vaddr) {
     int err = swap_vnode->ops->vop_read(swap_vnode, &uio);
     conditional_panic(err, "Could not read\n");
 
+    
     //Mark it unswapped
     curproc->addrspace->page_table[index1][index2].sos_vaddr &= (~PTE_SWAP);
 
     /* err = sos_remap(uaddr, sos_vaddr, curproc->addrspace); */
     /* conditional_panic(err, "Could not remap\n"); */
-
+    seL4_ARM_Page_Unify_Instruction(get_cap(sos_vaddr), 0, PAGE_SIZE_4K);
     return err;
 }
 
