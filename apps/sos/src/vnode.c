@@ -95,7 +95,7 @@ static void vnode_readdir_cb(uintptr_t token, enum nfs_stat status,
             /* Boundary write */
             memcpy(sos_vaddr, file_names[uio->offset], uaddr_next - uaddr);
             /* Write rest of next page */
-            strcpy(sos_vaddr_next, ((char *) file_names[uio->offset]) + uaddr_next - uaddr);
+	    strcpy(sos_vaddr_next, ((char *) file_names[uio->offset]) + uaddr_next - uaddr);
         } else {
             /* All on same page */
             /* Note: safe to use strcpy since file name is
@@ -496,7 +496,10 @@ static int vnode_read(struct vnode *vnode, struct uio *uio) {
 }
 
 static int vnode_swap_out(struct vnode *vnode, struct uio *uio) {
-    printf("Out offset: %d, vaddr: %p\n", uio->offset, uio->addr);
+    printf("Out offset: %d, vaddr: %p, data[1]:%d, data[2]:%d data[3]:%d\n", uio->offset, uio->addr,
+		    ((seL4_Word*)uio->addr)[1],
+		    ((seL4_Word*)uio->addr)[2],
+		    ((seL4_Word*)uio->addr)[3]);
     for (int i = 0 ; i < 4; i++) {
         seL4_Word *token = malloc(2 * sizeof(seL4_Word));
         token[0] = curr_coroutine_id;
@@ -521,7 +524,6 @@ static int vnode_swap_out(struct vnode *vnode, struct uio *uio) {
 }
 
 static int vnode_swap_in(struct vnode *vnode, struct uio *uio) {
-    printf("In offset: %d, vaddr: %p\n", uio->offset, uio->addr);
     int err = nfs_read(vnode->fh, uio->offset, PAGE_SIZE_4K, (nfs_read_cb_t)(vnode_read_cb), curr_coroutine_id);
 
     set_routine_arg(curr_coroutine_id, 0, uio->addr);
@@ -532,11 +534,25 @@ static int vnode_swap_in(struct vnode *vnode, struct uio *uio) {
     }
 
     yield();
+    
+    printf("In offset: %d, vaddr: %p", uio->offset, uio->addr);
+    printf(" data[1]:%d, data[2]:%d data[3]:%d\n",
+		    ((seL4_Word*)uio->addr)[1],
+		    ((seL4_Word*)uio->addr)[2],
+		    ((seL4_Word*)uio->addr)[3]);
 
     if (arg[1] != PAGE_SIZE_4K) {
         return -1;
     }
-
+    
+    //Violently find the data which cause the faut
+    if (uio->offset == 12288){
+	for (int i = 0 ;i < 4096;i++){
+             if (((seL4_Word*)uio->addr)[i] == 0xe8d8){
+                printf("fucking sos_addr%x",uio->addr+i);
+	     }	     
+	}
+    }
     return 0;
 }
 

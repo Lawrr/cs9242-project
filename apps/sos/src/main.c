@@ -162,11 +162,7 @@ void handle_syscall(seL4_Word badge, int num_args) {
 
         case SOS_USLEEP_SYSCALL:{
 	    void* t = (void*)seL4_GetIPCBuffer();
-	    printf("IPCBuffer addr%x\n",t); 
-	    printf("%d\n",seL4_GetMR(1));
-            printf("%d\n",seL4_GetMR(1));
             syscall_usleep(reply_cap); 
-	    thrash();
 	    break;
         }
         case SOS_TIME_STAMP_SYSCALL:
@@ -236,7 +232,6 @@ void syscall_loop(seL4_CPtr ep) {
         //printf("sysscall_loop\n");
         if (badge & IRQ_EP_BADGE) {
             /* Interrupt */
-	    printf("badge%x\n",badge);
             if (badge & IRQ_BADGE_NETWORK) {
                 network_irq();
             }
@@ -552,7 +547,7 @@ int main(void) {
     start_timer(timer_badge);
 
     /* NFS timeout every 100ms */
-    //register_timer(NFS_TIMEOUT_INTERVAL, nfs_timeout_callback, NULL);
+    register_timer(NFS_TIMEOUT_INTERVAL, nfs_timeout_callback, NULL);
     
     /* Start the user application */
     start_first_process(TTY_NAME, _sos_ipc_ep_cap);
