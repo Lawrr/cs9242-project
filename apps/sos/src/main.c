@@ -119,11 +119,9 @@ void thrash() {
     int *addr;
     int err;
     for (int i = 0; i < 5; i++) {
-        printf("Thrash %d\n", i);
         err = unswappable_alloc((seL4_Word *) &addr);
         conditional_panic(err, "Thrash fail\n");
         addr[0] = i;
-        printf("Thrash %d done\n", i);
     }
 }
 
@@ -162,11 +160,15 @@ void handle_syscall(seL4_Word badge, int num_args) {
             syscall_brk(reply_cap);
             break;
 
-        case SOS_USLEEP_SYSCALL:
-            thrash();
-            syscall_usleep(reply_cap);
-            break;
-
+        case SOS_USLEEP_SYSCALL:{
+	    void* t = (void*)seL4_GetIPCBuffer();
+	    printf("IPCBuffer addr%x\n",t); 
+	    printf("%d\n",seL4_GetMR(1));
+            printf("%d\n",seL4_GetMR(1));
+            syscall_usleep(reply_cap); 
+	    thrash();
+	    break;
+        }
         case SOS_TIME_STAMP_SYSCALL:
             syscall_time_stamp(reply_cap);
             break;
@@ -231,9 +233,10 @@ void syscall_loop(seL4_CPtr ep) {
         setjmp(syscall_loop_entry);
         message = seL4_Wait(ep, &badge);
         label = seL4_MessageInfo_get_label(message);
-        /* printf("sysscall_loop\n"); */
+        //printf("sysscall_loop\n");
         if (badge & IRQ_EP_BADGE) {
             /* Interrupt */
+	    printf("badge%x\n",badge);
             if (badge & IRQ_BADGE_NETWORK) {
                 network_irq();
             }
@@ -549,7 +552,7 @@ int main(void) {
     start_timer(timer_badge);
 
     /* NFS timeout every 100ms */
-    register_timer(NFS_TIMEOUT_INTERVAL, nfs_timeout_callback, NULL);
+    //register_timer(NFS_TIMEOUT_INTERVAL, nfs_timeout_callback, NULL);
     
     /* Start the user application */
     start_first_process(TTY_NAME, _sos_ipc_ep_cap);

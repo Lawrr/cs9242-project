@@ -172,6 +172,8 @@ void syscall_brk(seL4_CPtr reply_cap) {
 
 static void uwakeup(uint32_t id, void *reply_cap) {
     /* Wake up and reply back to application */
+    
+    printf("timer###\n");
     seL4_SetMR(0, 0);
     send_reply(reply_cap);
 }
@@ -185,6 +187,7 @@ void syscall_usleep(seL4_CPtr reply_cap) {
         send_reply(reply_cap);
         return;
     } else {
+	 printf("%d %d\n",msec,msec*1000);
         register_timer(msec * 1000, &uwakeup, (void *) reply_cap);
     }
 }
