@@ -406,3 +406,35 @@ int32_t get_app_cap(seL4_Word vaddr, struct app_cap **cap_ret) {
         return 0;
     }
 }
+
+void get_indices(seL4_Word uaddr, int *index1, int *index2){
+    *index1 = uaddr >> 22;
+    *index2 = (uaddr << 10) >> 22;   
+}
+
+int get_frame_index(seL4_Word sos_vaddr){
+    (sos_vaddr - PROCESS_VMEM_START + low_addr - base_addr) >> INDEX_ADDR_OFFSET;
+}
+
+void clear_reference_bit(seL4_Word uaddr,seL4_Word size){
+    int index1;
+    int index2;
+    for (int i = 0; i < size; i+=PAGE_SIZE_4K){
+    	get_indices(uaddr+i,&index1,&index2);
+        seL4_Word sos_vaddr = curproc->addrspace->page_table[index1][index2].sos_vaddr;
+        int index = get_frame_index(sos_vaddr);
+	if ((frame_table[index].mask & FRAME_VALID) &&
+	    (frame_table[index].mask & FRAME_SWAPABLE)){
+            frame_table[index].mask &= (~FRAME_REFERENCE);
+	}
+    }
+
+    //Last page may be skipped so make sure the last page is set
+    get_indices(uaddr+size,&index1,&index2);
+    seL4_Word sos_vaddr = curproc->addrspace->page_table[index1][index2].sos_vaddr;
+    int index = get_frame_index(sos_vaddr);
+    if ((frame_table[index].mask & FRAME_VALID) &&
+	(frame_table[index].mask & FRAME_SWAPABLE)){
+        frame_table[index].mask &= (~FRAME_REFERENCE);
+    }
+}
