@@ -497,7 +497,7 @@ static int vnode_read(struct vnode *vnode, struct uio *uio) {
 
 static int vnode_swap_out(struct vnode *vnode, struct uio *uio) {
     printf("Out offset: %d, vaddr: %p, data[1]:%d, data[2]:%d data[3]:%d\n", uio->offset, uio->addr,
-		    ((seL4_Word*)uio->addr)[1022],
+		    ((seL4_Word*)uio->addr)[0],
 		    ((seL4_Word*)uio->addr)[1023],
 		    ((seL4_Word*)uio->addr)[1024]);
     int initoffset = uio->offset;
@@ -507,7 +507,7 @@ static int vnode_swap_out(struct vnode *vnode, struct uio *uio) {
         token[1] = i;
 
         int offset = 1024 * i;
-        printf("offset%x addr%x",uio->offset+offset,uio->addr+offset);
+        printf("offset%x addr%x data%d ",uio->offset+offset,uio->addr+offset,((seL4_Word*)(uio->addr+offset))[0]);
 	int err = nfs_write(vnode->fh, uio->offset + offset, 1024, uio->addr + offset, &vnode_write_cb, token);
         if (err != NFS_OK) {
             return -1;
@@ -553,23 +553,14 @@ static int vnode_swap_in(struct vnode *vnode, struct uio *uio) {
     
     printf("In offset: %d, vaddr: %p", uio->offset, uio->addr);
     printf(" data[1]:%d, data[2]:%d data[3]:%d\n",
-		    ((seL4_Word*)uio->addr)[1022],
+		    ((seL4_Word*)uio->addr)[0],
 		    ((seL4_Word*)uio->addr)[1023],
 		    ((seL4_Word*)uio->addr)[1024]);
 
     if (arg[1] != PAGE_SIZE_4K) {
         return -1;
     }
-    
-    //Violently find the data which cause the faut
-    //if (uio->offset == 12288){
-	for (int i = 0 ;i < 4096;i++){
-             if (((seL4_Word*)uio->addr)[i] == 0xe8d8){
-                printf("###fucking sos_addr%x",uio->addr+i);
-	     }	     
-	}
-    //}
-    return 0;
+    return 0; 
 }
 
 static void vnode_write_cb(uintptr_t token, enum nfs_stat status, fattr_t *fattr, int count) {
