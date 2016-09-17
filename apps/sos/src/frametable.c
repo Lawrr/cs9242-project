@@ -166,26 +166,27 @@ int32_t unswappable_alloc(seL4_Word *vaddr) {
 }
 
 int32_t swap_out() {
-    // TODO round robin starting from victim index
     int victim = swap_victim_index;
-    for (int i = victim ; ;i = (i+1)%num_frames) {
-        if ((frame_table[i].mask & FRAME_VALID) && (frame_table[i].mask & FRAME_SWAPABLE)) {
+    for (int i = victim; ; i = (i + 1) % num_frames) {
+        if ((frame_table[i].mask & FRAME_VALID) &&
+            (frame_table[i].mask & FRAME_SWAPABLE)) {
+
             if (frame_table[i].mask & FRAME_REFERENCE) {
                 /* Clear reference */
                 frame_table[i].mask &= (~FRAME_REFERENCE);
             } else {
                 victim = i;
-                swap_victim_index = (victim+1)%num_frames;
+                swap_victim_index = (victim + 1) % num_frames;
                 break;
             }
+
         }
     }
 
     seL4_Word frame_vaddr = (victim << INDEX_ADDR_OFFSET) + base_addr - low_addr + PROCESS_VMEM_START;
+
     if (swap_vnode == NULL) {
-        printf("Opening\n");
         vfs_open(swapfile, FM_READ | FM_WRITE, &swap_vnode);
-        printf("Opening finish\n");
     }
 
     struct uio uio = {
@@ -193,55 +194,49 @@ int32_t swap_out() {
         .addr = PAGE_ALIGN_4K(frame_vaddr)
     };
 
-    printf("Victim: %d, %p\n", victim, frame_vaddr);
+    seL4_Word uaddr = frame_table[victim].app_caps.uaddr;
+
+    printf("Swap out - victim: %d, uaddr: %p, vaddr: %p\n", victim, uaddr, frame_vaddr);
+
     int err = swap_vnode->ops->vop_write(swap_vnode, &uio);
     conditional_panic(err, "Could not write\n");
     err = sos_unmap_page(frame_vaddr);
     conditional_panic(err, "Could not unmap\n");
 
-    seL4_Word uaddr = frame_table[victim].app_caps.uaddr;
-    printf("Swapping out uaddr: %p, vaddr: %p\n", uaddr, frame_vaddr);
     int index1 = uaddr >> 22;
     int index2 = (uaddr << 10) >> 22;
 
-    //Mark it swapped
+    /* Mark it swapped */
     frame_table[victim].app_caps.addrspace->page_table[index1][index2].sos_vaddr |= PTE_SWAP;
 
     frame_table[victim].app_caps.addrspace->swap_table[index1][index2].swap_index = curr_swap_offset++;
 
     frame_free(frame_vaddr);
-    
+
     seL4_ARM_Page_Unify_Instruction(get_cap(frame_vaddr), 0, PAGE_SIZE_4K);
     return 0;
 }
 
 int32_t swap_in(seL4_Word uaddr, seL4_Word sos_vaddr) {
-    printf("Swapping in uaddr: %p, vaddr: %p\n", uaddr, sos_vaddr);
+    printf("Swap in -  uaddr: %p, vaddr: %p\n", uaddr, sos_vaddr);
+
     //TODO error checking
     int index1 = uaddr >> 22;
     int index2 = (uaddr << 10) >> 22;
-
-    /* seL4_Word sos_vaddr; */
-    /* int err = frame_alloc(&sos_vaddr); */
-    /* if (err) return err; */
-
-    /* int err = sos_map_page(uaddr, &sos_vaddr); */
-    /* if (err) return err; */
 
     struct uio uio = {
         .offset = curproc->addrspace->swap_table[index1][index2].swap_index * PAGE_SIZE_4K,
         .addr = PAGE_ALIGN_4K(sos_vaddr)
     };
+
     int err = swap_vnode->ops->vop_read(swap_vnode, &uio);
     conditional_panic(err, "Could not read\n");
 
-    
-    //Mark it unswapped
+    /* Mark it unswapped */
     curproc->addrspace->page_table[index1][index2].sos_vaddr &= (~PTE_SWAP);
 
-    /* err = sos_remap(uaddr, sos_vaddr, curproc->addrspace); */
-    /* conditional_panic(err, "Could not remap\n"); */
     seL4_ARM_Page_Unify_Instruction(get_cap(sos_vaddr), 0, PAGE_SIZE_4K);
+
     return err;
 }
 

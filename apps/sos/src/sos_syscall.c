@@ -172,7 +172,7 @@ void syscall_brk(seL4_CPtr reply_cap) {
 
 static void uwakeup(uint32_t id, void *reply_cap) {
     /* Wake up and reply back to application */
-    
+
     seL4_SetMR(0, 0);
     send_reply(reply_cap);
 }
@@ -181,9 +181,8 @@ void syscall_usleep(seL4_CPtr reply_cap) {
     int msec = seL4_GetMR(1);
 
     thrash();
+
     /* Make sure sec is positive else reply */
-    
-    printf("thrash%d\n",msec);
     if (msec < 0) {
         seL4_SetMR(0, -1);
         send_reply(reply_cap);

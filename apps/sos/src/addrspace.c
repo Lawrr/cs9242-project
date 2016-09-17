@@ -35,9 +35,9 @@ struct app_addrspace *as_new() {
 }
 
 int as_define_region(struct app_addrspace *as,
-                     seL4_Word baseaddr,
-                     seL4_Word size,
-                     seL4_Word permissions) {
+        seL4_Word baseaddr,
+        seL4_Word size,
+        seL4_Word permissions) {
     struct region *new_region = malloc(sizeof(struct region));
     if (new_region == NULL) {
         return -1;
@@ -93,7 +93,7 @@ struct region *get_region(seL4_Word uaddr) {
     struct region *curr_region = curproc->addrspace->regions;
     while (curr_region != NULL) {
         if (curr_region->baseaddr <= uaddr &&
-            curr_region->baseaddr + curr_region->size > uaddr) {
+                curr_region->baseaddr + curr_region->size > uaddr) {
             return curr_region;
         }
         curr_region = curr_region->next;

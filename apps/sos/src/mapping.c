@@ -125,15 +125,6 @@ int sos_unmap_page(seL4_Word vaddr) {
     err = seL4_ARM_Page_Unmap(cap->cap);
     if (err != 0) return err;
 
-    /*should be done in swap out
-    cap->pte->sos_vaddr |= PTE_SWAP;
-    cap->ste->swap_index = curr_swap_offset;
-    */
-    /* printf("deleting\n"); */
-    /* printf("cap:%x\n",cap->cap); */
-    /* cspace_delete_cap(cur_cspace, cap); */
-    /* printf("deleting finished\n"); */
-
     return err;
 }
 

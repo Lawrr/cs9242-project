@@ -73,7 +73,7 @@ char *sys_name[9] = {
     "Sos close",
     "Sos brk",
     "Sos sleep",
-    "Sos timestampe",
+    "Sos timestamp",
     "Sos getdirent",
     "Sos stat"
 };
@@ -119,9 +119,11 @@ void thrash() {
     int *addr;
     int err;
     for (int i = 0; i < 5; i++) {
-        err = unswappable_alloc((seL4_Word *) &addr);
+        printf("Thrash #%d\n", i);
+        err = frame_alloc((seL4_Word *) &addr);
         conditional_panic(err, "Thrash fail\n");
         addr[0] = i;
+        // TODO read back value
     }
 }
 
@@ -160,11 +162,10 @@ void handle_syscall(seL4_Word badge, int num_args) {
             syscall_brk(reply_cap);
             break;
 
-        case SOS_USLEEP_SYSCALL:{
-	    void* t = (void*)seL4_GetIPCBuffer();
+        case SOS_USLEEP_SYSCALL:
             syscall_usleep(reply_cap); 
-	    break;
-        }
+            break;
+
         case SOS_TIME_STAMP_SYSCALL:
             syscall_time_stamp(reply_cap);
             break;
@@ -187,12 +188,11 @@ void handle_syscall(seL4_Word badge, int num_args) {
 }
 
 static void vm_fault_handler(seL4_Word badge, int num_args) {
-    int err;
-
     /* Save the caller */
     seL4_CPtr reply_cap = cspace_save_reply_cap(cur_cspace);
     assert(reply_cap != CSPACE_NULL);
 
+    int err;
     seL4_Word sos_vaddr, map_vaddr;
 
     /* Check whether instruction fault or data fault */
@@ -205,13 +205,14 @@ static void vm_fault_handler(seL4_Word badge, int num_args) {
         printf("Data fault - ");
         map_vaddr = seL4_GetMR(1);
     }
+
     printf("In vm_fault_handler for uaddr: %p, instr: %p\n", map_vaddr, seL4_GetMR(0));
 
     int index1 = map_vaddr >> 22;
     int index2 = (map_vaddr << 10) >> 22;
 
     err = sos_map_page(map_vaddr, &sos_vaddr);
-    printf("ERR: %d\n", err);
+    if (err) printf("ERR: %d\n", err);
     conditional_panic(err, "Could not map page\n");
 
     seL4_MessageInfo_t reply = seL4_MessageInfo_new(0, 0, 0, 0);

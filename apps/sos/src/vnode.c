@@ -95,7 +95,7 @@ static void vnode_readdir_cb(uintptr_t token, enum nfs_stat status,
             /* Boundary write */
             memcpy(sos_vaddr, file_names[uio->offset], uaddr_next - uaddr);
             /* Write rest of next page */
-	    strcpy(sos_vaddr_next, ((char *) file_names[uio->offset]) + uaddr_next - uaddr);
+            strcpy(sos_vaddr_next, ((char *) file_names[uio->offset]) + uaddr_next - uaddr);
         } else {
             /* All on same page */
             /* Note: safe to use strcpy since file name is
@@ -241,7 +241,7 @@ int vfs_get(char *path, struct vnode **ret_vnode) {
 int vfs_open(char *path, int mode, struct vnode **ret_vnode) {
     /* Get vnode */
     struct vnode *vnode;
-    
+
     int err = vfs_get(path, &vnode);
     if (err) return err;
 
@@ -496,49 +496,32 @@ static int vnode_read(struct vnode *vnode, struct uio *uio) {
 }
 
 static int vnode_swap_out(struct vnode *vnode, struct uio *uio) {
-    
+
     int initoffset = uio->offset;
     for (int i = 0 ; i < 4; i++) {
         seL4_Word *token = malloc(2 * sizeof(seL4_Word));
         token[0] = curr_coroutine_id;
         token[1] = i;
-        printf("Out offset: %d, vaddr: %p,addr %x data[1]:%d,addr %x data[1023]:%d, addr %x data[1025]:%d\n", uio->offset, uio->addr,
-		    uio->addr,
-		    *((seL4_Word*)(uio->addr)),
-		    uio->addr+1023,
-		    *((seL4_Word*)(uio->addr+1023)),
-		    uio->addr+1025,
-		    *((seL4_Word*)(uio->addr+1025)));
+
         int offset = 1024 * i;
-        printf("offset%x addr%x data%d \n",uio->offset+offset,uio->addr+offset,((seL4_Word*)(uio->addr+offset))[0]);
-	int err = nfs_write(vnode->fh, uio->offset + offset, 1024, uio->addr + offset, &vnode_write_cb, token);
+        int err = nfs_write(vnode->fh, uio->offset + offset, 1024, uio->addr + offset, &vnode_write_cb, token);
         if (err != NFS_OK) {
             return -1;
         }
     }
-    
+
     set_routine_arg(curr_coroutine_id, 0, (1<<4)-1);
     set_routine_arg(curr_coroutine_id, 1, 0);
-    
+
     yield();
 
-    
+
 
     int count =get_routine_arg(curr_coroutine_id, 1);
     if (count != PAGE_SIZE_4K) {
         return -1;
     }
-    /*
-    char mybuffer[4096];
-    printf("1.1\n");
-    nfs_read(vnode->fh,initoffset,4096,&vnode_read_cb,curr_coroutine_id);
-    printf("01.2\n");
-    set_routine_arg(curr_coroutine_id, 0, mybuffer);
-    printf("1.3\n");
-    yield();
-    printf("1.4\n");
-    printf("buffer[1]:%d buffer[2]:%d, buffer[3]:%d\n",mybuffer[1022],mybuffer[1023],mybuffer[1024]); 
-    */
+
     return 0;
 }
 
@@ -548,22 +531,15 @@ static int vnode_swap_in(struct vnode *vnode, struct uio *uio) {
     set_routine_arg(curr_coroutine_id, 0, uio->addr);
 
     if (err != NFS_OK) {
-        printf("Not NFS_OK\n");
         return -1;
     }
 
     yield();
-    
-    printf("In offset: %d, vaddr: %p", uio->offset, uio->addr);
-    printf(" data[1]:%d, data[2]:%d data[3]:%d\n",
-		     *(seL4_Word*)(uio->addr),
-		    *(seL4_Word*)(uio->addr+1023),
-		    *(seL4_Word *)(uio->addr+1025));
 
     if (arg[1] != PAGE_SIZE_4K) {
         return -1;
     }
-    return 0; 
+    return 0;
 }
 
 static void vnode_write_cb(uintptr_t token, enum nfs_stat status, fattr_t *fattr, int count) {
@@ -571,7 +547,6 @@ static void vnode_write_cb(uintptr_t token, enum nfs_stat status, fattr_t *fattr
     seL4_Word sos_vaddr = get_routine_arg(al[0], 0);
     conditional_panic(status, "nfs_write fail in end phase");
 
-    printf("write cb\n");
     seL4_Word req_mask = get_routine_arg(al[0], 0) & (~(1 << al[1]));
     set_routine_arg(al[0], 0, req_mask);
     seL4_Word cumulative_count = count + get_routine_arg(al[0], 1);
