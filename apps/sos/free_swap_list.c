@@ -1,14 +1,18 @@
+#include "free_swap_list.h"
+#include <utils/page.h>
+
 int *list1;
-int *list2;
+//int *list2;
 list1_free_index;
 list2_free_index
-void free_list_init(){
+void free_list_init(void *swap_list_page){
+    list1 = (int*) swap_list_page;
     for (int i = 0; i < 1024;i++){
         list1[i] = -1;
-        list2[i] = -1;
+        //list2[i] = -1;
     }
     list1_free_index = -1;
-    list2_free_index = -1;
+    //list2_free_index = -1;
 }
 
 void get_swap_offset(){
