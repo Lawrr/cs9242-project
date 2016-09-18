@@ -472,7 +472,7 @@ static int vnode_read(struct vnode *vnode, struct uio *uio) {
         err = nfs_read(vnode->fh, uio->offset, size, (nfs_read_cb_t) vnode_read_cb, curr_coroutine_id);
         conditional_panic(err, "failed read at send phrase");
 
-        seL4_CPtr sos_vaddr = get_sos_vaddr(uaddr, curproc->addrspace);
+        seL4_CPtr sos_vaddr = uaddr_to_sos_vaddr(uaddr);
         if (!sos_vaddr) {
             err = sos_map_page((seL4_Word) uaddr, &sos_vaddr);
             if (err) {
@@ -574,7 +574,7 @@ static int vnode_write(struct vnode *vnode, struct uio *uio) {
     seL4_Word end_uaddr = (seL4_Word) uaddr + ubuf_size;
     int err = 0;
 
-    seL4_CPtr sos_vaddr = get_sos_vaddr(uaddr, curproc->addrspace);
+    seL4_CPtr sos_vaddr = uaddr_to_sos_vaddr(uaddr);
     if (!sos_vaddr) {
         err = sos_map_page((seL4_Word) uaddr, &sos_vaddr);
         if (err && err != ERR_ALREADY_MAPPED) {
@@ -620,7 +620,7 @@ static int vnode_write(struct vnode *vnode, struct uio *uio) {
             }
         }
 
-        sos_vaddr = get_sos_vaddr(uaddr_next, curproc->addrspace);
+        sos_vaddr = uaddr_to_sos_vaddr(uaddr_next);
         if (!sos_vaddr && uaddr_next < end_uaddr) {
             err = sos_map_page((seL4_Word) uaddr_next, &sos_vaddr);
             if (err && err != ERR_ALREADY_MAPPED) {

@@ -48,4 +48,6 @@ int sos_map_page(seL4_Word uaddr, seL4_Word *sos_vaddr_ret);
 
 int sos_unmap_page(seL4_Word vaddr);
 
+extern inline seL4_Word uaddr_to_sos_vaddr(seL4_Word uaddr);
+
 #endif /* _MAPPING_H_ */
