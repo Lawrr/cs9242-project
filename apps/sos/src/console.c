@@ -28,8 +28,9 @@ static void console_serial_handler(struct serial *serial, char c) {
     seL4_Word *vnode_data = (seL4_Word *) (console_vnode->data);
 
     /* Take uaddr and turn it into sos_vaddr */
-    seL4_Word index1 = ((seL4_Word) console_uio->addr >> 22);
-    seL4_Word index2 = ((seL4_Word) console_uio->addr << 10) >> 22;
+    int index1 = root_index((seL4_Word) console_uio->addr);
+    int index2 = leaf_index((seL4_Word) console_uio->addr);
+
     struct page_table_entry **page_table = (struct page_table **) vnode_data[0];
 
     /* Align and add offset */

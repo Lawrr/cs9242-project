@@ -150,17 +150,18 @@ void frame_init(seL4_Word high, seL4_Word low) {
 
 /* get free frame from list */
 static seL4_Word get_free_frame() {
-    seL4_Word frame_vaddr = ((free_index << INDEX_ADDR_OFFSET) + base_addr - low_addr + PROCESS_VMEM_START);
+    seL4_Word frame_vaddr = frame_index_to_vaddr(free_index);
     frame_table[free_index].mask = FRAME_SWAPABLE | FRAME_VALID | FRAME_REFERENCE;
     free_index = frame_table[free_index].next_index;
     memset(frame_vaddr, 0, PAGE_SIZE);
+
     return frame_vaddr;
 }
 
 int32_t unswappable_alloc(seL4_Word *vaddr) {
     int err = frame_alloc(vaddr);
     if (err) return err;
-    uint32_t index = (*vaddr - PROCESS_VMEM_START + low_addr - base_addr) >> INDEX_ADDR_OFFSET;
+    uint32_t index = frame_vaddr_to_index(*vaddr);
     frame_table[index].mask &= (~FRAME_SWAPABLE);
     return err;
 }
@@ -169,7 +170,7 @@ int32_t swap_out() {
     int victim = swap_victim_index;
     for (int i = victim; ; i = (i + 1) % num_frames) {
         if ((frame_table[i].mask & FRAME_VALID) &&
-            (frame_table[i].mask & FRAME_SWAPABLE)) {
+                (frame_table[i].mask & FRAME_SWAPABLE)) {
 
             if (frame_table[i].mask & FRAME_REFERENCE) {
                 /* Clear reference */
@@ -183,7 +184,7 @@ int32_t swap_out() {
         }
     }
 
-    seL4_Word frame_vaddr = (victim << INDEX_ADDR_OFFSET) + base_addr - low_addr + PROCESS_VMEM_START;
+    seL4_Word frame_vaddr = frame_index_to_vaddr(victim);
 
     if (swap_vnode == NULL) {
         vfs_open(swapfile, FM_READ | FM_WRITE, &swap_vnode);
@@ -203,8 +204,8 @@ int32_t swap_out() {
     err = sos_unmap_page(frame_vaddr);
     conditional_panic(err, "Could not unmap\n");
 
-    int index1 = uaddr >> 22;
-    int index2 = (uaddr << 10) >> 22;
+    int index1 = root_index(uaddr);
+    int index2 = leaf_index(uaddr);
 
     /* Mark it swapped */
     frame_table[victim].app_caps.addrspace->page_table[index1][index2].sos_vaddr |= PTE_SWAP;
@@ -218,11 +219,11 @@ int32_t swap_out() {
 }
 
 int32_t swap_in(seL4_Word uaddr, seL4_Word sos_vaddr) {
-    printf("Swap in -  uaddr: %p, vaddr: %p\n", uaddr, sos_vaddr);
+    printf("Swap in - uaddr: %p, vaddr: %p\n", uaddr, sos_vaddr);
 
     //TODO error checking
-    int index1 = uaddr >> 22;
-    int index2 = (uaddr << 10) >> 22;
+    int index1 = root_index(uaddr);
+    int index2 = leaf_index(uaddr);
 
     struct uio uio = {
         .offset = curproc->addrspace->swap_table[index1][index2].swap_index * PAGE_SIZE_4K,
@@ -286,7 +287,7 @@ int32_t frame_alloc(seL4_Word *vaddr) {
         }
 
         /* Map to address space */
-        frame_vaddr = frame_paddr - low_addr + PROCESS_VMEM_START;
+        frame_vaddr = frame_paddr_to_vaddr(frame_paddr);
         err = map_page(frame_cap,
                 seL4_CapInitThreadPD,
                 frame_vaddr,
@@ -300,7 +301,7 @@ int32_t frame_alloc(seL4_Word *vaddr) {
         }
 
         /* Calculate index of frame in the frame table */
-        int index = (frame_paddr - base_addr) >> INDEX_ADDR_OFFSET;
+        uint32_t index = frame_paddr_to_index(frame_paddr);
         frame_table[index].mask = FRAME_SWAPABLE | FRAME_VALID | FRAME_REFERENCE;
         frame_table[index].cap = frame_cap;
 
@@ -317,7 +318,7 @@ int32_t frame_alloc(seL4_Word *vaddr) {
 }
 
 int32_t frame_free(seL4_Word vaddr) {
-    uint32_t index = (vaddr - PROCESS_VMEM_START + low_addr - base_addr) >> INDEX_ADDR_OFFSET;
+    uint32_t index = frame_vaddr_to_index(vaddr);
 
     /* Check that the frame was previously allocated */
     if (frame_table[index].cap == seL4_CapNull) return -1;
@@ -331,7 +332,7 @@ int32_t frame_free(seL4_Word vaddr) {
 }
 
 seL4_CPtr get_cap(seL4_Word vaddr) {
-    uint32_t index = (vaddr - PROCESS_VMEM_START + low_addr - base_addr) >> INDEX_ADDR_OFFSET;
+    uint32_t index = frame_vaddr_to_index(vaddr);
     return frame_table[index].cap;
 }
 
@@ -351,7 +352,7 @@ static struct app_cap *app_cap_new(seL4_CPtr cap, struct app_addrspace *addrspac
 }
 
 int32_t insert_app_cap(seL4_Word vaddr, seL4_CPtr cap, struct app_addrspace *addrspace, seL4_Word uaddr) {
-    uint32_t index = (vaddr - PROCESS_VMEM_START + low_addr - base_addr) >> INDEX_ADDR_OFFSET;
+    uint32_t index = frame_vaddr_to_index(vaddr);
 
     /* Check that the frame exists */
     if (frame_table[index].cap == seL4_CapNull) return -1;
@@ -386,7 +387,7 @@ int32_t insert_app_cap(seL4_Word vaddr, seL4_CPtr cap, struct app_addrspace *add
 int32_t get_app_cap(seL4_Word vaddr, struct app_cap **cap_ret) {
     struct page_table_entry **page_table = curproc->addrspace->page_table;
 
-    uint32_t index = (vaddr - PROCESS_VMEM_START + low_addr - base_addr) >> INDEX_ADDR_OFFSET;
+    uint32_t index = frame_vaddr_to_index(vaddr);
     if (frame_table[index].cap == seL4_CapNull) {
         return -1;
     }
@@ -407,34 +408,53 @@ int32_t get_app_cap(seL4_Word vaddr, struct app_cap **cap_ret) {
     }
 }
 
-void get_indices(seL4_Word uaddr, int *index1, int *index2){
-    *index1 = uaddr >> 22;
-    *index2 = (uaddr << 10) >> 22;   
+inline int root_index(seL4_Word uaddr) {
+    return (uaddr >> 22);
 }
 
-int get_frame_index(seL4_Word sos_vaddr){
-    (sos_vaddr - PROCESS_VMEM_START + low_addr - base_addr) >> INDEX_ADDR_OFFSET;
+inline int leaf_index(seL4_Word uaddr) {
+    return ((uaddr << 10) >> 22);
 }
 
-void clear_reference_bit(seL4_Word uaddr,seL4_Word size){
+inline uint32_t frame_vaddr_to_index(seL4_Word sos_vaddr) {
+    return ((sos_vaddr - PROCESS_VMEM_START + low_addr - base_addr) >> INDEX_ADDR_OFFSET);
+}
+
+inline seL4_Word frame_index_to_vaddr(uint32_t index) {
+    return ((index << INDEX_ADDR_OFFSET) + base_addr - low_addr + PROCESS_VMEM_START);
+}
+
+inline seL4_Word frame_paddr_to_vaddr(seL4_Word paddr) {
+    return (paddr - low_addr + PROCESS_VMEM_START);
+}
+
+inline uint32_t frame_paddr_to_index(seL4_Word paddr) {
+    return ((paddr - base_addr) >> INDEX_ADDR_OFFSET);
+}
+
+void clear_reference_bit(seL4_Word uaddr, seL4_Word size) {
     int index1;
     int index2;
-    for (int i = 0; i < size; i+=PAGE_SIZE_4K){
-    	get_indices(uaddr+i,&index1,&index2);
+
+    for (int i = 0; i < size; i += PAGE_SIZE_4K) {
+        index1 = root_index(uaddr + i);
+        index2 = leaf_index(uaddr + i);
         seL4_Word sos_vaddr = curproc->addrspace->page_table[index1][index2].sos_vaddr;
-        int index = get_frame_index(sos_vaddr);
-	if ((frame_table[index].mask & FRAME_VALID) &&
-	    (frame_table[index].mask & FRAME_SWAPABLE)){
+        int index = frame_vaddr_to_index(sos_vaddr);
+        if ((frame_table[index].mask & FRAME_VALID) &&
+                (frame_table[index].mask & FRAME_SWAPABLE)) {
             frame_table[index].mask &= (~FRAME_REFERENCE);
-	}
+        }
     }
 
     //Last page may be skipped so make sure the last page is set
-    get_indices(uaddr+size,&index1,&index2);
+    index1 = root_index(uaddr + size);
+    index2 = leaf_index(uaddr + size);
     seL4_Word sos_vaddr = curproc->addrspace->page_table[index1][index2].sos_vaddr;
-    int index = get_frame_index(sos_vaddr);
+    int index = frame_vaddr_to_index(sos_vaddr);
+
     if ((frame_table[index].mask & FRAME_VALID) &&
-	(frame_table[index].mask & FRAME_SWAPABLE)){
+            (frame_table[index].mask & FRAME_SWAPABLE)) {
         frame_table[index].mask &= (~FRAME_REFERENCE);
     }
 }

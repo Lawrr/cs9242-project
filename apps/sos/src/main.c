@@ -208,9 +208,6 @@ static void vm_fault_handler(seL4_Word badge, int num_args) {
 
     printf("In vm_fault_handler for uaddr: %p, instr: %p\n", map_vaddr, seL4_GetMR(0));
 
-    int index1 = map_vaddr >> 22;
-    int index2 = (map_vaddr << 10) >> 22;
-
     err = sos_map_page(map_vaddr, &sos_vaddr);
     if (err) printf("ERR: %d\n", err);
     conditional_panic(err, "Could not map page\n");

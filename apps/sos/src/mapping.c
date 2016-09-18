@@ -25,9 +25,6 @@
 #include <sys/debug.h>
 #include <cspace/cspace.h>
 
-#define INDEX1_SHIFT 22
-#define INDEX2_MASK (1023 << PAGE_BITS_4K)
-
 extern const seL4_BootInfo *_boot_info;
 extern struct PCB *curproc;
 extern uint32_t curr_swap_offset;
@@ -152,8 +149,8 @@ sos_map_page(seL4_Word vaddr_unaligned, seL4_Word *sos_vaddr_ret) {
         return ERR_INVALID_ADDR;
     }
 
-    seL4_Word index1 = vaddr >> INDEX1_SHIFT;
-    seL4_Word index2 = (vaddr & INDEX2_MASK) >> PAGE_BITS_4K;
+    int index1 = root_index(vaddr);
+    int index2 = leaf_index(vaddr);
 
     /* Checking with the region the check the permission */
     struct region *curr_region = as->regions;
@@ -297,8 +294,8 @@ int sos_remap(seL4_Word uaddr, seL4_Word sos_vaddr, struct app_addrspace *as) {
         return ERR_INTERNAL_MAP_ERROR;
     }
 
-    seL4_Word index1 = uaddr >> INDEX1_SHIFT;
-    seL4_Word index2 = (uaddr & INDEX2_MASK) >> PAGE_BITS_4K;
+    int index1 = root_index(uaddr);
+    int index2 = leaf_index(uaddr);
 
     /* Book keeping the copied caps */
     /* insert_app_cap(PAGE_ALIGN_4K(sos_vaddr), copied_cap, curproc->addrspace,uaddr); */
@@ -312,8 +309,8 @@ int sos_remap(seL4_Word uaddr, seL4_Word sos_vaddr, struct app_addrspace *as) {
 }
 
 int get_sos_vaddr(seL4_Word uaddr, struct app_addrspace *as) {
-    seL4_Word index1 = uaddr >> INDEX1_SHIFT;
-    seL4_Word index2 = (uaddr & INDEX2_MASK) >> PAGE_BITS_4K;
+    int index1 = root_index(uaddr);
+    int index2 = leaf_index(uaddr);
 
     if (as->page_table[index1][index2].sos_vaddr | PTE_VALID) {
         return as->page_table[index1][index2].sos_vaddr;
