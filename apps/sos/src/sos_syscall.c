@@ -180,7 +180,7 @@ static void uwakeup(uint32_t id, void *reply_cap) {
 void syscall_usleep(seL4_CPtr reply_cap) {
     int msec = seL4_GetMR(1);
 
-    thrash();
+    //thrash();
 
     /* Make sure sec is positive else reply */
     if (msec < 0) {
@@ -316,8 +316,11 @@ void syscall_write(seL4_CPtr reply_cap) {
         send_err(reply_cap, ERR_INTERNAL_ERROR);
         return;
     }
-
-    /* Reply */
+		
+	printf("count%d,#####remains%d\n",uio.size,uio.remaining);
+	
+     
+	/* Reply */
     seL4_SetMR(0, uio.size - uio.remaining);
     send_reply(reply_cap);
 }

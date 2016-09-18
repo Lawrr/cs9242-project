@@ -216,11 +216,10 @@ int32_t swap_out() {
         .offset = curr_swap_offset * PAGE_SIZE_4K,
         .addr = PAGE_ALIGN_4K(frame_vaddr)
     };
-
-    seL4_Word uaddr = frame_table[victim].app_caps.uaddr;
-
-    printf("Swap out - victim: %d, uaddr: %p, vaddr: %p, offset:%d\n", victim, uaddr, frame_vaddr,uio.offset);
     
+	seL4_Word uaddr = frame_table[victim].app_caps.uaddr;
+    
+    printf("Swap out, uaddr %x, vaddr %x, offset%d\n",uaddr,frame_vaddr,uio.offset);
     int err = swap_vnode->ops->vop_write(swap_vnode, &uio);
     conditional_panic(err, "Could not write\n");
 
@@ -238,10 +237,7 @@ int32_t swap_out() {
     frame_free(frame_vaddr); 
 	
 	seL4_ARM_Page_Unify_Instruction(get_cap(frame_vaddr), 0, PAGE_SIZE_4K);
-	if (uaddr == 0x12000){
-       printf("######I did swap out 0x12000\n");
-	   printf("root %d leaf %d frame_vaddr%x, cap:%x\n",index1,index2,frame_vaddr,get_cap(frame_vaddr));
-	}
+	
 	return 0;
 }
 
@@ -257,14 +253,11 @@ int32_t swap_in(seL4_Word uaddr, seL4_Word sos_vaddr) {
         .addr = PAGE_ALIGN_4K(sos_vaddr)
     };
 
-    printf("Swap in - uaddr: %p, vaddr: %p, offset:%d\n", uaddr, sos_vaddr,uio.offset);
     int err = swap_vnode->ops->vop_read(swap_vnode, &uio);
     conditional_panic(err, "Could not read\n");
-   
-	if (uaddr == 0x12000){
-       printf("+++++swaping in 0x12000\n");
-	   printf("frame_vaddr%x, cap:%x\n",sos_vaddr,get_cap(sos_vaddr));
-	}	
+
+    printf("Swap in, uaddr %x, vaddr %x, offset%d\n",uaddr,sos_vaddr,uio.offset);	
+		
     /* Mark it unswapped */
 	seL4_Word mask = as->page_table[index1][index2].sos_vaddr & PAGE_MASK_4K;
     as->page_table[index1][index2].sos_vaddr = (sos_vaddr | PTE_VALID | mask) & (~PTE_SWAP);  
@@ -272,7 +265,6 @@ int32_t swap_in(seL4_Word uaddr, seL4_Word sos_vaddr) {
 	frame_table[frame_index].app_caps.addrspace = curproc -> addrspace;
 	frame_table[frame_index].app_caps.uaddr = uaddr;
 
-	printf("value in page table root index 0,leaf index 18, %x\n",as->page_table[0][18].sos_vaddr);
     seL4_ARM_Page_Unify_Instruction(get_cap(sos_vaddr), 0, PAGE_SIZE_4K);
     return err;
 }
