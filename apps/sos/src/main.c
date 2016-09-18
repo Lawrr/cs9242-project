@@ -205,7 +205,7 @@ static void vm_fault_handler(seL4_Word badge, int num_args) {
         /* Data fault */
         printf("Data fault - ");
         map_vaddr = seL4_GetMR(1); 
-    	set_reference_bit(PAGE_ALIGN_4K(instruction_vaddr),1);
+    	pin_frame_entry(PAGE_ALIGN_4K(instruction_vaddr),1);
     }
 
     printf("In vm_fault_handler for uaddr: %p, instr: %p\n", map_vaddr, seL4_GetMR(0));
@@ -216,6 +216,10 @@ static void vm_fault_handler(seL4_Word badge, int num_args) {
 
     seL4_MessageInfo_t reply = seL4_MessageInfo_new(0, 0, 0, 0);
     seL4_Send(reply_cap, reply);
+
+	if (!isInstruction){
+       unpin_frame_entry(instruction_vaddr,1);
+	}
 
     /* Free the saved reply cap */
     cspace_free_slot(cur_cspace, reply_cap); 

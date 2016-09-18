@@ -19,8 +19,8 @@ extern inline seL4_Word frame_index_to_vaddr(uint32_t index);
 extern inline seL4_Word frame_paddr_to_vaddr(seL4_Word paddr);
 extern inline uint32_t frame_paddr_to_index(seL4_Word paddr);
 
-void set_reference_bit(seL4_Word uaddr, seL4_Word size);
-
+void pin_frame_entry(seL4_Word uaddr, seL4_Word size);
+void unpin_frame_entry(seL4_Word uaddr, seL4_Word size);
 void frame_init();
 
 int32_t frame_alloc(seL4_Word *vaddr);

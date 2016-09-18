@@ -437,7 +437,8 @@ int32_t get_app_cap(seL4_Word vaddr, struct app_cap **cap_ret) {
     }
 }
 
-void set_reference_bit(seL4_Word uaddr, seL4_Word size) {
+//Set reference bit as well as make it unswappable 
+void pin_frame_entry(seL4_Word uaddr, seL4_Word size) {
     int index1;
     int index2;
     seL4_Word sos_vaddr;
@@ -453,6 +454,7 @@ void set_reference_bit(seL4_Word uaddr, seL4_Word size) {
         if ((frame_table[frame_index].mask & FRAME_VALID) &&
             (frame_table[frame_index].mask & FRAME_SWAPPABLE)) {
             frame_table[frame_index].mask |= FRAME_REFERENCE;
+			frame_table[frame_index].mask &= (~FRAME_SWAPPABLE);
         }
     }
 
@@ -465,8 +467,40 @@ void set_reference_bit(seL4_Word uaddr, seL4_Word size) {
     if ((frame_table[frame_index].mask & FRAME_VALID) &&
             (frame_table[frame_index].mask & FRAME_SWAPPABLE)) {
         frame_table[frame_index].mask = FRAME_REFERENCE;
+        frame_table[frame_index].mask &= (~FRAME_SWAPPABLE);
+	}
+}
+
+void unpin_frame_entry(seL4_Word uaddr, seL4_Word size) {
+    int index1;
+    int index2;
+    seL4_Word sos_vaddr;
+    uint32_t frame_index;
+    struct app_addrspace *as = curproc->addrspace;
+
+    for (int i = 0; i < size; i += PAGE_SIZE_4K) {
+        index1 = root_index(uaddr + i);
+        index2 = leaf_index(uaddr + i);
+        sos_vaddr = as->page_table[index1][index2].sos_vaddr;
+        frame_index = frame_vaddr_to_index(sos_vaddr);
+
+        if ((frame_table[frame_index].mask & FRAME_VALID)) {
+            frame_table[frame_index].mask |= FRAME_SWAPPABLE;
+        }
+    }
+
+    /* Last page may be skipped so make sure the last page is set */
+    index1 = root_index(uaddr + size);
+    index2 = leaf_index(uaddr + size);
+    sos_vaddr = curproc->addrspace->page_table[index1][index2].sos_vaddr;
+    frame_index = frame_vaddr_to_index(sos_vaddr);
+
+    if ((frame_table[frame_index].mask & FRAME_VALID)) {
+        frame_table[frame_index].mask |= FRAME_SWAPPABLE;
     }
 }
+
+
 
 static void reset_frame_mask(uint32_t index) {
     frame_table[index].mask = FRAME_SWAPPABLE | FRAME_VALID | FRAME_REFERENCE;
