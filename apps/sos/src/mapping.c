@@ -210,7 +210,6 @@ sos_map_page(seL4_Word vaddr_unaligned, seL4_Word *sos_vaddr_ret) {
     seL4_Word curr_sos_vaddr = (*page_table_vaddr)[index1][index2].sos_vaddr;
     if ((seL4_Word *) curr_sos_vaddr != NULL) {
         if ((curr_sos_vaddr & PTE_SWAP) == 0) {
-            printf("Addr: %p is already mapped %d\n", curr_sos_vaddr, (curr_sos_vaddr & PTE_SWAP));
             /* Already mapped */
             *sos_vaddr_ret = (*page_table_vaddr)[index1][index2].sos_vaddr;
             return ERR_ALREADY_MAPPED;

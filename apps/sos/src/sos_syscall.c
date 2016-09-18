@@ -225,7 +225,9 @@ void syscall_getdirent(seL4_CPtr reply_cap) {
     if (vnode->ops->vop_getdirent == NULL) {
         err = 1;
     } else {
+        pin_frame_entry(uaddr, nbyte);
         err = vnode->ops->vop_getdirent(vnode, &uio);
+        unpin_frame_entry(uaddr, nbyte);
     }
     if (err) {
         send_err(reply_cap, -1);
@@ -252,7 +254,10 @@ void syscall_stat(seL4_CPtr reply_cap) {
     sos_vaddr = PAGE_ALIGN_4K(sos_vaddr);
     sos_vaddr |= (uaddr & PAGE_MASK_4K);
 
+    pin_frame_entry(ustat_buf, sizeof(sos_stat_t));
+    pin_frame_entry(uaddr, MAX_PATH_LEN);
     err = get_safe_path(path_sos_vaddr, uaddr, sos_vaddr, MAX_PATH_LEN);
+    unpin_frame_entry(uaddr, MAX_PATH_LEN);
     if (err) {
         send_err(reply_cap, ERR_ILLEGAL_USERADDR);
         return;
@@ -267,6 +272,7 @@ void syscall_stat(seL4_CPtr reply_cap) {
     }
 
     err = vnode->ops->vop_stat(vnode, ustat_buf);
+    unpin_frame_entry(ustat_buf, sizeof(sos_stat_t));
     if (err) {
         send_err(reply_cap, -1);
         return;
@@ -398,7 +404,9 @@ void syscall_open(seL4_CPtr reply_cap) {
     sos_vaddr = PAGE_ALIGN_4K(sos_vaddr);
     sos_vaddr |= (uaddr & PAGE_MASK_4K);
 
+    pin_frame_entry(uaddr, MAX_PATH_LEN);
     err = get_safe_path(path_sos_vaddr, uaddr, sos_vaddr, MAX_PATH_LEN);
+    unpin_frame_entry(uaddr, MAX_PATH_LEN);
     if (err) {
         send_err(reply_cap, ERR_ILLEGAL_USERADDR);
         return;
