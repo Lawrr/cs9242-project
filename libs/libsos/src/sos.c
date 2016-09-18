@@ -204,13 +204,7 @@ int sos_brk(uintptr_t newbrk) {
 }
 
 size_t sos_write(void *vData, size_t count) {
-	int actual = sos_sys_write(std_output, vData, count);
-    if (actual != count){
-       void * it = &actual;
-	   sos_sys_write(std_output,it,4);	
-       sos_sys_write(std_output,(void*)(&count),4);
-	}
-	return actual;
+	return sos_sys_write(std_output, vData, count);
 }
 
 size_t sos_read(void *vData, size_t count) {

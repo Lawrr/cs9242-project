@@ -309,17 +309,17 @@ void syscall_write(seL4_CPtr reply_cap) {
     if (vnode->ops->vop_write == NULL) {
         err = 1;
     } else {
-		pin_frame_entry(uaddr,ubuf_size);
+        pin_frame_entry(uaddr, ubuf_size);
         err = vnode->ops->vop_write(vnode, &uio);
-        unpin_frame_entry(uaddr,ubuf_size);
-		entry->offset = uio.offset;
+        unpin_frame_entry(uaddr, ubuf_size);
+        entry->offset = uio.offset;
     }
     if (err) {
         send_err(reply_cap, ERR_INTERNAL_ERROR);
         return;
     }
-		
-	/* Reply */
+
+    /* Reply */
     seL4_SetMR(0, uio.size - uio.remaining);
     send_reply(reply_cap);
 }
@@ -357,7 +357,9 @@ void syscall_read(seL4_CPtr reply_cap) {
     if (vnode->ops->vop_read == NULL) {
         err = 1;
     } else {
+        pin_frame_entry(uaddr, ubuf_size);
         err = vnode->ops->vop_read(vnode, &uio);
+        unpin_frame_entry(uaddr, ubuf_size);
         entry->offset = uio.offset;
     }
 
