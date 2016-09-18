@@ -210,6 +210,7 @@ sos_map_page(seL4_Word vaddr_unaligned, seL4_Word *sos_vaddr_ret) {
     seL4_Word curr_sos_vaddr = (*page_table_vaddr)[index1][index2].sos_vaddr;
     if ((seL4_Word *) curr_sos_vaddr != NULL) {
         if ((curr_sos_vaddr & PTE_SWAP) == 0) {
+            printf("Addr: %p is already mapped %d\n", curr_sos_vaddr, (curr_sos_vaddr & PTE_SWAP));
             /* Already mapped */
             *sos_vaddr_ret = (*page_table_vaddr)[index1][index2].sos_vaddr;
             return ERR_ALREADY_MAPPED;
@@ -241,9 +242,13 @@ sos_map_page(seL4_Word vaddr_unaligned, seL4_Word *sos_vaddr_ret) {
         insert_app_cap(PAGE_ALIGN_4K(new_frame_vaddr),
                 copied_cap,
                 curproc->addrspace,
-            vaddr);
+                vaddr);
     } else {
         copied_cap = app_cap->cap;
+
+        /* Set new app cap data for this frame */
+        app_cap->addrspace = curproc->addrspace;
+        app_cap->uaddr = vaddr_unaligned;
     }
 
     err = map_page(copied_cap,

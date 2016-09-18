@@ -191,7 +191,7 @@ int32_t swap_out() {
     int victim = swap_victim_index;
     for (int i = victim; ; i = (i + 1) % num_frames) {
         if ((frame_table[i].mask & FRAME_VALID) &&
-                (frame_table[i].mask & FRAME_SWAPPABLE)) {
+            (frame_table[i].mask & FRAME_SWAPPABLE)) {
 
             if (frame_table[i].mask & FRAME_REFERENCE) {
                 /* Clear reference */
@@ -242,11 +242,11 @@ int32_t swap_out() {
 }
 
 int32_t swap_in(seL4_Word uaddr, seL4_Word sos_vaddr) {
-
-    //TODO error checking
     int index1 = root_index(uaddr);
     int index2 = leaf_index(uaddr);
+    seL4_Word frame_index = frame_vaddr_to_index(sos_vaddr);
 
+    /* Write page back in from pagefile */
     struct app_addrspace *as = curproc->addrspace;
     struct uio uio = {
         .offset = as->swap_table[index1][index2].swap_index * PAGE_SIZE_4K,
@@ -260,12 +260,10 @@ int32_t swap_in(seL4_Word uaddr, seL4_Word sos_vaddr) {
 		
     /* Mark it unswapped */
 	seL4_Word mask = as->page_table[index1][index2].sos_vaddr & PAGE_MASK_4K;
-    as->page_table[index1][index2].sos_vaddr = (sos_vaddr | PTE_VALID | mask) & (~PTE_SWAP);  
-    seL4_Word frame_index = frame_vaddr_to_index(sos_vaddr);
-	frame_table[frame_index].app_caps.addrspace = curproc -> addrspace;
-	frame_table[frame_index].app_caps.uaddr = uaddr;
+    as->page_table[index1][index2].sos_vaddr = (sos_vaddr | PTE_VALID | mask) & (~PTE_SWAP);
 
     seL4_ARM_Page_Unify_Instruction(get_cap(sos_vaddr), 0, PAGE_SIZE_4K);
+
     return err;
 }
 
@@ -459,13 +457,13 @@ void pin_frame_entry(seL4_Word uaddr, seL4_Word size) {
     }
 
     /* Last page may be skipped so make sure the last page is set */
-    index1 = root_index(uaddr + size-1);
-    index2 = leaf_index(uaddr + size-1);
+    index1 = root_index(uaddr + size - 1);
+    index2 = leaf_index(uaddr + size - 1);
     sos_vaddr = curproc->addrspace->page_table[index1][index2].sos_vaddr;
     frame_index = frame_vaddr_to_index(sos_vaddr);
 
     if ((frame_table[frame_index].mask & FRAME_VALID) &&
-            (frame_table[frame_index].mask & FRAME_SWAPPABLE)) {
+        (frame_table[frame_index].mask & FRAME_SWAPPABLE)) {
         frame_table[frame_index].mask = FRAME_REFERENCE;
         frame_table[frame_index].mask &= (~FRAME_SWAPPABLE);
 	}

@@ -319,9 +319,6 @@ void syscall_write(seL4_CPtr reply_cap) {
         return;
     }
 		
-	printf("count%d,#####remains%d\n",uio.size,uio.remaining);
-	
-     
 	/* Reply */
     seL4_SetMR(0, uio.size - uio.remaining);
     send_reply(reply_cap);

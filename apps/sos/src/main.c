@@ -133,8 +133,8 @@ void handle_syscall(seL4_Word badge, int num_args) {
 
     syscall_number = seL4_GetMR(0);
 
-    printf("Syscall :%s  -- received from user application\n",
-            sys_name[syscall_number]);
+    /* printf("Syscall :%s  -- received from user application\n", */
+    /*         sys_name[syscall_number]); */
 
     /* Save the caller */
     reply_cap = cspace_save_reply_cap(cur_cspace);
@@ -205,7 +205,7 @@ static void vm_fault_handler(seL4_Word badge, int num_args) {
         /* Data fault */
         printf("Data fault - ");
         map_vaddr = seL4_GetMR(1); 
-    	pin_frame_entry(PAGE_ALIGN_4K(instruction_vaddr),1);
+    	pin_frame_entry(PAGE_ALIGN_4K(seL4_GetMR(0)), 1);
     }
 
     printf("In vm_fault_handler for uaddr: %p, instr: %p\n", map_vaddr, seL4_GetMR(0));
