@@ -454,7 +454,7 @@ void clear_reference_bit(seL4_Word uaddr, seL4_Word size) {
         index1 = root_index(uaddr + i);
         index2 = leaf_index(uaddr + i);
         sos_vaddr = as->page_table[index1][index2].sos_vaddr;
-        frame_index = frame_vaddr_to_frame_index(sos_vaddr);
+        frame_index = frame_vaddr_to_index(sos_vaddr);
 
         if ((frame_table[frame_index].mask & FRAME_VALID) &&
             (frame_table[frame_index].mask & FRAME_SWAPPABLE)) {
