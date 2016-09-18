@@ -267,7 +267,7 @@ sos_map_page(seL4_Word vaddr_unaligned, seL4_Word *sos_vaddr_ret) {
 
     if (pte.sos_vaddr & PTE_SWAP) {
         swap_in(vaddr, PAGE_ALIGN_4K(new_frame_vaddr));
-    }
+	}
 
     *sos_vaddr_ret = new_frame_vaddr;
     return 0;

@@ -316,14 +316,14 @@ struct command commands[] = { { "dir", dir }, { "ls", dir }, { "cat", cat }, {
 
 void test_paging(){
    int a[4096][4096];
-   for (int i = 0;i < 200; i++){
+   for (int i = 0;i < 4096; i++){
        for ( int j = 0; j < 4096; j++){
            a[i][j]= i*4096+j;
        }
        printf("(%d,%d) = %d\n",i,0,a[i][0]);
    }
    printf("#################################\n");
-   for (int i = 0;i < 200; i++){
+   for (int i = 0;i < 4096; i++){
        printf("(%d,%d) = %d\n",i,0,a[i][0]);
    }
 }

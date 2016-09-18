@@ -220,12 +220,7 @@ int32_t swap_out() {
     seL4_Word uaddr = frame_table[victim].app_caps.uaddr;
 
     printf("Swap out - victim: %d, uaddr: %p, vaddr: %p, offset:%d\n", victim, uaddr, frame_vaddr,uio.offset);
-    if (uaddr == 0x11000){
-       printf("[0]%x [512]%x [256]%x [100]%x\n",((seL4_Word*)frame_vaddr)[0],
-		       ((seL4_Word*)frame_vaddr)[512],
-                      ((seL4_Word*)frame_vaddr)[256],
-		      ((seL4_Word*)frame_vaddr)[100]);
-    }
+    
     int err = swap_vnode->ops->vop_write(swap_vnode, &uio);
     conditional_panic(err, "Could not write\n");
 
@@ -240,11 +235,14 @@ int32_t swap_out() {
     as->page_table[index1][index2].sos_vaddr |= PTE_SWAP;
     as->swap_table[index1][index2].swap_index = curr_swap_offset++;
 
-    frame_free(frame_vaddr);
-
-    seL4_ARM_Page_Unify_Instruction(get_cap(frame_vaddr), 0, PAGE_SIZE_4K);
-
-    return 0;
+    frame_free(frame_vaddr); 
+	
+	seL4_ARM_Page_Unify_Instruction(get_cap(frame_vaddr), 0, PAGE_SIZE_4K);
+	if (uaddr == 0x12000){
+       printf("######I did swap out 0x12000\n");
+	   printf("root %d leaf %d frame_vaddr%x, cap:%x\n",index1,index2,frame_vaddr,get_cap(frame_vaddr));
+	}
+	return 0;
 }
 
 int32_t swap_in(seL4_Word uaddr, seL4_Word sos_vaddr) {
@@ -262,17 +260,20 @@ int32_t swap_in(seL4_Word uaddr, seL4_Word sos_vaddr) {
     printf("Swap in - uaddr: %p, vaddr: %p, offset:%d\n", uaddr, sos_vaddr,uio.offset);
     int err = swap_vnode->ops->vop_read(swap_vnode, &uio);
     conditional_panic(err, "Could not read\n");
-    if (uaddr == 0x11000){
-    printf("[0]%x [512]%x [256]%x [100]%x\n",((seL4_Word*)sos_vaddr)[0],
-		       ((seL4_Word*)sos_vaddr)[512],
-                      ((seL4_Word*)sos_vaddr)[256],
-		      ((seL4_Word*)sos_vaddr)[100]);
-    }
+   
+	if (uaddr == 0x12000){
+       printf("+++++swaping in 0x12000\n");
+	   printf("frame_vaddr%x, cap:%x\n",sos_vaddr,get_cap(sos_vaddr));
+	}	
     /* Mark it unswapped */
-    as->page_table[index1][index2].sos_vaddr &= (~PTE_SWAP);
+	seL4_Word mask = as->page_table[index1][index2].sos_vaddr & PAGE_MASK_4K;
+    as->page_table[index1][index2].sos_vaddr = (sos_vaddr | PTE_VALID | mask) & (~PTE_SWAP);  
+    seL4_Word frame_index = frame_vaddr_to_index(sos_vaddr);
+	frame_table[frame_index].app_caps.addrspace = curproc -> addrspace;
+	frame_table[frame_index].app_caps.uaddr = uaddr;
 
+	printf("value in page table root index 0,leaf index 18, %x\n",as->page_table[0][18].sos_vaddr);
     seL4_ARM_Page_Unify_Instruction(get_cap(sos_vaddr), 0, PAGE_SIZE_4K);
-
     return err;
 }
 
@@ -367,7 +368,7 @@ int32_t frame_free(seL4_Word vaddr) {
 }
 
 seL4_CPtr get_cap(seL4_Word vaddr) {
-    uint32_t index = frame_vaddr_to_index(vaddr);
+    uint32_t index = frame_vaddr_to_index(PAGE_ALIGN_4K(vaddr));
     return frame_table[index].cap;
 }
 
@@ -444,7 +445,7 @@ int32_t get_app_cap(seL4_Word vaddr, struct app_cap **cap_ret) {
     }
 }
 
-void clear_reference_bit(seL4_Word uaddr, seL4_Word size) {
+void set_reference_bit(seL4_Word uaddr, seL4_Word size) {
     int index1;
     int index2;
     seL4_Word sos_vaddr;
@@ -459,7 +460,7 @@ void clear_reference_bit(seL4_Word uaddr, seL4_Word size) {
 
         if ((frame_table[frame_index].mask & FRAME_VALID) &&
             (frame_table[frame_index].mask & FRAME_SWAPPABLE)) {
-            frame_table[frame_index].mask &= (~FRAME_REFERENCE);
+            frame_table[frame_index].mask |= FRAME_REFERENCE;
         }
     }
 
@@ -471,7 +472,7 @@ void clear_reference_bit(seL4_Word uaddr, seL4_Word size) {
 
     if ((frame_table[frame_index].mask & FRAME_VALID) &&
             (frame_table[frame_index].mask & FRAME_SWAPPABLE)) {
-        frame_table[frame_index].mask &= (~FRAME_REFERENCE);
+        frame_table[frame_index].mask = FRAME_REFERENCE;
     }
 }
 

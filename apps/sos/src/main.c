@@ -193,17 +193,19 @@ static void vm_fault_handler(seL4_Word badge, int num_args) {
     assert(reply_cap != CSPACE_NULL);
 
     int err;
-    seL4_Word sos_vaddr, map_vaddr;
-
+    seL4_Word sos_vaddr, map_vaddr, instruction_vaddr;
+    
+	int isInstruction = seL4_GetMR(2);		
     /* Check whether instruction fault or data fault */
-    if (seL4_GetMR(2)) {
+    if (isInstruction) {
         /* Instruction fault */
         printf("Instruction fault - ");
         map_vaddr = seL4_GetMR(0);
     } else {
         /* Data fault */
         printf("Data fault - ");
-        map_vaddr = seL4_GetMR(1);
+        map_vaddr = seL4_GetMR(1); 
+    	set_reference_bit(PAGE_ALIGN_4K(instruction_vaddr),1);
     }
 
     printf("In vm_fault_handler for uaddr: %p, instr: %p\n", map_vaddr, seL4_GetMR(0));
@@ -216,9 +218,8 @@ static void vm_fault_handler(seL4_Word badge, int num_args) {
     seL4_Send(reply_cap, reply);
 
     /* Free the saved reply cap */
-    cspace_free_slot(cur_cspace, reply_cap);
+    cspace_free_slot(cur_cspace, reply_cap); 
 }
-
 void syscall_loop(seL4_CPtr ep) {
     seL4_Word badge;
     seL4_Word label;
