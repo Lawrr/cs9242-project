@@ -14,10 +14,17 @@
 #define VNODE_TABLE_SLOTS 64
 #define NUM_ARG 4
 
+/* Externs */
 extern struct PCB *curproc;
 extern int curr_coroutine_id;
 extern fhandle_t mnt_point;
 extern const char *swapfile;
+
+/* Vnode */
+static struct vnode *vnode_new(char *path);
+
+/* Default Vops */
+static int file_create(struct vnode *vnode);
 
 static int vnode_open(struct vnode *vnode, int mode);
 static int vnode_close(struct vnode *vnode);
@@ -26,29 +33,28 @@ static int vnode_write(struct vnode *vnode, struct uio *uio);
 static int vnode_stat(struct vnode *vnode, sos_stat_t *stat);
 static int vnode_getdirent(struct vnode *vnode, struct uio *uio);
 
+/* Callbacks */
+static void vnode_write_cb(uintptr_t token, enum nfs_stat status, fattr_t *fattr, int count);
+
+static void vnode_create_cb(uintptr_t token, nfs_stat_t status, fhandle_t *fh, fattr_t *fattr);
+
+static void vnode_open_cb(uintptr_t token, nfs_stat_t status, fhandle_t *fh, fattr_t *fattr);
+
+static void vnode_read_cb(uintptr_t token, nfs_stat_t status, fattr_t *fattr, int count, void *data);
+
+static void vnode_stat_cb(uintptr_t token, nfs_stat_t status, fhandle_t *fh, fattr_t *fattr);
+
+static void vnode_readdir_cb(uintptr_t token, enum nfs_stat status, int num_files, char *file_names[], nfscookie_t nfscookie);
+
+/* Swapping */
 static int vnode_swap_in(struct vnode *vnode, struct uio *uio);
 static int vnode_swap_out(struct vnode *vnode, struct uio *uio);
 
+/* Devices */
 static void dev_list_init();
+static int is_dev(char *dev);
 
-static void vnode_write_cb(uintptr_t token, enum nfs_stat status, fattr_t *fattr, int count);
-
-static struct dev dev_list[MAX_DEV_NUM];
-static struct hashtable *vnode_table;
-
-static seL4_Word arg[NUM_ARG];
-
-int vfs_init() {
-    vnode_table = hashtable_new(VNODE_TABLE_SLOTS);
-    if (vnode_table == NULL) {
-        return 1;
-    }
-
-    dev_list_init();
-
-    return 0;
-}
-
+/* Default vops */
 static const struct vnode_ops default_ops = {
     &vnode_open,
     &vnode_close,
@@ -58,84 +64,17 @@ static const struct vnode_ops default_ops = {
     &vnode_getdirent
 };
 
-static void vnode_readdir_cb(uintptr_t token, enum nfs_stat status,
-        int num_files, char *file_names[],
-        nfscookie_t nfscookie) {
-    arg[0] = (seL4_Word) status;
-    arg[1] = nfscookie;
+/* Variables */
+static struct dev dev_list[MAX_DEV_NUM];
+static struct hashtable *vnode_table;
 
-    struct uio *uio = get_routine_arg((int) token, 0);
+static seL4_Word arg[NUM_ARG];
 
-    if (uio->offset == 0 && num_files == 0) {
-        /* Valid next pos NULL */
-        uio->addr = "\0";
-
-    } else if (uio->offset < num_files) {
-        /* Check if we need to map a second page */
-        int len = strlen(file_names[uio->offset]) + 1;
-        if (len > uio->size) {
-            arg[1] = 0; /* Hard set to stop it continuing */
-        }
-
-        seL4_Word uaddr = uio->addr;
-        seL4_Word uaddr_end = uio->addr + len;
-
-        seL4_Word sos_vaddr;
-        int err = sos_map_page(uaddr, &sos_vaddr);
-        sos_vaddr = PAGE_ALIGN_4K(sos_vaddr);
-        sos_vaddr |= (uaddr & PAGE_MASK_4K);
-        if (PAGE_ALIGN_4K(uaddr) != PAGE_ALIGN_4K(uaddr_end)) {
-            seL4_Word uaddr_next = PAGE_ALIGN_4K(uaddr) + 0x1000;
-
-            seL4_Word sos_vaddr_next;
-            err = sos_map_page(uaddr_next, &sos_vaddr_next);
-
-            sos_vaddr_next = PAGE_ALIGN_4K(sos_vaddr_next);
-
-            /* Boundary write */
-            memcpy(sos_vaddr, file_names[uio->offset], uaddr_next - uaddr);
-            /* Write rest of next page */
-            strcpy(sos_vaddr_next, ((char *) file_names[uio->offset]) + uaddr_next - uaddr);
-        } else {
-            /* All on same page */
-            /* Note: safe to use strcpy since file name is
-             * guaranteed to be null terminated and we already
-             * know it is all on the same page */
-            strcpy(sos_vaddr, file_names[uio->offset]);
-        }
-
-        uio->remaining = uio->size - len;
-        uio->offset = 0;
-
-    } else {
-        uio->offset -= num_files;
-    }
-
-    set_resume(token);
-}
-
-
-static int vnode_getdirent(struct vnode *vnode, struct uio *uio) {
-    seL4_Word cookies = 0;
-    set_routine_arg(curr_coroutine_id, 0, uio);
-
-    do {
-        set_routine_arg(curr_coroutine_id, 0, uio);
-        nfs_readdir(&mnt_point, cookies, vnode_readdir_cb, curr_coroutine_id);
-        yield();
-        int err = arg[0];
-        cookies = arg[1];
-    } while (uio->offset > 0 && cookies != 0);
-
-    /* Error - reached over the end */
-    if (uio->offset > 0 && cookies == 0) {
-        return 1;
-    }
-
-    return 0;
-}
-
-
+/*
+ * =======================================================
+ * DEVICES
+ * =======================================================
+ */
 static void dev_list_init() {
     for (int i = 0 ; i < MAX_DEV_NUM; i++) {
         dev_list[i].name = NULL;
@@ -178,52 +117,21 @@ static int is_dev(char *dev) {
     return -1;
 }
 
-static struct vnode *vnode_new(char *path) {
-    struct vnode *vnode = malloc(sizeof(struct vnode));
-    if (vnode == NULL) {
-        return NULL;
+
+/*
+ * =======================================================
+ * VFS
+ * =======================================================
+ */
+int vfs_init() {
+    vnode_table = hashtable_new(VNODE_TABLE_SLOTS);
+    if (vnode_table == NULL) {
+        return 1;
     }
 
-    int dev_id = is_dev(path);
+    dev_list_init();
 
-    /* Initialise variables */
-    vnode->path = malloc(strlen(path + 1));
-    if (vnode->path == NULL) {
-        return NULL;
-    }
-
-    strcpy(vnode->path, path);
-    vnode->read_count = 0;
-    vnode->write_count = 0;
-    vnode->data = NULL;
-    vnode->fh = NULL;
-    vnode->fattr = NULL;
-
-    if (dev_id != -1) {
-        /* Handle device */ 
-        /* Set device's ops */
-        vnode->ops = dev_list[dev_id].ops;
-    } else {
-        /* Handle file */
-
-        /* Check if it is the swapfile */
-        if (!strcmp(path, swapfile)) {
-            struct vnode_ops *ops = malloc(sizeof(struct vnode_ops));
-            ops->vop_read = &vnode_swap_in;
-            ops->vop_write = &vnode_swap_out;
-            ops->vop_open = &vnode_open;
-            ops->vop_close = &vnode_close;
-            ops->vop_stat = &vnode_stat;
-            ops->vop_getdirent = &vnode_getdirent;
-            vnode->ops = ops;
-            vnode->data = ops;
-        } else {
-            /* Normal file ops */
-            vnode->ops = &default_ops;
-        }
-    }
-
-    return vnode;
+    return 0;
 }
 
 int vfs_get(char *path, struct vnode **ret_vnode) {
@@ -296,32 +204,159 @@ int vfs_close(struct vnode *vnode, int mode) {
     return 0;
 }
 
-static void vnode_open_cb(uintptr_t token, nfs_stat_t status, fhandle_t *fh, fattr_t *fattr) {
-    arg[0] = (seL4_Word) status;
-    arg[1] = (seL4_Word) malloc(sizeof(fhandle_t));
-    arg[2] = (seL4_Word) malloc(sizeof(fattr_t));
 
-    memcpy(arg[1], fh, sizeof(fhandle_t));
-    memcpy(arg[2], fattr, sizeof(fattr_t));
-    /* 0 has special meaning for setjmp returns, so map 0 to -1 */
-    if (status == 0) status = -1;
+/*
+ * =======================================================
+ * GENERAL VNODE FUNCTIONS
+ * =======================================================
+ */
+static struct vnode *vnode_new(char *path) {
+    struct vnode *vnode = malloc(sizeof(struct vnode));
+    if (vnode == NULL) {
+        return NULL;
+    }
+
+    int dev_id = is_dev(path);
+
+    /* Initialise variables */
+    vnode->path = malloc(strlen(path + 1));
+    if (vnode->path == NULL) {
+        return NULL;
+    }
+
+    strcpy(vnode->path, path);
+    vnode->read_count = 0;
+    vnode->write_count = 0;
+    vnode->data = NULL;
+    vnode->fh = NULL;
+    vnode->fattr = NULL;
+
+    if (dev_id != -1) {
+        /* Handle device */ 
+        /* Set device's ops */
+        vnode->ops = dev_list[dev_id].ops;
+    } else {
+        /* Handle file */
+
+        /* Check if it is the swapfile */
+        if (!strcmp(path, swapfile)) {
+            struct vnode_ops *ops = malloc(sizeof(struct vnode_ops));
+            ops->vop_read = &vnode_swap_in;
+            ops->vop_write = &vnode_swap_out;
+            ops->vop_open = &vnode_open;
+            ops->vop_close = &vnode_close;
+            ops->vop_stat = &vnode_stat;
+            ops->vop_getdirent = &vnode_getdirent;
+            vnode->ops = ops;
+            vnode->data = ops;
+        } else {
+            /* Normal file ops */
+            vnode->ops = &default_ops;
+        }
+    }
+
+    return vnode;
+}
+
+
+/*
+ * =======================================================
+ * CLOSE
+ * =======================================================
+ */
+static int vnode_close(struct vnode *vnode) {
+    return 0;
+}
+
+
+/*
+ * =======================================================
+ * GETDIRENT
+ * =======================================================
+ */
+static int vnode_getdirent(struct vnode *vnode, struct uio *uio) {
+    seL4_Word cookies = 0;
+    set_routine_arg(curr_coroutine_id, 0, uio);
+
+    do {
+        set_routine_arg(curr_coroutine_id, 0, uio);
+        nfs_readdir(&mnt_point, cookies, vnode_readdir_cb, curr_coroutine_id);
+        yield();
+        int err = arg[0];
+        cookies = arg[1];
+    } while (uio->offset > 0 && cookies != 0);
+
+    /* Error - reached over the end */
+    if (uio->offset > 0 && cookies == 0) {
+        return 1;
+    }
+
+    return 0;
+}
+
+static void vnode_readdir_cb(uintptr_t token, enum nfs_stat status,
+        int num_files, char *file_names[],
+        nfscookie_t nfscookie) {
+    arg[0] = (seL4_Word) status;
+    arg[1] = nfscookie;
+
+    struct uio *uio = get_routine_arg((int) token, 0);
+
+    if (uio->offset == 0 && num_files == 0) {
+        /* Valid next pos NULL */
+        uio->addr = "\0";
+
+    } else if (uio->offset < num_files) {
+        /* Check if we need to map a second page */
+        int len = strlen(file_names[uio->offset]) + 1;
+        if (len > uio->size) {
+            arg[1] = 0; /* Hard set to stop it continuing */
+        }
+
+        seL4_Word uaddr = uio->addr;
+        seL4_Word uaddr_end = uio->addr + len;
+
+        seL4_Word sos_vaddr;
+        int err = sos_map_page(uaddr, &sos_vaddr);
+        sos_vaddr = PAGE_ALIGN_4K(sos_vaddr);
+        sos_vaddr |= (uaddr & PAGE_MASK_4K);
+        if (PAGE_ALIGN_4K(uaddr) != PAGE_ALIGN_4K(uaddr_end)) {
+            seL4_Word uaddr_next = PAGE_ALIGN_4K(uaddr) + 0x1000;
+
+            seL4_Word sos_vaddr_next;
+            err = sos_map_page(uaddr_next, &sos_vaddr_next);
+
+            sos_vaddr_next = PAGE_ALIGN_4K(sos_vaddr_next);
+
+            /* Boundary write */
+            memcpy(sos_vaddr, file_names[uio->offset], uaddr_next - uaddr);
+            /* Write rest of next page */
+            strcpy(sos_vaddr_next, ((char *) file_names[uio->offset]) + uaddr_next - uaddr);
+        } else {
+            /* All on same page */
+            /* Note: safe to use strcpy since file name is
+             * guaranteed to be null terminated and we already
+             * know it is all on the same page */
+            strcpy(sos_vaddr, file_names[uio->offset]);
+        }
+
+        uio->remaining = uio->size - len;
+        uio->offset = 0;
+
+    } else {
+        uio->offset -= num_files;
+    }
 
     set_resume(token);
 }
 
-static void vnode_stat_cb(uintptr_t token, nfs_stat_t status, fhandle_t *fh, fattr_t *fattr) {
-    arg[0] = (seL4_Word) status;
-    arg[1] = (seL4_Word) malloc(sizeof(fattr_t));
 
-    memcpy(arg[1], fattr, sizeof(fattr_t));
-
-    /* 0 has special meaning for setjmp returns, so map 0 to -1 */
-    if (status == 0) status = -1;
-
-    set_resume(token);
-}
-
-int vnode_stat(struct vnode *vnode, sos_stat_t *stat) {
+/*
+ * =======================================================
+ * STAT
+ * =======================================================
+ */
+static int vnode_stat(struct vnode *vnode, sos_stat_t *stat) {
     nfs_lookup(&mnt_point, vnode->path, (nfs_lookup_cb_t) vnode_stat_cb, curr_coroutine_id);
     yield();
 
@@ -376,17 +411,24 @@ int vnode_stat(struct vnode *vnode, sos_stat_t *stat) {
     return ret;
 }
 
-static void vnode_create_cb(uintptr_t token, nfs_stat_t status, fhandle_t *fh, fattr_t *fattr) {
+static void vnode_stat_cb(uintptr_t token, nfs_stat_t status, fhandle_t *fh, fattr_t *fattr) {
     arg[0] = (seL4_Word) status;
-    arg[1] = (seL4_Word) malloc(sizeof(fhandle_t));
-    arg[2] = (seL4_Word) malloc(sizeof(fattr_t));
+    arg[1] = (seL4_Word) malloc(sizeof(fattr_t));
 
-    memcpy(arg[1], fh, sizeof(fhandle_t));
-    memcpy(arg[2], fattr, sizeof(fattr_t));
+    memcpy(arg[1], fattr, sizeof(fattr_t));
+
+    /* 0 has special meaning for setjmp returns, so map 0 to -1 */
+    if (status == 0) status = -1;
 
     set_resume(token);
 }
 
+
+/*
+ * =======================================================
+ * CREATE
+ * =======================================================
+ */
 static int file_create(struct vnode *vnode) {
     uint64_t timestamp = time_stamp();
     timeval_t curr_time;
@@ -407,6 +449,23 @@ static int file_create(struct vnode *vnode) {
     yield();
 }
 
+static void vnode_create_cb(uintptr_t token, nfs_stat_t status, fhandle_t *fh, fattr_t *fattr) {
+    arg[0] = (seL4_Word) status;
+    arg[1] = (seL4_Word) malloc(sizeof(fhandle_t));
+    arg[2] = (seL4_Word) malloc(sizeof(fattr_t));
+
+    memcpy(arg[1], fh, sizeof(fhandle_t));
+    memcpy(arg[2], fattr, sizeof(fattr_t));
+
+    set_resume(token);
+}
+
+
+/*
+ * =======================================================
+ * OPEN
+ * =======================================================
+ */
 static int vnode_open(struct vnode *vnode, fmode_t mode) {
     if (vnode->fh != NULL) return 0;
 
@@ -438,22 +497,25 @@ static int vnode_open(struct vnode *vnode, fmode_t mode) {
     return 0;
 }
 
-static int vnode_close(struct vnode *vnode) {
-    return 0;
-}
+static void vnode_open_cb(uintptr_t token, nfs_stat_t status, fhandle_t *fh, fattr_t *fattr) {
+    arg[0] = (seL4_Word) status;
+    arg[1] = (seL4_Word) malloc(sizeof(fhandle_t));
+    arg[2] = (seL4_Word) malloc(sizeof(fattr_t));
 
-static void vnode_read_cb(uintptr_t token, nfs_stat_t status, fattr_t *fattr, int count, void *data) {
-    seL4_Word sos_vaddr = get_routine_arg(token, 0);
-    if (status == NFS_OK) {
-        memcpy((void *) sos_vaddr, data, count);
-    }
-
-    arg[0] = (seL4_Word)status;
-    arg[1] = (seL4_Word)count;
+    memcpy(arg[1], fh, sizeof(fhandle_t));
+    memcpy(arg[2], fattr, sizeof(fattr_t));
+    /* 0 has special meaning for setjmp returns, so map 0 to -1 */
+    if (status == 0) status = -1;
 
     set_resume(token);
 }
 
+
+/*
+ * =======================================================
+ * READ
+ * =======================================================
+ */
 static int vnode_read(struct vnode *vnode, struct uio *uio) {
     char *uaddr = (char *) uio->addr;
     seL4_Word ubuf_size = uio->size;
@@ -504,70 +566,25 @@ static int vnode_read(struct vnode *vnode, struct uio *uio) {
     return 0;
 }
 
-static int vnode_swap_out(struct vnode *vnode, struct uio *uio) {
-
-    int initoffset = uio->offset;
-    for (int i = 0 ; i < 4; i++) {
-        seL4_Word *token = malloc(2 * sizeof(seL4_Word));
-        token[0] = curr_coroutine_id;
-        token[1] = i;
-
-        int offset = 1024 * i;
-        int err = nfs_write(vnode->fh, uio->offset + offset, 1024, uio->addr + offset, &vnode_write_cb, token);
-        if (err != NFS_OK) {
-            return -1;
-        }
+static void vnode_read_cb(uintptr_t token, nfs_stat_t status, fattr_t *fattr, int count, void *data) {
+    seL4_Word sos_vaddr = get_routine_arg(token, 0);
+    if (status == NFS_OK) {
+        memcpy((void *) sos_vaddr, data, count);
     }
 
-    set_routine_arg(curr_coroutine_id, 0, (1<<4)-1);
-    set_routine_arg(curr_coroutine_id, 1, 0);
+    arg[0] = (seL4_Word)status;
+    arg[1] = (seL4_Word)count;
 
-    yield();
-
-
-
-    int count =get_routine_arg(curr_coroutine_id, 1);
-    if (count != PAGE_SIZE_4K) {
-        return -1;
-    }
-
-    return 0;
+    set_resume(token);
 }
 
-static int vnode_swap_in(struct vnode *vnode, struct uio *uio) {
-    int err = nfs_read(vnode->fh, uio->offset, PAGE_SIZE_4K, (nfs_read_cb_t)(vnode_read_cb), curr_coroutine_id);
 
-    set_routine_arg(curr_coroutine_id, 0, uio->addr);
 
-    if (err != NFS_OK) {
-        return -1;
-    }
-
-    yield();
-
-    if (arg[1] != PAGE_SIZE_4K) {
-        return -1;
-    }
-    return 0;
-}
-
-static void vnode_write_cb(uintptr_t token, enum nfs_stat status, fattr_t *fattr, int count) {
-    seL4_Word * al = (seL4_Word*) token;
-    seL4_Word sos_vaddr = get_routine_arg(al[0], 0);
-    conditional_panic(status, "nfs_write fail in end phase");
-
-    seL4_Word req_mask = get_routine_arg(al[0], 0) & (~(1 << al[1]));
-    set_routine_arg(al[0], 0, req_mask);
-    seL4_Word cumulative_count = count + get_routine_arg(al[0], 1);
-
-    set_routine_arg(al[0], 1, cumulative_count);
-    if (req_mask == 0) {
-        set_resume(al[0]);
-    }
-
-    free(al);
-}
-
+/*
+ * =======================================================
+ * WRITE
+ * =======================================================
+ */
 static int vnode_write(struct vnode *vnode, struct uio *uio) {
     char *uaddr = (char *) uio->addr;
     seL4_Word ubuf_size = uio->size;
@@ -639,5 +656,74 @@ static int vnode_write(struct vnode *vnode, struct uio *uio) {
         uio->offset += count;
     }
 
+    return 0;
+}
+
+static void vnode_write_cb(uintptr_t token, enum nfs_stat status, fattr_t *fattr, int count) {
+    seL4_Word * al = (seL4_Word*) token;
+    seL4_Word sos_vaddr = get_routine_arg(al[0], 0);
+    conditional_panic(status, "nfs_write fail in end phase");
+
+    seL4_Word req_mask = get_routine_arg(al[0], 0) & (~(1 << al[1]));
+    set_routine_arg(al[0], 0, req_mask);
+    seL4_Word cumulative_count = count + get_routine_arg(al[0], 1);
+
+    set_routine_arg(al[0], 1, cumulative_count);
+    if (req_mask == 0) {
+        set_resume(al[0]);
+    }
+
+    free(al);
+}
+
+/*
+ * =======================================================
+ * SWAPFILE
+ * =======================================================
+ */
+static int vnode_swap_out(struct vnode *vnode, struct uio *uio) {
+
+    int initoffset = uio->offset;
+    for (int i = 0 ; i < 4; i++) {
+        seL4_Word *token = malloc(2 * sizeof(seL4_Word));
+        token[0] = curr_coroutine_id;
+        token[1] = i;
+
+        int offset = 1024 * i;
+        int err = nfs_write(vnode->fh, uio->offset + offset, 1024, uio->addr + offset, &vnode_write_cb, token);
+        if (err != NFS_OK) {
+            return -1;
+        }
+    }
+
+    set_routine_arg(curr_coroutine_id, 0, (1<<4)-1);
+    set_routine_arg(curr_coroutine_id, 1, 0);
+
+    yield();
+
+
+
+    int count =get_routine_arg(curr_coroutine_id, 1);
+    if (count != PAGE_SIZE_4K) {
+        return -1;
+    }
+
+    return 0;
+}
+
+static int vnode_swap_in(struct vnode *vnode, struct uio *uio) {
+    int err = nfs_read(vnode->fh, uio->offset, PAGE_SIZE_4K, (nfs_read_cb_t)(vnode_read_cb), curr_coroutine_id);
+
+    set_routine_arg(curr_coroutine_id, 0, uio->addr);
+
+    if (err != NFS_OK) {
+        return -1;
+    }
+
+    yield();
+
+    if (arg[1] != PAGE_SIZE_4K) {
+        return -1;
+    }
     return 0;
 }

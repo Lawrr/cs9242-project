@@ -43,14 +43,11 @@ struct dev {
     struct vnode_ops *ops;
 };
 
-int vfs_init();
-
-int vfs_get(char *path, struct vnode **ret_vnode);
-
-int vfs_open(char *path, int mode, struct vnode **ret_vnode);
-
-int vfs_close(struct vnode *vnode, int mode);
-
 int dev_add(char *dev_name, struct vnode_ops *dev_ops);
+
+int vfs_init();
+int vfs_get(char *path, struct vnode **ret_vnode);
+int vfs_open(char *path, int mode, struct vnode **ret_vnode);
+int vfs_close(struct vnode *vnode, int mode);
 
 #endif
