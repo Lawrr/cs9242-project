@@ -24,6 +24,7 @@ void clear_reference_bit(seL4_Word uaddr, seL4_Word size);
 void frame_init();
 
 int32_t frame_alloc(seL4_Word *vaddr);
+int32_t unswappable_alloc(seL4_Word *vaddr);
 
 int32_t frame_free(seL4_Word vaddr);
 

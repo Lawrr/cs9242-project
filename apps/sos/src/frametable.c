@@ -24,13 +24,20 @@
 #define FRAME_SWAPPABLE (1 << 1)
 #define FRAME_VALID (1 << 0)
 
-static void reset_frame_mask(uint32_t index);
-
 extern struct PCB *curproc;
 
 const char *swapfile = "pagefile";
 
-/* val swapable | valid
+/* Static function declarations */
+static void reset_frame_mask(uint32_t index);
+
+static seL4_Word get_free_frame();
+
+static struct app_cap *app_cap_new(seL4_CPtr cap, struct app_addrspace *addrspace, seL4_Word uaddr);
+
+/* Static struct declarations */
+
+/* val swappable | valid
  * XXXXXX| R | S | V |
  * R:reference bit which used for second chance replacement
  * S:Swappable bit because some frame is allocated as coroutine stack
@@ -49,25 +56,27 @@ static struct frame_table_cap {
     struct frame_table_cap *next;
 };
 
+/* Frame table */
 static struct frame_entry *frame_table;
 
-/* Untyped region after end of frame table */
-static uint64_t base_addr;
+static uint64_t base_addr; /* Untyped region after end of frame table */
 static int32_t low_addr;
 static int32_t high_addr;
 
 static uint32_t num_frames;
 
-/* Swapping */
-static struct vnode *swap_vnode;
-uint32_t swap_victim_index = 0;
-uint32_t curr_swap_offset = 0;
+static struct frame_table_cap *frame_table_cap_head;
 
 /* -1 no free_list but memory is not full
    -2 no free_list and memory is full (swapping later)*/
 static int32_t free_index;
 
-static struct frame_table_cap *frame_table_cap_head;
+/* Swapping */
+static struct vnode *swap_vnode;
+
+uint32_t swap_victim_index = 0;
+uint32_t curr_swap_offset = 0;
+
 
 void frame_init(seL4_Word high, seL4_Word low) {
     int32_t err;
@@ -154,8 +163,14 @@ void frame_init(seL4_Word high, seL4_Word low) {
 /* get free frame from list */
 static seL4_Word get_free_frame() {
     seL4_Word frame_vaddr = frame_index_to_vaddr(free_index);
+
+    /* Reset the new frame mask */
     reset_frame_mask(free_index);
+    
+    /* Update free index */
     free_index = frame_table[free_index].next_index;
+
+    /* Clear frame */
     memset(frame_vaddr, 0, PAGE_SIZE);
 
     return frame_vaddr;
@@ -164,9 +179,12 @@ static seL4_Word get_free_frame() {
 int32_t unswappable_alloc(seL4_Word *vaddr) {
     int err = frame_alloc(vaddr);
     if (err) return err;
+
+    /* Set unswappable */
     uint32_t index = frame_vaddr_to_index(*vaddr);
     frame_table[index].mask &= (~FRAME_SWAPPABLE);
-    return err;
+
+    return 0;
 }
 
 int32_t swap_out() {
@@ -365,6 +383,7 @@ int32_t insert_app_cap(seL4_Word vaddr, seL4_CPtr cap, struct app_addrspace *add
     if (frame_table[index].cap == seL4_CapNull) return -1;
 
     struct app_cap *copied_cap;
+
     /* Note: First app cap is not malloc'd */
     if (frame_table[index].app_caps.cap == seL4_CapNull) {
         /* First app cap */
@@ -415,34 +434,6 @@ int32_t get_app_cap(seL4_Word vaddr, struct app_cap **cap_ret) {
     }
 }
 
-static void reset_frame_mask(uint32_t index) {
-    frame_table[index].mask = FRAME_SWAPPABLE | FRAME_VALID | FRAME_REFERENCE;
-}
-
-inline int root_index(seL4_Word uaddr) {
-    return (uaddr >> 22);
-}
-
-inline int leaf_index(seL4_Word uaddr) {
-    return ((uaddr << 10) >> 22);
-}
-
-inline uint32_t frame_vaddr_to_index(seL4_Word sos_vaddr) {
-    return ((sos_vaddr - PROCESS_VMEM_START + low_addr - base_addr) >> INDEX_ADDR_OFFSET);
-}
-
-inline seL4_Word frame_index_to_vaddr(uint32_t index) {
-    return ((index << INDEX_ADDR_OFFSET) + base_addr - low_addr + PROCESS_VMEM_START);
-}
-
-inline seL4_Word frame_paddr_to_vaddr(seL4_Word paddr) {
-    return (paddr - low_addr + PROCESS_VMEM_START);
-}
-
-inline uint32_t frame_paddr_to_index(seL4_Word paddr) {
-    return ((paddr - base_addr) >> INDEX_ADDR_OFFSET);
-}
-
 void clear_reference_bit(seL4_Word uaddr, seL4_Word size) {
     int index1;
     int index2;
@@ -472,4 +463,32 @@ void clear_reference_bit(seL4_Word uaddr, seL4_Word size) {
             (frame_table[frame_index].mask & FRAME_SWAPPABLE)) {
         frame_table[frame_index].mask &= (~FRAME_REFERENCE);
     }
+}
+
+static void reset_frame_mask(uint32_t index) {
+    frame_table[index].mask = FRAME_SWAPPABLE | FRAME_VALID | FRAME_REFERENCE;
+}
+
+inline int root_index(seL4_Word uaddr) {
+    return (uaddr >> 22);
+}
+
+inline int leaf_index(seL4_Word uaddr) {
+    return ((uaddr << 10) >> 22);
+}
+
+inline uint32_t frame_vaddr_to_index(seL4_Word sos_vaddr) {
+    return ((sos_vaddr - PROCESS_VMEM_START + low_addr - base_addr) >> INDEX_ADDR_OFFSET);
+}
+
+inline seL4_Word frame_index_to_vaddr(uint32_t index) {
+    return ((index << INDEX_ADDR_OFFSET) + base_addr - low_addr + PROCESS_VMEM_START);
+}
+
+inline seL4_Word frame_paddr_to_vaddr(seL4_Word paddr) {
+    return (paddr - low_addr + PROCESS_VMEM_START);
+}
+
+inline uint32_t frame_paddr_to_index(seL4_Word paddr) {
+    return ((paddr - base_addr) >> INDEX_ADDR_OFFSET);
 }
