@@ -41,8 +41,7 @@ static struct hashtable_entry *list_get(struct hashtable_entry *entry_head, char
     return NULL;
 }
 
-static int *list_remove(struct hashtable_entry *entry_head,
-        char *key) {
+static int list_remove(struct hashtable_entry *entry_head, char *key) {
     struct hashtable_entry *prev = NULL;
     struct hashtable_entry *curr = entry_head;
     while (curr != NULL && curr->key != NULL) {
@@ -97,6 +96,7 @@ struct hashtable *hashtable_new(uint32_t slots) {
 int hashtable_insert(struct hashtable *ht, char *key, void *value) {
     uint32_t index = hash(key, ht->slots);
     struct hashtable_entry *entry = malloc(sizeof(struct hashtable_entry));
+    if (entry == NULL) return 1;
     entry->key = key;
     entry->value = value;
     entry->next = NULL;

@@ -382,9 +382,6 @@ void syscall_read(seL4_CPtr reply_cap) {
     send_reply(reply_cap);
 }
 
-
-
-
 void syscall_open(seL4_CPtr reply_cap) {
     seL4_Word fdt_status = curproc->addrspace->fdt_status;
     seL4_Word free_fd = fdt_status & LOWER_TWO_BYTE_MASK;

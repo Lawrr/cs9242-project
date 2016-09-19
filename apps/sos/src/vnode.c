@@ -145,7 +145,8 @@ int vfs_get(char *path, struct vnode **ret_vnode) {
         vnode = vnode_new(path);
         if (vnode == NULL) return -1;
 
-        hashtable_insert(vnode_table, path, vnode);
+        int err = hashtable_insert(vnode_table, vnode->path, vnode);
+        conditional_panic(err, "Could not insert into hashtable\n");
     } else {
         /* Already exists */
         vnode = (struct vnode *) entry->value;
@@ -192,7 +193,8 @@ int vfs_close(struct vnode *vnode, int mode) {
 
     if (vnode->read_count + vnode->write_count == 0) {
         /* No more references left - Remove vnode */
-        hashtable_remove(vnode_table, vnode->path);
+        int err = hashtable_remove(vnode_table, vnode->path);
+        conditional_panic(err, "Could not remove from hashtable\n");
 
         if (vnode->fh != NULL) free(vnode->fh);
         if (vnode->fattr != NULL) free(vnode->fattr);
@@ -220,7 +222,7 @@ static struct vnode *vnode_new(char *path) {
     int dev_id = is_dev(path);
 
     /* Initialise variables */
-    vnode->path = malloc(strlen(path + 1));
+    vnode->path = malloc(strlen(path) + 1);
     if (vnode->path == NULL) {
         return NULL;
     }
