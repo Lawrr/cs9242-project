@@ -38,7 +38,6 @@ void coroutine_init() {
 
 yield() {
     int id = setjmp(coroutines[curr_coroutine_id]);
-//    print_jmpbuf(syscall_loop_entry); 
     if (id == 0) {
         /* First time */
         longjmp(syscall_loop_entry, 1);
