@@ -40,8 +40,6 @@ int get_swap_index() {
             int err = swap_vnode->ops->vop_read(swap_vnode, &uio);
             conditional_panic(err, "Could not read\n");
 
-            printf("Getting more free indices from file[%d], so current freelist is now freelist[%d] = %d\n", freelist_page->index, PAGE_SIZE_4K / sizeof(int) - 1, freelist_indices[PAGE_SIZE_4K / sizeof(int) - 1]);
-
             /* Update freelist data */
             struct freelist_page *next = freelist_page->next;
             free(freelist_page);
@@ -54,13 +52,11 @@ int get_swap_index() {
 
         } else {
             /* No more freelists */
-            printf("Getting free index from end (bump pointer): %d\n", end_index);
             return end_index++;
         }
 
     } else {
         /* Just use freelist */
-        printf("Getting free index from current[%d] = %d\n", freelist_length - 1, freelist_indices[freelist_length - 1]);
         return freelist_indices[--freelist_length];
     }
 }
@@ -91,11 +87,9 @@ void free_swap_index(uint32_t index) {
         freelist_page = new_flp;
 
         freelist_length = PAGE_SIZE_4K / sizeof(int); /* 1024 */
-        printf("Freeing to new page at file[%d]\n", index);
 
     } else {
         /* Add to freelist */
-        printf("Freeing to current freelist[%d] = %d\n", freelist_length, index);
         freelist_indices[freelist_length++] = index;
     }
 }

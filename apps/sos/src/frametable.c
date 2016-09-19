@@ -16,6 +16,15 @@
 
 #include <sys/panic.h>
 
+
+#define LIMIT_FRAMES
+
+#ifdef LIMIT_FRAMES
+#define NUM_LIMIT_FRAMES 1070
+int frames_to_alloc = 0;
+#endif
+
+
 #define PAGE_TABLE_MASK (0xFFF00000)
 #define PAGE_SIZE 4096lu /* Bytes */
 #define INDEX_ADDR_OFFSET 12 /* Bits to shift */
@@ -223,7 +232,7 @@ int32_t swap_out() {
     
 	seL4_Word uaddr = frame_table[victim].app_caps.uaddr;
     
-    printf("Swap out, uaddr %x, vaddr %x, offset%d\n",uaddr,frame_vaddr,uio.offset);
+    printf("Swap out - uaddr: %p, vaddr: %p, swap_index: %d\n", uaddr, frame_vaddr, swap_offset);
     int err = swap_vnode->ops->vop_write(swap_vnode, &uio);
     conditional_panic(err, "Could not write\n");
 
@@ -267,7 +276,7 @@ int32_t swap_in(seL4_Word uaddr, seL4_Word sos_vaddr) {
     /* Mark page in pagefile as free */
     free_swap_index(swap_index);
 
-    printf("Swap in, uaddr %x, vaddr %x, offset%d\n",uaddr,sos_vaddr,uio.offset);	
+    printf("Swap in - uaddr: %p, vaddr: %p, swap_index: %d\n", uaddr, sos_vaddr, swap_index);
 		
     /* Mark it unswapped */
 	seL4_Word mask = as->page_table[index1][index2].sos_vaddr & PAGE_MASK_4K;
@@ -278,10 +287,6 @@ int32_t swap_in(seL4_Word uaddr, seL4_Word sos_vaddr) {
     return err;
 }
 
-#define LIMIT_FRAMES 1
-#ifdef LIMIT_FRAMES
-int frames_to_alloc = 0;
-#endif
 int32_t frame_alloc(seL4_Word *vaddr) {
     int err;
     seL4_Word frame_vaddr;
@@ -291,10 +296,10 @@ int32_t frame_alloc(seL4_Word *vaddr) {
 
         /* Get untyped memory */
         seL4_Word frame_paddr = ut_alloc(seL4_PageBits);
+
 #ifdef LIMIT_FRAMES
-        num_frames = 1070;
         frames_to_alloc++;
-        if (frames_to_alloc > num_frames || frame_paddr == NULL) {
+        if (frames_to_alloc > NUM_LIMIT_FRAMES || frame_paddr == NULL) {
             *vaddr = NULL;
             err = swap_out();
             conditional_panic(err, "Swap out failed\n");
@@ -302,6 +307,8 @@ int32_t frame_alloc(seL4_Word *vaddr) {
             return 0;
         }
 #endif
+
+#ifndef LIMIT_FRAMES
         if (frame_paddr == NULL) {
             *vaddr = NULL;
             err = swap_out();
@@ -309,6 +316,7 @@ int32_t frame_alloc(seL4_Word *vaddr) {
             *vaddr = get_free_frame();
             return 0;
         }
+#endif
 
         /* Retype to frame */
         seL4_Word frame_cap;

@@ -115,18 +115,6 @@ static void of_table_init() {
     of_table[STDOUT].file_info.st_fmode = FM_WRITE;
 }
 
-void thrash() {
-    int *addr;
-    int err;
-    for (int i = 0; i < 5; i++) {
-        printf("Thrash #%d\n", i);
-        err = frame_alloc((seL4_Word *) &addr);
-        conditional_panic(err, "Thrash fail\n");
-        addr[0] = i;
-        // TODO read back value
-    }
-}
-
 void handle_syscall(seL4_Word badge, int num_args) {
     seL4_Word syscall_number;
     seL4_CPtr reply_cap;

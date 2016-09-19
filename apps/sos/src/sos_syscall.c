@@ -180,8 +180,6 @@ static void uwakeup(uint32_t id, void *reply_cap) {
 void syscall_usleep(seL4_CPtr reply_cap) {
     int msec = seL4_GetMR(1);
 
-    //thrash();
-
     /* Make sure sec is positive else reply */
     if (msec < 0) {
         seL4_SetMR(0, -1);

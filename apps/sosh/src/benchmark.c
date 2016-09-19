@@ -22,7 +22,7 @@
 #include <sos.h>
 
 /* turn this off when recording real results */
-#define BENCHMARK_DEBUG 0
+#define BENCHMARK_DEBUG 1
 
 /* number of times to run the benchmark before recording results
  * this primes the caches etc so we don't use cold cache results */
