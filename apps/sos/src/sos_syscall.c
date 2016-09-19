@@ -51,9 +51,9 @@ static void send_err(seL4_CPtr reply_cap, int err) {
     cspace_free_slot(cur_cspace, reply_cap);
 }
 
-static int validate_buffer_size(seL4_CPtr reply_cap, int32_t size) {
-    if (size <= 0) {
-        send_err(reply_cap, ERR_INVALID_ARGUMENT);
+static int validate_buffer_size(seL4_CPtr reply_cap, uint32_t size) {
+    if (size == 0) {
+        send_err(reply_cap, 0);
         return 1;
     }
     return 0;
@@ -61,7 +61,7 @@ static int validate_buffer_size(seL4_CPtr reply_cap, int32_t size) {
 
 static int validate_uaddr(seL4_CPtr reply_cap, char *uaddr, int32_t size) {
     if (!legal_uaddr(uaddr, size)) {
-        send_err(reply_cap, ERR_ILLEGAL_USERADDR);
+        send_err(reply_cap, -1);
         return 1;
     }
     return 0;
@@ -69,7 +69,7 @@ static int validate_uaddr(seL4_CPtr reply_cap, char *uaddr, int32_t size) {
 
 static int validate_fd(seL4_CPtr reply_cap, int fd) {
     if (fd < 0 || fd >= PROCESS_MAX_FILES) {
-        send_err(reply_cap, ERR_INVALID_FD);
+        send_err(reply_cap, -1);
         return 1;
     }
     return 0;
@@ -77,7 +77,7 @@ static int validate_fd(seL4_CPtr reply_cap, int fd) {
 
 static int validate_ofd(seL4_CPtr reply_cap, int ofd) {
     if (ofd == -1) {
-        send_err(reply_cap, ERR_INVALID_FD);
+        send_err(reply_cap, -1);
         return 1;
     }
     return 0;
@@ -85,7 +85,7 @@ static int validate_ofd(seL4_CPtr reply_cap, int ofd) {
 
 static int validate_ofd_mode(seL4_CPtr reply_cap, int ofd, int mode) {
     if (!(of_table[ofd].file_info.st_fmode & mode)) {
-        send_err(reply_cap, ERR_ILLEGAL_ACCESS_MODE);
+        send_err(reply_cap, -1);
         return 1;
     }
     return 0;
@@ -93,7 +93,7 @@ static int validate_ofd_mode(seL4_CPtr reply_cap, int ofd, int mode) {
 
 static int validate_max_fd(seL4_CPtr reply_cap, int fd_count) {
     if (fd_count == PROCESS_MAX_FILES) {
-        send_err(reply_cap, ERR_MAX_FILE);
+        send_err(reply_cap, -1);
         return 1;
     }
     return 0;
@@ -101,7 +101,7 @@ static int validate_max_fd(seL4_CPtr reply_cap, int fd_count) {
 
 static int validate_max_ofd(seL4_CPtr reply_cap, int ofd_count) {
     if (ofd_count == MAX_OPEN_FILE) {
-        send_err(reply_cap, ERR_MAX_SYSTEM_FILE);
+        send_err(reply_cap, -1);
         return 1;
     }
     return 0;
@@ -217,7 +217,7 @@ void syscall_getdirent(seL4_CPtr reply_cap) {
     struct vnode *vnode;
     int err = vfs_get("", &vnode);
     if (err) {
-        send_err(reply_cap, ERR_ILLEGAL_USERADDR);
+        send_err(reply_cap, -1);
         return;
     }
 
@@ -259,7 +259,7 @@ void syscall_stat(seL4_CPtr reply_cap) {
     unpin_frame_entry(uaddr, MAX_PATH_LEN);
     if (err) {
         unpin_frame_entry(ustat_buf, sizeof(sos_stat_t));
-        send_err(reply_cap, ERR_ILLEGAL_USERADDR);
+        send_err(reply_cap, -1);
         return;
     }
 
@@ -323,7 +323,7 @@ void syscall_write(seL4_CPtr reply_cap) {
         entry->offset = uio.offset;
     }
     if (err) {
-        send_err(reply_cap, ERR_INTERNAL_ERROR);
+        send_err(reply_cap, -1);
         return;
     }
 
@@ -376,7 +376,7 @@ void syscall_read(seL4_CPtr reply_cap) {
     free(data);
 
     if (err) {
-        send_err(reply_cap, ERR_INTERNAL_ERROR);
+        send_err(reply_cap, -1);
         return;
     }
 
@@ -408,7 +408,7 @@ void syscall_open(seL4_CPtr reply_cap) {
     err = get_safe_path(path_sos_vaddr, uaddr, sos_vaddr, MAX_PATH_LEN);
     unpin_frame_entry(uaddr, MAX_PATH_LEN);
     if (err) {
-        send_err(reply_cap, ERR_ILLEGAL_USERADDR);
+        send_err(reply_cap, -1);
         return;
     }
 
