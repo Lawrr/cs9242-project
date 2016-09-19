@@ -697,11 +697,11 @@ static int vnode_swap_out(struct vnode *vnode, struct uio *uio) {
 		token[0] = curr_coroutine_id;
 		token[1] = num_req;
 
-		int offset = 1024 * num_req;
-		int err = nfs_write(vnode->fh, uio->offset + offset, size, uio->addr + offset, &vnode_write_cb, token);
+		int err = nfs_write(vnode->fh, uio->offset, size, uio->addr, &vnode_write_cb, token);
 		if (err != NFS_OK) {
 			return -1;
 		}
+		uio->offset += size;
 		uio->size -= size;
 		num_req++;
 	}
