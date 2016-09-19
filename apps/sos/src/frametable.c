@@ -483,7 +483,7 @@ void pin_frame_entry(seL4_Word uaddr, seL4_Word size) {
 
     if ((frame_table[frame_index].mask & FRAME_VALID) &&
         (frame_table[frame_index].mask & FRAME_SWAPPABLE)) {
-        frame_table[frame_index].mask = FRAME_REFERENCE;
+        frame_table[frame_index].mask |= FRAME_REFERENCE;
         frame_table[frame_index].mask &= (~FRAME_SWAPPABLE);
 	}
 }
