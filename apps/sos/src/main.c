@@ -232,19 +232,13 @@ void syscall_loop(seL4_CPtr ep) {
 
         } else if (label == seL4_VMFault) {
             /* Page fault */
-            //TODO change to start proper coroutine
-            seL4_Word data[2];
-            data[0] = badge;
-            data[1] = seL4_MessageInfo_get_length(message) - 1;
-            start_coroutine(&vm_fault_handler, data);
+            start_coroutine(&vm_fault_handler, badge,
+                            seL4_MessageInfo_get_length(message) - 1);
 
         } else if (label == seL4_NoFault) {
             /* System call */
-            // TODO change data[x]
-            seL4_Word data[2];
-            data[0] = badge;
-            data[1] = seL4_MessageInfo_get_length(message) - 1;
-            start_coroutine(&handle_syscall, data);
+            start_coroutine(&handle_syscall, badge,
+                            seL4_MessageInfo_get_length(message) - 1);
         } else {
             printf("Rootserver got an unknown message\n");
         }

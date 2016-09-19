@@ -69,7 +69,8 @@ void set_resume(int id) {
     next_resume_id = id;
 }
 
-int start_coroutine(void (*task)(seL4_Word badge, int num_args), void *data) {
+int start_coroutine(void (*task)(seL4_Word badge, int num_args),
+                    seL4_Word badge, int num_args) {
     /* Check reached max coroutines */
     if (num_tasks == NUM_COROUTINES) return 1;
 
@@ -97,15 +98,19 @@ int start_coroutine(void (*task)(seL4_Word badge, int num_args), void *data) {
     sptr -= sizeof(void *);
     *sptr = sptr_new;
 
-    void *data_new = data;
-    sptr -= sizeof(void *);
-    *sptr = (void *) data_new;
+    seL4_Word badge_new = badge;
+    sptr -= sizeof(seL4_Word);
+    *sptr = badge;
+
+    int num_args_new = num_args;
+    sptr -= sizeof(int);
+    *sptr = num_args;
 
     /* Change to new sp */
     asm volatile("mov sp, %[newsp]" : : [newsp] "r" (sptr) : "sp");
 
     /* Run task */
-    task(((seL4_Word *) data_new)[0], ((seL4_Word *) data_new)[1]);
+    task(badge_new, num_args_new);
 
     /* Task finished */
     free_list[task_id] = 1;
