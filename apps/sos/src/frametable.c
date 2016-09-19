@@ -72,11 +72,9 @@ static struct frame_table_cap *frame_table_cap_head;
 static int32_t free_index;
 
 /* Swapping */
-static struct vnode *swap_vnode;
+struct vnode *swap_vnode;
 
 uint32_t swap_victim_index = 0;
-uint32_t curr_swap_offset = 0;
-
 
 void frame_init(seL4_Word high, seL4_Word low) {
     int32_t err;
@@ -212,9 +210,14 @@ int32_t swap_out() {
         vfs_open(swapfile, FM_READ | FM_WRITE, &swap_vnode);
     }
 
+    /* Get swap offset */
+    int swap_offset = get_swap_index();
+
     struct uio uio = {
-        .offset = curr_swap_offset * PAGE_SIZE_4K,
-        .addr = PAGE_ALIGN_4K(frame_vaddr)
+        .offset = swap_offset * PAGE_SIZE_4K,
+        .addr = PAGE_ALIGN_4K(frame_vaddr),
+        .size = PAGE_SIZE_4K,
+        .remaining = PAGE_SIZE_4K
     };
     
 	seL4_Word uaddr = frame_table[victim].app_caps.uaddr;
@@ -232,7 +235,7 @@ int32_t swap_out() {
 
     /* Mark it swapped */
     as->page_table[index1][index2].sos_vaddr |= PTE_SWAP;
-    as->swap_table[index1][index2].swap_index = curr_swap_offset++;
+    as->swap_table[index1][index2].swap_index = swap_offset;
 
     frame_free(frame_vaddr); 
 	
@@ -248,13 +251,19 @@ int32_t swap_in(seL4_Word uaddr, seL4_Word sos_vaddr) {
 
     /* Write page back in from pagefile */
     struct app_addrspace *as = curproc->addrspace;
+    uint32_t swap_index = as->swap_table[index1][index2].swap_index;
     struct uio uio = {
-        .offset = as->swap_table[index1][index2].swap_index * PAGE_SIZE_4K,
-        .addr = PAGE_ALIGN_4K(sos_vaddr)
+        .offset = swap_index * PAGE_SIZE_4K,
+        .addr = PAGE_ALIGN_4K(sos_vaddr),
+        .size = PAGE_SIZE_4K,
+        .remaining = PAGE_SIZE_4K
     };
 
     int err = swap_vnode->ops->vop_read(swap_vnode, &uio);
     conditional_panic(err, "Could not read\n");
+
+    /* Mark page in pagefile as free */
+    free_swap_index(swap_index);
 
     printf("Swap in, uaddr %x, vaddr %x, offset%d\n",uaddr,sos_vaddr,uio.offset);	
 		

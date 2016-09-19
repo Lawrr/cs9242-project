@@ -712,7 +712,7 @@ static int vnode_swap_out(struct vnode *vnode, struct uio *uio) {
 }
 
 static int vnode_swap_in(struct vnode *vnode, struct uio *uio) {
-    int err = nfs_read(vnode->fh, uio->offset, PAGE_SIZE_4K, (nfs_read_cb_t)(vnode_read_cb), curr_coroutine_id);
+    int err = nfs_read(vnode->fh, uio->offset, uio->size, (nfs_read_cb_t)(vnode_read_cb), curr_coroutine_id);
 
     set_routine_arg(curr_coroutine_id, 0, uio->addr);
 
