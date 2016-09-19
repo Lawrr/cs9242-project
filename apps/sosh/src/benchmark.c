@@ -189,8 +189,8 @@ static int run_benchmark(char *name, benchmark_fn_t fn, uint32_t overhead,
                 if (fn == sos_sys_read) {
                     assert(buf[j * sz + CLZ(sz)] == (char) CLZ(sz));
                 }
-            }
 #endif
+            }
             READ_CCNT(end);
             results[i] = end - start;
         }
