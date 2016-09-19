@@ -26,11 +26,6 @@ static int free_list[NUM_COROUTINES];
 /* Slots for storing args passed to callback */
 static seL4_Word routine_args[NUM_COROUTINES][5];
 static char *routine_frames[NUM_COROUTINES];
-print_jmpbuf(jmp_buf t){
-   for (int i = 0;i < 32; i++){
-      printf("jmp_buf[%d]=%d\n",i,t[i]);
-   }
-}
 
 void coroutine_init() {
     int err;
