@@ -267,7 +267,7 @@ struct command {
 char test_str[] = "Basic test string for read/write";
 char small_buf[SMALL_BUF_SZ];
 
-void test_buffers(int console_fd) {
+static void test_buffers(int console_fd) {
     /* test a small string from the code segment */
     int result = sos_sys_write(console_fd, test_str, strlen(test_str));
     assert(result == strlen(test_str));
@@ -309,34 +309,49 @@ void test_buffers(int console_fd) {
     }
 }
 
+static int thrash(int argc, char *argv[]) {
+    if (argc != 2) {
+        printf("Usage %s npages\n", argv[0]);
+        return 1;
+    }
+    int pages = atoi(argv[1]);
+    int a[pages][4096];
+
+    for (int i = 0; i < pages; i++) {
+        for (int j = 0; j < 4096; j++) {
+            a[i][j]= i * 4096 + j;
+        }
+        printf("a[%d][0] = %d\n", i, a[i][0]);
+        printf("a[%d][2048] = %d\n", i, a[i][2048]);
+        printf("a[%d][4095] = %d\n", i, a[i][4095]);
+    }
+
+    printf("#################################\n");
+    printf("Checking values...\n");
+    printf("#################################\n");
+
+    for (int i = 0; i < pages; i++) {
+        printf("a[%d][0] = %d\n", i, a[i][0]);
+        printf("a[%d][2048] = %d\n", i, a[i][2048]);
+        printf("a[%d][4095] = %d\n", i, a[i][4095]);
+        assert(a[i][0] == i * 4096);
+        assert(a[i][2048] == i * 4096 + 2048);
+        assert(a[i][4095] == i * 4096 + 4095);
+    }
+
+    return 0;
+}
+
 struct command commands[] = { { "dir", dir }, { "ls", dir }, { "cat", cat }, {
         "cp", cp }, { "ps", ps }, { "exec", exec }, {"sleep",second_sleep}, {"msleep",milli_sleep},
         {"time", second_time}, {"mtime", micro_time}, {"kill", kill},
-        {"benchmark", benchmark}};
-
-void test_paging(){
-   int a[4096][4096];
-   for (int i = 0;i < 1000; i++){
-       for ( int j = 0; j < 4096; j++){
-           a[i][j]= i*4096+j;
-       }
-       printf("(%d,%d) = %d\n",i,0,a[i][0]);
-   }
-   printf("#################################\n");
-   for (int i = 0;i < 1000; i++){
-       printf("(%d,%d) = %d\n",i,0,a[i][0]);
-   }
-}
-
-
+        {"benchmark", benchmark}, {"thrash", thrash}};
 
 int main(void) {
     char buf[BUF_SIZ];
     char *argv[MAX_ARGS];
     int i, r, done, found, new, argc;
     char *bp, *p;
-
-    /* test_paging(); */
 
     in = open("console", O_RDONLY);
     assert(in >= 0);
