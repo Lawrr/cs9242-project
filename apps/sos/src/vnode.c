@@ -682,26 +682,34 @@ static void vnode_write_cb(uintptr_t token, enum nfs_stat status, fattr_t *fattr
  * =======================================================
  */
 static int vnode_swap_out(struct vnode *vnode, struct uio *uio) {
-
+    
     int initoffset = uio->offset;
-    for (int i = 0 ; i < 4; i++) {
-        seL4_Word *token = malloc(2 * sizeof(seL4_Word));
-        token[0] = curr_coroutine_id;
-        token[1] = i;
+	int num_req = 0;
+	while (uio->size > 0){
+		seL4_Word size = 0;
+		if (uio->size > 1024){
+			size = 1024;
+		}	else{
+			size = uio->size;
+		}
+		
+		seL4_Word *token = malloc(2 * sizeof(seL4_Word));
+		token[0] = curr_coroutine_id;
+		token[1] = num_req;
 
-        int offset = 1024 * i;
-        int err = nfs_write(vnode->fh, uio->offset + offset, 1024, uio->addr + offset, &vnode_write_cb, token);
-        if (err != NFS_OK) {
-            return -1;
-        }
-    }
+		int offset = 1024 * num_req;
+		int err = nfs_write(vnode->fh, uio->offset + offset, size, uio->addr + offset, &vnode_write_cb, token);
+		if (err != NFS_OK) {
+			return -1;
+		}
+		uio->size -= size;
+		num_req++;
+	}
 
-    set_routine_arg(curr_coroutine_id, 0, (1<<4)-1);
+    set_routine_arg(curr_coroutine_id, 0, (1<<num_req)-1);
     set_routine_arg(curr_coroutine_id, 1, 0);
 
     yield();
-
-
 
     int count =get_routine_arg(curr_coroutine_id, 1);
     if (count != PAGE_SIZE_4K) {
