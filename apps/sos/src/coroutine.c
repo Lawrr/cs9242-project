@@ -85,9 +85,12 @@ int start_coroutine(void (*task)(seL4_Word badge, int num_args), void *data) {
 
     /* Allocate new stack frame */
     char *sptr = routine_frames[curr_coroutine_id];
+
+    /* Clean frame before using */
+    memset(PAGE_ALIGN_4K((seL4_Word) sptr), 0, PAGE_SIZE_4K);
     
     /* Move stack ptr up by a frame (since stack grows down) */
-    sptr += 4096;
+    sptr += PAGE_SIZE_4K;
 
     /* Add stuff to the new stack */
     void *sptr_new = sptr;
@@ -96,7 +99,7 @@ int start_coroutine(void (*task)(seL4_Word badge, int num_args), void *data) {
 
     void *data_new = data;
     sptr -= sizeof(void *);
-    *sptr = (seL4_Word) data_new;
+    *sptr = (void *) data_new;
 
     /* Change to new sp */
     asm volatile("mov sp, %[newsp]" : : [newsp] "r" (sptr) : "sp");
@@ -104,8 +107,7 @@ int start_coroutine(void (*task)(seL4_Word badge, int num_args), void *data) {
     /* Run task */
     task(((seL4_Word *) data_new)[0], ((seL4_Word *) data_new)[1]);
 
-    /* Task finished - clean up */
-    memset(PAGE_ALIGN_4K((seL4_Word) sptr_new), 0, PAGE_SIZE_4K);
+    /* Task finished */
     free_list[task_id] = 1;
     num_tasks--;
 
