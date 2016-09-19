@@ -193,7 +193,8 @@ static void vm_fault_handler(seL4_Word badge, int num_args) {
         /* Data fault */
         printf("Data fault - ");
         map_vaddr = seL4_GetMR(1); 
-    	pin_frame_entry(PAGE_ALIGN_4K(seL4_GetMR(0)), 1);
+        instruction_vaddr = seL4_GetMR(0);
+        pin_frame_entry(PAGE_ALIGN_4K(instruction_vaddr), PAGE_SIZE_4K);
     }
 
     printf("In vm_fault_handler for uaddr: %p, instr: %p\n", map_vaddr, seL4_GetMR(0));
@@ -202,12 +203,12 @@ static void vm_fault_handler(seL4_Word badge, int num_args) {
     if (err) printf("ERR: %d\n", err);
     conditional_panic(err, "Could not map page\n");
 
+    if (!isInstruction) {
+        unpin_frame_entry(PAGE_ALIGN_4K(instruction_vaddr), PAGE_SIZE_4K);
+    }
+
     seL4_MessageInfo_t reply = seL4_MessageInfo_new(0, 0, 0, 0);
     seL4_Send(reply_cap, reply);
-
-	if (!isInstruction){
-       unpin_frame_entry(instruction_vaddr,1);
-	}
 
     /* Free the saved reply cap */
     cspace_free_slot(cur_cspace, reply_cap); 

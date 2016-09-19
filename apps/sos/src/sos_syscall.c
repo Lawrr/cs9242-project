@@ -258,6 +258,7 @@ void syscall_stat(seL4_CPtr reply_cap) {
     err = get_safe_path(path_sos_vaddr, uaddr, sos_vaddr, MAX_PATH_LEN);
     unpin_frame_entry(uaddr, MAX_PATH_LEN);
     if (err) {
+        unpin_frame_entry(ustat_buf, sizeof(sos_stat_t));
         send_err(reply_cap, ERR_ILLEGAL_USERADDR);
         return;
     }
@@ -266,6 +267,7 @@ void syscall_stat(seL4_CPtr reply_cap) {
     struct vnode *vnode;
     err = vfs_get(path_sos_vaddr, &vnode);
     if (err) {
+        unpin_frame_entry(ustat_buf, sizeof(sos_stat_t));
         send_err(reply_cap, -1);
         return;
     }

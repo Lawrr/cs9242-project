@@ -331,11 +331,11 @@ static int thrash(int argc, char *argv[]) {
     printf("#################################\n");
 
     for (int i = 0; i < pages; i++) {
-        printf("Checking: a[%d][0] == %d\n", i, a[i][0]);
+        printf("Checking: a[%d][0] = %d - Should be: %d\n", i, a[i][0], i * 4096);
         assert(a[i][0] == i * 4096);
-        printf("Checking: a[%d][2048] == %d\n", i, a[i][2048]);
+        printf("Checking: a[%d][2048] = %d - Should be: %d\n", i, a[i][2048], i * 4096 + 2048);
         assert(a[i][2048] == i * 4096 + 2048);
-        printf("Checking: a[%d][4095] == %d\n", i, a[i][4095]);
+        printf("Checking: a[%d][4095] = %d - Should be: %d\n", i, a[i][4095], i * 4096 + 4095);
         assert(a[i][4095] == i * 4096 + 4095);
     }
 

@@ -507,8 +507,8 @@ void unpin_frame_entry(seL4_Word uaddr, seL4_Word size) {
     }
 
     /* Last page may be skipped so make sure the last page is set */
-    index1 = root_index(uaddr + size-1);
-    index2 = leaf_index(uaddr + size-1);
+    index1 = root_index(uaddr + size - 1);
+    index2 = leaf_index(uaddr + size - 1);
     sos_vaddr = curproc->addrspace->page_table[index1][index2].sos_vaddr;
     frame_index = frame_vaddr_to_index(sos_vaddr);
 
