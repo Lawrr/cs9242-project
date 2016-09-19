@@ -300,23 +300,17 @@ int32_t frame_alloc(seL4_Word *vaddr) {
         num_frames = 1070;
         frames_to_alloc++;
         if (frames_to_alloc > num_frames || frame_paddr == NULL) {
-            *vaddr = NULL;
-            err = swap_out();
-            conditional_panic(err, "Swap out failed\n");
-            *vaddr = get_free_frame();
-            return 0;
-        }
 #endif
-
 #ifndef LIMIT_FRAMES
         if (frame_paddr == NULL) {
+#endif
+            /* Swapping */
             *vaddr = NULL;
             err = swap_out();
             conditional_panic(err, "Swap out failed\n");
             *vaddr = get_free_frame();
             return 0;
         }
-#endif
 
         /* Retype to frame */
         seL4_Word frame_cap;
