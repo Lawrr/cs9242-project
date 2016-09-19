@@ -20,7 +20,6 @@
 #define LIMIT_FRAMES
 
 #ifdef LIMIT_FRAMES
-#define NUM_LIMIT_FRAMES 1070
 int frames_to_alloc = 0;
 #endif
 
@@ -298,8 +297,9 @@ int32_t frame_alloc(seL4_Word *vaddr) {
         seL4_Word frame_paddr = ut_alloc(seL4_PageBits);
 
 #ifdef LIMIT_FRAMES
+        num_frames = 1070;
         frames_to_alloc++;
-        if (frames_to_alloc > NUM_LIMIT_FRAMES || frame_paddr == NULL) {
+        if (frames_to_alloc > num_frames || frame_paddr == NULL) {
             *vaddr = NULL;
             err = swap_out();
             conditional_panic(err, "Swap out failed\n");
