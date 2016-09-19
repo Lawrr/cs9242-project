@@ -210,7 +210,8 @@ void syscall_getdirent(seL4_CPtr reply_cap) {
     }
 
     struct uio uio = {
-        .addr = uaddr,
+        .uaddr = uaddr,
+        .vaddr = NULL,
         .size = nbyte,
         .remaining = nbyte,
         .offset = pos
@@ -305,7 +306,8 @@ void syscall_write(seL4_CPtr reply_cap) {
     struct vnode *vnode = of_table[ofd].vnode;
 
     struct uio uio = {
-        .addr = uaddr,
+        .uaddr = uaddr,
+        .vaddr = NULL,
         .size = ubuf_size,
         .remaining = ubuf_size,
         .offset = entry->offset
@@ -346,7 +348,8 @@ void syscall_read(seL4_CPtr reply_cap) {
     struct vnode *vnode = of_table[ofd].vnode;
 
     struct uio uio = {
-        .addr = uaddr,
+        .uaddr = uaddr,
+        .vaddr = NULL,
         .size = ubuf_size,
         .remaining = ubuf_size,
         .offset = entry->offset

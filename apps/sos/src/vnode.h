@@ -23,7 +23,8 @@ struct vnode {
 };
 
 struct uio {
-    char *addr;
+    char *uaddr;
+    char *vaddr;
     int size;
     int remaining;
     int offset;

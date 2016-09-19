@@ -28,18 +28,18 @@ static void console_serial_handler(struct serial *serial, char c) {
     seL4_Word *vnode_data = (seL4_Word *) (console_vnode->data);
 
     /* Take uaddr and turn it into sos_vaddr */
-    int index1 = root_index((seL4_Word) console_uio->addr);
-    int index2 = leaf_index((seL4_Word) console_uio->addr);
+    int index1 = root_index((seL4_Word) console_uio->uaddr);
+    int index2 = leaf_index((seL4_Word) console_uio->uaddr);
 
     struct page_table_entry **page_table = (struct page_table **) vnode_data[0];
 
     /* Align and add offset */
     char *sos_vaddr = PAGE_ALIGN_4K(page_table[index1][index2].sos_vaddr);
-    sos_vaddr = ((seL4_Word) sos_vaddr) | ((seL4_Word) console_uio->addr & PAGE_MASK_4K);
+    sos_vaddr = ((seL4_Word) sos_vaddr) | ((seL4_Word) console_uio->uaddr & PAGE_MASK_4K);
 
     /* Write into buffer */
     *sos_vaddr = c;
-    console_uio->addr++;
+    console_uio->uaddr++;
     console_uio->remaining--;
     console_uio->offset++;
 
@@ -50,7 +50,7 @@ static void console_serial_handler(struct serial *serial, char c) {
 }
 
 int console_write(struct vnode *vnode, struct uio *uio) {
-    seL4_Word uaddr = uio->addr;
+    seL4_Word uaddr = uio->uaddr;
     seL4_Word ubuf_size = uio->size;
     seL4_Word end_uaddr = uaddr + ubuf_size;
 
@@ -86,7 +86,7 @@ int console_write(struct vnode *vnode, struct uio *uio) {
 }
 
 int console_read(struct vnode *vnode, struct uio *uio) {
-    seL4_Word uaddr = uio->addr;
+    seL4_Word uaddr = uio->uaddr;
     seL4_Word ubuf_size = uio->size;
 
     /* Make sure address is mapped */

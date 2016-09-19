@@ -214,9 +214,10 @@ int32_t swap_out() {
     int swap_offset = get_swap_index();
 
     struct uio uio = {
-        .offset = swap_offset * PAGE_SIZE_4K,
-        .addr = PAGE_ALIGN_4K(frame_vaddr),
+        .vaddr = PAGE_ALIGN_4K(frame_vaddr),
+        .uaddr = NULL,
         .size = PAGE_SIZE_4K,
+        .offset = swap_offset * PAGE_SIZE_4K,
         .remaining = PAGE_SIZE_4K
     };
     
@@ -253,9 +254,10 @@ int32_t swap_in(seL4_Word uaddr, seL4_Word sos_vaddr) {
     struct app_addrspace *as = curproc->addrspace;
     uint32_t swap_index = as->swap_table[index1][index2].swap_index;
     struct uio uio = {
-        .offset = swap_index * PAGE_SIZE_4K,
-        .addr = PAGE_ALIGN_4K(sos_vaddr),
+        .vaddr = PAGE_ALIGN_4K(sos_vaddr),
+        .uaddr = NULL,
         .size = PAGE_SIZE_4K,
+        .offset = swap_index * PAGE_SIZE_4K,
         .remaining = PAGE_SIZE_4K
     };
 

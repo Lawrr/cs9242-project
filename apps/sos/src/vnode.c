@@ -13,6 +13,7 @@
 
 #define VNODE_TABLE_SLOTS 64
 #define NUM_ARG 4
+#define MAX_WRITE_SIZE 1024
 
 /* Externs */
 extern struct PCB *curproc;
@@ -233,26 +234,10 @@ static struct vnode *vnode_new(char *path) {
 
     if (dev_id != -1) {
         /* Handle device */ 
-        /* Set device's ops */
         vnode->ops = dev_list[dev_id].ops;
     } else {
         /* Handle file */
-
-        /* Check if it is the swapfile */
-        if (!strcmp(path, swapfile)) {
-            struct vnode_ops *ops = malloc(sizeof(struct vnode_ops));
-            ops->vop_read = &vnode_swap_in;
-            ops->vop_write = &vnode_swap_out;
-            ops->vop_open = &vnode_open;
-            ops->vop_close = &vnode_close;
-            ops->vop_stat = &vnode_stat;
-            ops->vop_getdirent = &vnode_getdirent;
-            vnode->ops = ops;
-            vnode->data = ops;
-        } else {
-            /* Normal file ops */
-            vnode->ops = &default_ops;
-        }
+        vnode->ops = &default_ops;
     }
 
     return vnode;
@@ -304,7 +289,7 @@ static void vnode_readdir_cb(uintptr_t token, enum nfs_stat status,
 
     if (uio->offset == 0 && num_files == 0) {
         /* Valid next pos NULL */
-        uio->addr = "\0";
+        uio->uaddr = "\0";
 
     } else if (uio->offset < num_files) {
         /* Check if we need to map a second page */
@@ -313,8 +298,8 @@ static void vnode_readdir_cb(uintptr_t token, enum nfs_stat status,
             arg[1] = 0; /* Hard set to stop it continuing */
         }
 
-        seL4_Word uaddr = uio->addr;
-        seL4_Word uaddr_end = uio->addr + len;
+        seL4_Word uaddr = uio->uaddr;
+        seL4_Word uaddr_end = uio->uaddr + len;
 
         seL4_Word sos_vaddr;
         int err = sos_map_page(uaddr, &sos_vaddr);
@@ -517,43 +502,64 @@ static void vnode_open_cb(uintptr_t token, nfs_stat_t status, fhandle_t *fh, fat
  * =======================================================
  */
 static int vnode_read(struct vnode *vnode, struct uio *uio) {
-    char *uaddr = (char *) uio->addr;
-    seL4_Word ubuf_size = uio->size;
-    seL4_Word end_uaddr = (seL4_Word) uaddr + ubuf_size;
-    int err = 0;
+    int err;
+    seL4_Word sos_vaddr;
+    seL4_Word buf_size = uio->size;
+    char *uaddr = NULL;
 
-    while (ubuf_size > 0) {
-        seL4_Word uaddr_next = PAGE_ALIGN_4K((seL4_Word) uaddr) + 0x1000;
+    if (uio->uaddr != NULL) {
+        uaddr = uio->uaddr;
+    }
+
+    while (buf_size > 0) {
         seL4_Word size;
-        if (end_uaddr >= uaddr_next) {
-            size = uaddr_next - (seL4_Word) uaddr;
+        seL4_Word end_uaddr, uaddr_next;
+        
+        if (uio->uaddr != NULL) {
+            /* uaddr */
+
+            /* We must find the sos_vaddrs for each page */
+            end_uaddr = (seL4_Word) uaddr + buf_size;
+            uaddr_next = PAGE_ALIGN_4K((seL4_Word) uaddr) + 0x1000;
+            if (end_uaddr >= uaddr_next) {
+                size = uaddr_next - (seL4_Word) uaddr;
+            } else {
+                size = buf_size;
+            }
         } else {
-            size = ubuf_size;
+            /* vaddr */
+            size = buf_size;
         }
 
         err = nfs_read(vnode->fh, uio->offset, size, (nfs_read_cb_t) vnode_read_cb, curr_coroutine_id);
         conditional_panic(err, "failed read at send phrase");
 
-        seL4_CPtr sos_vaddr = uaddr_to_sos_vaddr(uaddr);
-        if (!sos_vaddr) {
-            err = sos_map_page((seL4_Word) uaddr, &sos_vaddr);
-            if (err) {
-                return 1;
+        /* Set sos_vaddr */
+        if (uio->uaddr != NULL) {
+            /* uaddr */
+            sos_vaddr = uaddr_to_sos_vaddr(uaddr);
+            if (!sos_vaddr) {
+                err = sos_map_page((seL4_Word) uaddr, &sos_vaddr);
+                if (err) {
+                    return 1;
+                }
             }
+
+            sos_vaddr = PAGE_ALIGN_4K(sos_vaddr);
+            sos_vaddr |= ((seL4_Word) uaddr & PAGE_MASK_4K);
+        } else {
+            /* vaddr */
+            sos_vaddr = uio->vaddr;
         }
 
-        sos_vaddr = PAGE_ALIGN_4K(sos_vaddr);
-        sos_vaddr |= ((seL4_Word) uaddr & PAGE_MASK_4K);
         set_routine_arg(curr_coroutine_id, 0, sos_vaddr);
 
         yield();
 
-        conditional_panic(arg[0], "failed read in end phrase");
+        seL4_Word count = arg[0];
 
-        seL4_Word count = arg[1];
-
-        ubuf_size -= count;
-        uaddr += count;
+        buf_size -= count;
+        if (uio->uaddr != NULL) uaddr += count;
 
         uio->remaining -= count;
         uio->offset += count;
@@ -567,13 +573,15 @@ static int vnode_read(struct vnode *vnode, struct uio *uio) {
 }
 
 static void vnode_read_cb(uintptr_t token, nfs_stat_t status, fattr_t *fattr, int count, void *data) {
+    conditional_panic(status, "failed read in end phrase");
+
     seL4_Word sos_vaddr = get_routine_arg(token, 0);
+
     if (status == NFS_OK) {
         memcpy((void *) sos_vaddr, data, count);
     }
 
-    arg[0] = (seL4_Word)status;
-    arg[1] = (seL4_Word)count;
+    arg[0] = (seL4_Word)count;
 
     set_resume(token);
 }
@@ -586,33 +594,50 @@ static void vnode_read_cb(uintptr_t token, nfs_stat_t status, fattr_t *fattr, in
  * =======================================================
  */
 static int vnode_write(struct vnode *vnode, struct uio *uio) {
-    char *uaddr = (char *) uio->addr;
-    seL4_Word ubuf_size = uio->size;
-    seL4_Word end_uaddr = (seL4_Word) uaddr + ubuf_size;
-    int err = 0;
+    int err;
+    seL4_Word sos_vaddr;
+    seL4_Word buf_size = uio->size;
+    char *uaddr = NULL;
 
-    seL4_CPtr sos_vaddr = uaddr_to_sos_vaddr(uaddr);
-    if (!sos_vaddr) {
-        err = sos_map_page((seL4_Word) uaddr, &sos_vaddr);
-        if (err && err != ERR_ALREADY_MAPPED) {
-            return 1;
+    /* Check if we got a uaddr or vaddr */
+    if (uio->uaddr != NULL) {
+        /* uaddr */
+        uaddr = uio->uaddr;
+        sos_vaddr = uaddr_to_sos_vaddr(uaddr);
+        if (!sos_vaddr) {
+            err = sos_map_page((seL4_Word) uaddr, &sos_vaddr);
+            if (err && err != ERR_ALREADY_MAPPED) {
+                return 1;
+            }
         }
+    } else {
+        /* vaddr */
+        sos_vaddr = uio->vaddr;
     }
 
-    while (ubuf_size > 0) {
-        seL4_Word uaddr_next = PAGE_ALIGN_4K((seL4_Word) uaddr) + 0x1000;
+    while (buf_size > 0) {
         seL4_Word size;
-        if (end_uaddr >= uaddr_next) {
-            size = uaddr_next - (seL4_Word) uaddr;
-        } else {
-            size = ubuf_size;
-        }
+        seL4_Word end_uaddr, uaddr_next;
 
-        /* Though we can assume the buffer is mapped because it is a write operation,
-           we still use sos_map_page to find the mapping address if it is already mapped */
-        sos_vaddr = PAGE_ALIGN_4K(sos_vaddr);
-        /*Add offset*/
-        sos_vaddr |= ((seL4_Word) uaddr & PAGE_MASK_4K);
+        if (uio->uaddr != NULL) {
+            /* uaddr */
+            
+            /* We must find the sos_vaddrs for each page */
+            end_uaddr = (seL4_Word) uaddr + buf_size;
+            uaddr_next = PAGE_ALIGN_4K((seL4_Word) uaddr) + 0x1000;
+            if (end_uaddr >= uaddr_next) {
+                size = uaddr_next - (seL4_Word) uaddr;
+            } else {
+                size = buf_size;
+            }
+
+            sos_vaddr = PAGE_ALIGN_4K(sos_vaddr);
+            /*Add offset*/
+            sos_vaddr |= ((seL4_Word) uaddr & PAGE_MASK_4K);
+        } else {
+            /* vaddr */
+            size = buf_size;
+        }
 
         int req_id = 0;
         while (size > 0) {
@@ -620,28 +645,43 @@ static int vnode_write(struct vnode *vnode, struct uio *uio) {
             token[0] = curr_coroutine_id;
             token[1] = req_id;
 
-            int offset = 1024 * req_id;
-            if (size > 1024) {
-                err = nfs_write(vnode->fh, uio->offset + offset, 1024, sos_vaddr + offset, &vnode_write_cb, token);
-                req_id++;
-                size -= 1024;
+            int offset = MAX_WRITE_SIZE * req_id;
+
+            if (size > MAX_WRITE_SIZE) {
+                err = nfs_write(vnode->fh,
+                                uio->offset + offset,
+                                MAX_WRITE_SIZE,
+                                sos_vaddr + offset,
+                                &vnode_write_cb,
+                                token);
                 conditional_panic(err, "fail write in send phrase");
+
+                size -= MAX_WRITE_SIZE;
+                req_id++;
             } else {
-                err = nfs_write(vnode->fh, uio->offset + offset, size, sos_vaddr + offset, &vnode_write_cb, token);
+                err = nfs_write(vnode->fh,
+                                uio->offset + offset,
+                                size,
+                                sos_vaddr + offset,
+                                &vnode_write_cb,
+                                token);
+                conditional_panic(err, "fail write in send phrase");
+
                 size = 0;
 
                 set_routine_arg(curr_coroutine_id, 0, (1 << (req_id + 1)) - 1);
                 set_routine_arg(curr_coroutine_id, 1, 0);
-
-                conditional_panic(err, "fail write in send phrase");
             }
         }
 
-        sos_vaddr = uaddr_to_sos_vaddr(uaddr_next);
-        if (!sos_vaddr && uaddr_next < end_uaddr) {
-            err = sos_map_page((seL4_Word) uaddr_next, &sos_vaddr);
-            if (err && err != ERR_ALREADY_MAPPED) {
-                return 1;
+        if (uio->uaddr != NULL) {
+            /* Update uaddr's sos_vaddr */
+            sos_vaddr = uaddr_to_sos_vaddr(uaddr_next);
+            if (!sos_vaddr && uaddr_next < end_uaddr) {
+                err = sos_map_page((seL4_Word) uaddr_next, &sos_vaddr);
+                if (err && err != ERR_ALREADY_MAPPED) {
+                    return 1;
+                }
             }
         }
 
@@ -649,8 +689,8 @@ static int vnode_write(struct vnode *vnode, struct uio *uio) {
 
         seL4_Word count = get_routine_arg(curr_coroutine_id, 1);
 
-        ubuf_size -= count;
-        uaddr += count;
+        buf_size -= count;
+        if (uio->uaddr != NULL) uaddr += count;
 
         uio->remaining -= count;
         uio->offset += count;
@@ -660,9 +700,9 @@ static int vnode_write(struct vnode *vnode, struct uio *uio) {
 }
 
 static void vnode_write_cb(uintptr_t token, enum nfs_stat status, fattr_t *fattr, int count) {
-    seL4_Word * al = (seL4_Word*) token;
-    seL4_Word sos_vaddr = get_routine_arg(al[0], 0);
     conditional_panic(status, "nfs_write fail in end phase");
+
+    seL4_Word *al = (seL4_Word *) token;
 
     seL4_Word req_mask = get_routine_arg(al[0], 0) & (~(1 << al[1]));
     set_routine_arg(al[0], 0, req_mask);
@@ -674,56 +714,4 @@ static void vnode_write_cb(uintptr_t token, enum nfs_stat status, fattr_t *fattr
     }
 
     free(al);
-}
-
-/*
- * =======================================================
- * SWAPFILE
- * =======================================================
- */
-static int vnode_swap_out(struct vnode *vnode, struct uio *uio) {
-
-    int initoffset = uio->offset;
-    for (int i = 0 ; i < 4; i++) {
-        seL4_Word *token = malloc(2 * sizeof(seL4_Word));
-        token[0] = curr_coroutine_id;
-        token[1] = i;
-
-        int offset = 1024 * i;
-        int err = nfs_write(vnode->fh, uio->offset + offset, 1024, uio->addr + offset, &vnode_write_cb, token);
-        if (err != NFS_OK) {
-            return -1;
-        }
-    }
-
-    set_routine_arg(curr_coroutine_id, 0, (1<<4)-1);
-    set_routine_arg(curr_coroutine_id, 1, 0);
-
-    yield();
-
-
-
-    int count =get_routine_arg(curr_coroutine_id, 1);
-    if (count != PAGE_SIZE_4K) {
-        return -1;
-    }
-
-    return 0;
-}
-
-static int vnode_swap_in(struct vnode *vnode, struct uio *uio) {
-    int err = nfs_read(vnode->fh, uio->offset, uio->size, (nfs_read_cb_t)(vnode_read_cb), curr_coroutine_id);
-
-    set_routine_arg(curr_coroutine_id, 0, uio->addr);
-
-    if (err != NFS_OK) {
-        return -1;
-    }
-
-    yield();
-
-    if (arg[1] != PAGE_SIZE_4K) {
-        return -1;
-    }
-    return 0;
 }
