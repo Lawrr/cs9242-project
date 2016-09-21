@@ -490,3 +490,8 @@ void syscall_close(seL4_CPtr reply_cap) {
     seL4_SetMR(0, 0);
     send_reply(reply_cap);
 }
+
+void syscall_process_create(seL4_CPtr reply_cap){
+         
+}
+
