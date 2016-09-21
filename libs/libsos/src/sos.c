@@ -136,8 +136,22 @@ int sos_stat(const char *path, sos_stat_t *buf) {
 }
 
 pid_t sos_process_create(const char *path) {
-    printf("System call not yet implemented\n");
-    return -1;
+    //printf("System call not yet implemented\n");
+    int numRegs = 2;
+    seL4_MessageInfo_t tag = seL4_MessageInfo_new(seL4_NoFault, 0, 0, numRegs);
+    seL4_SetTag(tag);
+   
+    /* Set syscall number */
+    seL4_SetMR(0, 9);
+    /* Set file name pointer */
+    seL4_SetMR(1, (seL4_Word) path);
+    /* Set open mode information */
+    
+    seL4_Call(SOS_IPC_EP_CAP, tag);
+
+    /* Return fd / err */
+    return seL4_GetMR(0);
+    return seL4_GetMR(0);
 }
 
 int sos_process_delete(pid_t pid) {
@@ -211,3 +225,6 @@ size_t sos_read(void *vData, size_t count) {
     //return sos_sys_read(std_input, vData, count);
     return 0;
 }
+
+
+
