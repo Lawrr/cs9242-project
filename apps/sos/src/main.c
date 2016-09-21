@@ -231,12 +231,12 @@ void syscall_loop(seL4_CPtr ep) {
 
         } else if (label == seL4_VMFault) {
             /* Page fault */
-            start_coroutine(&vm_fault_handler, syscall_loop_entry, badge,
+            start_coroutine(&vm_fault_handler, badge,
                             seL4_MessageInfo_get_length(message) - 1);
 
         } else if (label == seL4_NoFault) {
             /* System call */
-            start_coroutine(&handle_syscall, syscall_loop_entry, badge,
+            start_coroutine(&handle_syscall, badge,
                             seL4_MessageInfo_get_length(message) - 1);
         } else {
             printf("Rootserver got an unknown message\n");

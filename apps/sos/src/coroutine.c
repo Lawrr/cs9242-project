@@ -72,7 +72,6 @@ void set_resume(int id) {
 }
 
 int start_coroutine(void (*task)(seL4_Word badge, int num_args),
-                    jmp_buf return_entry,
                     seL4_Word badge, int num_args) {
     /* Check reached max coroutines */
     if (num_tasks == NUM_COROUTINES) return 1;
@@ -121,7 +120,7 @@ int start_coroutine(void (*task)(seL4_Word badge, int num_args),
     num_tasks--;
 
     /* Return to main loop */
-    longjmp(return_entry, 1);
+    longjmp(syscall_loop_entry, 1);
 
     /* Never reached */
 }

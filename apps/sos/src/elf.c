@@ -52,8 +52,6 @@ extern seL4_ARM_PageDirectory dest_as;
 extern jmp_buf syscall_loop_entry;
 extern seL4_CPtr _sos_ipc_ep_cap;
 
-jmp_buf mapping_entry;
-
 /*
  * Convert ELF permissions into seL4 permissions.
  */
@@ -70,16 +68,11 @@ static inline seL4_Word get_sel4_rights_from_elf(unsigned long permissions) {
     return result;
 }
 
-void mapping_loop(seL4_CPtr ep, int exit_after_setjmp) {
+void mapping_loop(seL4_CPtr ep) {
     seL4_Word badge;
     seL4_Word label;
     seL4_MessageInfo_t message;
     while (1) {
-        int err = setjmp(syscall_loop_entry);
-        if (exit_after_setjmp && err == 0) {
-            longjmp(mapping_entry, 1);
-        }
-        exit_after_setjmp = 0;
         message = seL4_Wait(ep, &badge);
         label = seL4_MessageInfo_get_label(message);
         if (badge & IRQ_EP_BADGE) {
@@ -95,13 +88,11 @@ void mapping_loop(seL4_CPtr ep, int exit_after_setjmp) {
             printf("Rootserver got an unknown message\n");
         }
 
-        seL4_Word req_mask = get_routine_arg(1, 0);
+        seL4_Word req_mask = get_routine_arg(0, 0);
         if (req_mask == 0) {
-            break;
+            return;
         }
     }
-
-    resume();
 }
 
 /*
@@ -153,25 +144,30 @@ zero-filling a newly allocated frame.
         int err;
 
         /* Map the frame into address space */
-        jmp_buf reenter_entry;
-        int reenter = setjmp(reenter_entry);
+        int reenter = setjmp(syscall_loop_entry);
         if (!reenter) {
-            start_coroutine(sos_map_page, reenter_entry, dst, &sos_vaddr);
+            start_coroutine(sos_map_page, dst, &sos_vaddr);
         } else {
-           /* Now copy our data into the destination vspace. */
-            nbytes = PAGESIZE - (dst & PAGEMASK);
-            if (pos < file_size){
-                memcpy((void*) (sos_vaddr | ((dst << LOWER_BITS_SHIFT) >> LOWER_BITS_SHIFT)),
-                        (void*)src, MIN(nbytes, file_size - pos));
+            seL4_Word req_mask = get_routine_arg(0, 0);
+            if (req_mask) {
+                mapping_loop(_sos_ipc_ep_cap);
+                resume();
+            } else {
+               /* Now copy our data into the destination vspace. */
+                nbytes = PAGESIZE - (dst & PAGEMASK);
+                if (pos < file_size){
+                    memcpy((void*) (sos_vaddr | ((dst << LOWER_BITS_SHIFT) >> LOWER_BITS_SHIFT)),
+                            (void*)src, MIN(nbytes, file_size - pos));
+                }
+                sos_cap = get_cap(sos_vaddr);
+
+                /* Not observable to I-cache yet so flush the frame */
+                seL4_ARM_Page_Unify_Instruction(sos_cap, 0, PAGESIZE);
+
+                pos += nbytes;
+                dst += nbytes;
+                src += nbytes;    
             }
-            sos_cap = get_cap(sos_vaddr);
-
-            /* Not observable to I-cache yet so flush the frame */
-            seL4_ARM_Page_Unify_Instruction(sos_cap, 0, PAGESIZE);
-
-            pos += nbytes;
-            dst += nbytes;
-            src += nbytes;    
         }
 
 
@@ -188,12 +184,6 @@ int elf_load(seL4_ARM_PageDirectory dest_pd, struct app_addrspace *dest_as, char
     /* Ensure that the ELF file looks sane. */
     if (elf_checkFile(elf_file)){
         return seL4_InvalidArgument;
-    }
-
-    /* Set mapping jmp point */
-    err = setjmp(mapping_entry);
-    if (!err) {
-        start_coroutine(mapping_loop, mapping_entry, _sos_ipc_ep_cap, 1);
     }
 
     num_headers = elf_getNumProgramHeaders(elf_file);
