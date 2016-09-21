@@ -145,33 +145,68 @@ pid_t sos_process_create(const char *path) {
     seL4_SetMR(0, 9);
     /* Set file name pointer */
     seL4_SetMR(1, (seL4_Word) path);
-    /* Set open mode information */
+    
+    seL4_Call(SOS_IPC_EP_CAP, tag);
+
+    /* Return pid / err */
+    return seL4_GetMR(0);
+}
+
+int sos_process_delete(pid_t pid) {
+    int numRegs = 2;
+    seL4_MessageInfo_t tag = seL4_MessageInfo_new(seL4_NoFault, 0, 0, numRegs);
+    seL4_SetTag(tag);
+   
+    /* Set syscall number */
+    seL4_SetMR(0, 10);
+    /* Set pid */
+    seL4_SetMR(1, (seL4_Word) pid);
+    
+    seL4_Call(SOS_IPC_EP_CAP, tag);
+
+    /* Return / err */
+    return seL4_GetMR(0);
+}
+
+pid_t sos_my_id(void) {
+    return -1;
+}
+
+int sos_process_status(sos_process_t *processes, unsigned max) {
+    int numRegs = 3;
+    seL4_MessageInfo_t tag = seL4_MessageInfo_new(seL4_NoFault, 0, 0, numRegs);
+    seL4_SetTag(tag);
+   
+    /* Set syscall number */
+    seL4_SetMR(0, 13);
+    /* Set processes  pointer */
+    seL4_SetMR(1, (seL4_Word) processes);
+
+    /* Set maximum number */
+    seL4_SetMR(2, (seL4_Word) max);
     
     seL4_Call(SOS_IPC_EP_CAP, tag);
 
     /* Return fd / err */
     return seL4_GetMR(0);
-    return seL4_GetMR(0);
-}
-
-int sos_process_delete(pid_t pid) {
-    printf("System call not yet implemented\n");
-    return -1;
-}
-
-pid_t sos_my_id(void) {
-    printf("System call not yet implemented\n");
-    return -1;
-}
-
-int sos_process_status(sos_process_t *processes, unsigned max) {
-    printf("System call not yet implemented\n");
-    return -1;
 }
 
 pid_t sos_process_wait(pid_t pid) {
-    printf("System call not yet implemented\n");
-    return -1;
+    int numRegs = 2;
+    seL4_MessageInfo_t tag = seL4_MessageInfo_new(seL4_NoFault, 0, 0, numRegs);
+    seL4_SetTag(tag);
+   
+    /* Set syscall number */
+    seL4_SetMR(0, 12);
+
+    /*set pid */
+    seL4_SetMR(1, (seL4_Word) pid);
+
+    
+    seL4_Call(SOS_IPC_EP_CAP, tag);
+
+    /* Return pid / err */
+    return seL4_GetMR(0);
 }
 
 void sos_sys_usleep(int msec) {
