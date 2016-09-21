@@ -18,6 +18,8 @@ static int num_tasks = 0;
 /* Next task to resume to */
 static int next_resume_id = -1;
 
+static int start_index = 0;
+
 /* Coroutine slots */
 static jmp_buf coroutines[NUM_COROUTINES];
 /* List of free coroutine slots */
@@ -70,6 +72,7 @@ void set_resume(int id) {
 }
 
 int start_coroutine(void (*task)(seL4_Word badge, int num_args),
+                    jmp_buf return_entry,
                     seL4_Word badge, int num_args) {
     /* Check reached max coroutines */
     if (num_tasks == NUM_COROUTINES) return 1;
@@ -77,7 +80,7 @@ int start_coroutine(void (*task)(seL4_Word badge, int num_args),
     num_tasks++;
 
     /* Find free slot */
-    int task_id = 0;
+    int task_id = start_index;
     while (free_list[task_id] == 0) {
         task_id++;
     }
@@ -114,10 +117,11 @@ int start_coroutine(void (*task)(seL4_Word badge, int num_args),
 
     /* Task finished */
     free_list[task_id] = 1;
+    start_index = task_id;
     num_tasks--;
 
     /* Return to main loop */
-    longjmp(syscall_loop_entry, 1);
+    longjmp(return_entry, 1);
 
     /* Never reached */
 }

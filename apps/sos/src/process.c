@@ -1,14 +1,21 @@
-extern _cpio_archive[]; 
-#include "process.h"
 #include <cspace/cspace.h>
 #include <cpio/cpio.h>
-#include <file.h>
-#include <vmem_layout.h>
 
-#define TTY_NAME             CONFIG_SOS_STARTUP_APP
-#define TTY_PRIORITY         (0)
-#define TTY_EP_BADGE         (101)
+#include "vmem_layout.h"
+#include "file.h"
+#include "process.h"
+
+#define verbose 5
+#include <assert.h>
+#include <sys/panic.h>
+
+extern _cpio_archive[]; 
+
 extern struct oft_entry of_table[];
+
+struct PCB tty_test_process;
+
+struct PCB *curproc = &tty_test_process;
 
 void start_process(char* app_name, seL4_CPtr fault_ep) {
     int err;

@@ -2,6 +2,15 @@
 #define _PROCESS_H_
 
 #include <cspace/cspace.h>
+
+#define TTY_NAME             CONFIG_SOS_STARTUP_APP
+#define TTY_PRIORITY         (0)
+#define TTY_EP_BADGE         (101)
+
+/* This is the index where a clients syscall enpoint will
+ * be stored in the clients cspace. */
+#define USER_EP_CAP          (1)
+
 struct PCB {
     seL4_Word tcb_addr;
     seL4_TCB tcb_cap;
@@ -16,9 +25,7 @@ struct PCB {
   
     struct app_addrspace *addrspace;
 };
-struct PCB tty_test_process;
-
-struct PCB *curproc = &tty_test_process;
 
 void start_process(char* app_name, seL4_CPtr fault_ep); 
+
 #endif

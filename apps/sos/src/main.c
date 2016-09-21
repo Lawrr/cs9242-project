@@ -43,9 +43,6 @@
 #include <sys/debug.h>
 #include <sys/panic.h>
 
-/* This is the index where a clients syscall enpoint will
- * be stored in the clients cspace. */
-#define USER_EP_CAP          (1)
 /* To differencient between async and and sync IPC, we assign a
  * badge to the async endpoint. The badge that we receive will
  * be the bitwise 'OR' of the async endpoint badge and the badges
@@ -213,6 +210,7 @@ static void vm_fault_handler(seL4_Word badge, int num_args) {
     /* Free the saved reply cap */
     cspace_free_slot(cur_cspace, reply_cap); 
 }
+
 void syscall_loop(seL4_CPtr ep) {
     seL4_Word badge;
     seL4_Word label;
@@ -233,12 +231,12 @@ void syscall_loop(seL4_CPtr ep) {
 
         } else if (label == seL4_VMFault) {
             /* Page fault */
-            start_coroutine(&vm_fault_handler, badge,
+            start_coroutine(&vm_fault_handler, syscall_loop_entry, badge,
                             seL4_MessageInfo_get_length(message) - 1);
 
         } else if (label == seL4_NoFault) {
             /* System call */
-            start_coroutine(&handle_syscall, badge,
+            start_coroutine(&handle_syscall, syscall_loop_entry, badge,
                             seL4_MessageInfo_get_length(message) - 1);
         } else {
             printf("Rootserver got an unknown message\n");
@@ -417,18 +415,18 @@ int main(void) {
     /* Initialise coroutines */
     coroutine_init();
 
+    /* Start the user application */
+    start_process(TTY_NAME, _sos_ipc_ep_cap);
+
     /* Initialise the timer */
     void *epit1_vaddr = map_device(EPIT1_PADDR, EPIT_REGISTERS * sizeof(uint32_t));
     void *epit2_vaddr = map_device(EPIT2_PADDR, EPIT_REGISTERS * sizeof(uint32_t));
     timer_init(epit1_vaddr, epit2_vaddr);
     seL4_CPtr timer_badge = badge_irq_ep(_sos_interrupt_ep_cap, IRQ_BADGE_TIMER);
     start_timer(timer_badge);
-
+    
     /* NFS timeout every 100ms */
     register_timer(NFS_TIMEOUT_INTERVAL, nfs_timeout_callback, NULL);
-    
-    /* Start the user application */
-    start_process(TTY_NAME, _sos_ipc_ep_cap);
 
     /* Wait on synchronous endpoint for IPC */
     dprintf(0, "\nSOS entering syscall loop\n");

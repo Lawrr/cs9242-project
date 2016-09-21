@@ -554,7 +554,8 @@ static int vnode_read(struct vnode *vnode, struct uio *uio) {
             sos_vaddr = uio->vaddr;
         }
 
-        set_routine_arg(curr_coroutine_id, 0, sos_vaddr);
+        set_routine_arg(curr_coroutine_id, 0, 1);
+        set_routine_arg(curr_coroutine_id, 1, sos_vaddr);
 
         yield();
 
@@ -577,13 +578,15 @@ static int vnode_read(struct vnode *vnode, struct uio *uio) {
 static void vnode_read_cb(uintptr_t token, nfs_stat_t status, fattr_t *fattr, int count, void *data) {
     conditional_panic(status, "failed read in end phrase");
 
-    seL4_Word sos_vaddr = get_routine_arg(token, 0);
+    seL4_Word sos_vaddr = get_routine_arg(token, 1);
 
     if (status == NFS_OK) {
         memcpy((void *) sos_vaddr, data, count);
     }
 
     arg[0] = (seL4_Word)count;
+
+    set_routine_arg(curr_coroutine_id, 0, 0);
 
     set_resume(token);
 }

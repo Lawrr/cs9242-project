@@ -297,7 +297,7 @@ int32_t frame_alloc(seL4_Word *vaddr) {
         seL4_Word frame_paddr = ut_alloc(seL4_PageBits);
 
 #ifdef LIMIT_FRAMES
-        num_frames = 1070;
+        num_frames = 500;
         frames_to_alloc++;
         if (frames_to_alloc > num_frames || frame_paddr == NULL) {
 #endif
