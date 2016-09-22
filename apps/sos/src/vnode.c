@@ -433,6 +433,8 @@ static int file_create(struct vnode *vnode) {
 
     nfs_create(&mnt_point, vnode->path, &sattr, (nfs_create_cb_t) vnode_create_cb, curr_coroutine_id);
 
+    set_routine_arg(curr_coroutine_id, 0, 1);
+
     yield();
 }
 
@@ -443,6 +445,8 @@ static void vnode_create_cb(uintptr_t token, nfs_stat_t status, fhandle_t *fh, f
 
     memcpy(arg[1], fh, sizeof(fhandle_t));
     memcpy(arg[2], fattr, sizeof(fattr_t));
+
+    set_routine_arg(curr_coroutine_id, 0, 0);
 
     set_resume(token);
 }
@@ -536,18 +540,12 @@ static int vnode_read(struct vnode *vnode, struct uio *uio) {
             size = buf_size;
         }
 
-        err = nfs_read(vnode->fh, uio->offset, size, (nfs_read_cb_t) vnode_read_cb, curr_coroutine_id);
-        conditional_panic(err, "failed read at send phrase");
-
         /* Set sos_vaddr */
         if (uio->uaddr != NULL) {
             /* uaddr */
-            sos_vaddr = uaddr_to_sos_vaddr(uaddr);
-            if (!sos_vaddr) {
-                err = sos_map_page((seL4_Word) uaddr, &sos_vaddr);
-                if (err) {
-                    return 1;
-                }
+            err = sos_map_page((seL4_Word) uaddr, &sos_vaddr);
+            if (err && err != ERR_ALREADY_MAPPED) {
+                return 1;
             }
 
             sos_vaddr = PAGE_ALIGN_4K(sos_vaddr);
@@ -556,6 +554,9 @@ static int vnode_read(struct vnode *vnode, struct uio *uio) {
             /* vaddr */
             sos_vaddr = uio->vaddr;
         }
+
+        err = nfs_read(vnode->fh, uio->offset, size, (nfs_read_cb_t) vnode_read_cb, curr_coroutine_id);
+        conditional_panic(err, "failed read at send phrase");
 
         set_routine_arg(curr_coroutine_id, 0, 1);
         set_routine_arg(curr_coroutine_id, 1, sos_vaddr);
@@ -611,12 +612,9 @@ static int vnode_write(struct vnode *vnode, struct uio *uio) {
     if (uio->uaddr != NULL) {
         /* uaddr */
         uaddr = uio->uaddr;
-        sos_vaddr = uaddr_to_sos_vaddr(uaddr);
-        if (!sos_vaddr) {
-            err = sos_map_page((seL4_Word) uaddr, &sos_vaddr);
-            if (err && err != ERR_ALREADY_MAPPED) {
-                return 1;
-            }
+        err = sos_map_page((seL4_Word) uaddr, &sos_vaddr);
+        if (err && err != ERR_ALREADY_MAPPED) {
+            return 1;
         }
     } else {
         /* vaddr */
@@ -625,7 +623,7 @@ static int vnode_write(struct vnode *vnode, struct uio *uio) {
 
     while (buf_size > 0) {
         seL4_Word size;
-        seL4_Word end_uaddr, uaddr_next;
+        seL4_Word end_uaddr, uaddr_next, sos_vaddr_next;
 
         if (uio->uaddr != NULL) {
             /* uaddr */
@@ -642,6 +640,15 @@ static int vnode_write(struct vnode *vnode, struct uio *uio) {
             sos_vaddr = PAGE_ALIGN_4K(sos_vaddr);
             /*Add offset*/
             sos_vaddr |= ((seL4_Word) uaddr & PAGE_MASK_4K);
+
+            /* Update uaddr's sos_vaddr */
+            sos_vaddr_next = uaddr_to_sos_vaddr(uaddr_next);
+            if (uaddr_next < end_uaddr) {
+                err = sos_map_page((seL4_Word) uaddr_next, &sos_vaddr_next);
+                if (err && err != ERR_ALREADY_MAPPED) {
+                    return 1;
+                }
+            }
         } else {
             /* vaddr */
             size = buf_size;
@@ -683,14 +690,7 @@ static int vnode_write(struct vnode *vnode, struct uio *uio) {
         }
 
         if (uio->uaddr != NULL) {
-            /* Update uaddr's sos_vaddr */
-            sos_vaddr = uaddr_to_sos_vaddr(uaddr_next);
-            if (!sos_vaddr && uaddr_next < end_uaddr) {
-                err = sos_map_page((seL4_Word) uaddr_next, &sos_vaddr);
-                if (err && err != ERR_ALREADY_MAPPED) {
-                    return 1;
-                }
-            }
+            sos_vaddr = sos_vaddr_next;
         }
 
         yield();

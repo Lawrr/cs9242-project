@@ -262,7 +262,7 @@ sos_map_page(seL4_Word vaddr_unaligned, seL4_Word *sos_vaddr_ret) {
     }
 
     /* Book keeping in our own page table */
-    int mask = (curr_sos_vaddr << 22) >> 22;
+    int mask = (curr_sos_vaddr << 20) >> 20;
     if (mask == 0) {
         mask = (curr_region->permissions | PTE_VALID);
     }
