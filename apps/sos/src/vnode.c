@@ -308,7 +308,7 @@ static void vnode_readdir_cb(uintptr_t token, enum nfs_stat status,
         sos_vaddr = PAGE_ALIGN_4K(sos_vaddr);
         sos_vaddr |= (uaddr & PAGE_MASK_4K);
         if (PAGE_ALIGN_4K(uaddr) != PAGE_ALIGN_4K(uaddr_end)) {
-            seL4_Word uaddr_next = PAGE_ALIGN_4K(uaddr) + 0x1000;
+            seL4_Word uaddr_next = PAGE_ALIGN_4K(uaddr) + PAGE_SIZE_4K;
 
             seL4_Word sos_vaddr_next;
             err = sos_map_page(uaddr_next, &sos_vaddr_next);
@@ -529,7 +529,7 @@ static int vnode_read(struct vnode *vnode, struct uio *uio) {
 
             /* We must find the sos_vaddrs for each page */
             end_uaddr = (seL4_Word) uaddr + buf_size;
-            uaddr_next = PAGE_ALIGN_4K((seL4_Word) uaddr) + 0x1000;
+            uaddr_next = PAGE_ALIGN_4K((seL4_Word) uaddr) + PAGE_SIZE_4K;
             if (end_uaddr >= uaddr_next) {
                 size = uaddr_next - (seL4_Word) uaddr;
             } else {
@@ -630,7 +630,7 @@ static int vnode_write(struct vnode *vnode, struct uio *uio) {
             
             /* We must find the sos_vaddrs for each page */
             end_uaddr = (seL4_Word) uaddr + buf_size;
-            uaddr_next = PAGE_ALIGN_4K((seL4_Word) uaddr) + 0x1000;
+            uaddr_next = PAGE_ALIGN_4K((seL4_Word) uaddr) + PAGE_SIZE_4K;
             if (end_uaddr >= uaddr_next) {
                 size = uaddr_next - (seL4_Word) uaddr;
             } else {

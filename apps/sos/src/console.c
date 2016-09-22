@@ -55,7 +55,7 @@ int console_write(struct vnode *vnode, struct uio *uio) {
     seL4_Word end_uaddr = uaddr + ubuf_size;
 
     while (ubuf_size > 0) {
-        seL4_Word uaddr_next = PAGE_ALIGN_4K(uaddr) + 0x1000;
+        seL4_Word uaddr_next = PAGE_ALIGN_4K(uaddr) + PAGE_SIZE_4K;
         seL4_Word size;
         if (end_uaddr >= uaddr_next) {
             size = uaddr_next-uaddr;
@@ -96,7 +96,7 @@ int console_read(struct vnode *vnode, struct uio *uio) {
 
     my_coroutine_id = curr_coroutine_id;
     while (curr_size > 0) {
-        seL4_Word uaddr_next = PAGE_ALIGN_4K(curr_uaddr) + 0x1000;
+        seL4_Word uaddr_next = PAGE_ALIGN_4K(curr_uaddr) + PAGE_SIZE_4K;
         seL4_Word size;
         if (end_uaddr >= uaddr_next) {
             size = uaddr_next-curr_uaddr;

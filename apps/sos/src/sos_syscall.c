@@ -110,7 +110,7 @@ static int validate_max_ofd(seL4_CPtr reply_cap, int ofd_count) {
 static int get_safe_path(char *dst, seL4_Word uaddr,
         seL4_Word sos_vaddr, uint32_t max_len) {
     /* Get safe path */
-    seL4_Word uaddr_next_page = PAGE_ALIGN_4K(uaddr) + 0x1000;
+    seL4_Word uaddr_next_page = PAGE_ALIGN_4K(uaddr) + PAGE_SIZE_4K;
     seL4_Word safe_len = uaddr_next_page - uaddr;
     if (safe_len < max_len) {
         int len = strnlen(sos_vaddr, safe_len);
