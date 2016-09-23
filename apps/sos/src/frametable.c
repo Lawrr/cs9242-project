@@ -448,15 +448,20 @@ int32_t get_app_cap(seL4_Word vaddr, struct app_cap **cap_ret) {
     }
 }
 
-//Set reference bit as well as make it unswappable 
+/* Set reference bit as well as make it unswappable */ 
 void pin_frame_entry(seL4_Word uaddr, seL4_Word size) {
+    if (size <= 0) return;
+
     int index1;
     int index2;
     seL4_Word sos_vaddr;
     uint32_t frame_index;
     struct app_addrspace *as = curproc->addrspace;
 
-    for (int i = 0; i < size; i += PAGE_SIZE_4K) {
+    int internal_offset = uaddr - PAGE_ALIGN_4K(uaddr);
+    int end_frame_size = size + internal_offset;
+
+    for (int i = 0; i < end_frame_size; i += PAGE_SIZE_4K) {
         index1 = root_index(uaddr + i);
         index2 = leaf_index(uaddr + i);
         sos_vaddr = as->page_table[index1][index2].sos_vaddr;
@@ -469,29 +474,21 @@ void pin_frame_entry(seL4_Word uaddr, seL4_Word size) {
 			frame_table[frame_index].mask &= (~FRAME_SWAPPABLE);
         }
     }
-
-    /* Last page may be skipped so make sure the last page is set */
-    index1 = root_index(uaddr + size - 1);
-    index2 = leaf_index(uaddr + size - 1);
-    sos_vaddr = curproc->addrspace->page_table[index1][index2].sos_vaddr;
-    if ((sos_vaddr & PTE_SWAP) || (sos_vaddr & PTE_VALID) == 0) return;
-    frame_index = frame_vaddr_to_index(sos_vaddr);
-
-    if ((frame_table[frame_index].mask & FRAME_VALID) &&
-        (frame_table[frame_index].mask & FRAME_SWAPPABLE)) {
-        frame_table[frame_index].mask |= FRAME_REFERENCE;
-        frame_table[frame_index].mask &= (~FRAME_SWAPPABLE);
-	}
 }
 
 void unpin_frame_entry(seL4_Word uaddr, seL4_Word size) {
+    if (size <= 0) return;
+
     int index1;
     int index2;
     seL4_Word sos_vaddr;
     uint32_t frame_index;
     struct app_addrspace *as = curproc->addrspace;
 
-    for (int i = 0; i < size; i += PAGE_SIZE_4K) {
+    int internal_offset = uaddr - PAGE_ALIGN_4K(uaddr);
+    int end_frame_size = size + internal_offset;
+
+    for (int i = 0; i < end_frame_size; i += PAGE_SIZE_4K) {
         index1 = root_index(uaddr + i);
         index2 = leaf_index(uaddr + i);
         sos_vaddr = as->page_table[index1][index2].sos_vaddr;
@@ -501,17 +498,6 @@ void unpin_frame_entry(seL4_Word uaddr, seL4_Word size) {
         if ((frame_table[frame_index].mask & FRAME_VALID)) {
             frame_table[frame_index].mask |= FRAME_SWAPPABLE;
         }
-    }
-
-    /* Last page may be skipped so make sure the last page is set */
-    index1 = root_index(uaddr + size - 1);
-    index2 = leaf_index(uaddr + size - 1);
-    sos_vaddr = curproc->addrspace->page_table[index1][index2].sos_vaddr;
-    if ((sos_vaddr & PTE_SWAP) || (sos_vaddr & PTE_VALID) == 0) return;
-    frame_index = frame_vaddr_to_index(sos_vaddr);
-
-    if ((frame_table[frame_index].mask & FRAME_VALID)) {
-        frame_table[frame_index].mask |= FRAME_SWAPPABLE;
     }
 }
 

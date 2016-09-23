@@ -47,10 +47,6 @@ static void vnode_stat_cb(uintptr_t token, nfs_stat_t status, fhandle_t *fh, fat
 
 static void vnode_readdir_cb(uintptr_t token, enum nfs_stat status, int num_files, char *file_names[], nfscookie_t nfscookie);
 
-/* Swapping */
-static int vnode_swap_in(struct vnode *vnode, struct uio *uio);
-static int vnode_swap_out(struct vnode *vnode, struct uio *uio);
-
 /* Devices */
 static void dev_list_init();
 static int is_dev(char *dev);
