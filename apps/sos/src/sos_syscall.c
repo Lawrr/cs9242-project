@@ -17,7 +17,7 @@ extern struct PCB *curproc;
 extern struct oft_entry of_table[MAX_OPEN_FILE];
 extern seL4_Word ofd_count;
 extern seL4_Word curr_free_ofd;
-extern _sos_ipc_ep_cap;
+extern seL4_CPtr _sos_ipc_ep_cap;
 
 /* Checks that user pointer range is a valid in userspace */
 static int legal_uaddr(seL4_Word base, uint32_t size) {
