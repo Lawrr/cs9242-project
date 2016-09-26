@@ -17,7 +17,10 @@ struct PCB tty_test_process;
 
 struct PCB *curproc = &tty_test_process;
 
-void start_process(char* app_name, seL4_CPtr fault_ep) {
+/* 255 process I can't remmeber which macro should we use*/
+struct PCB* PCB_table[255];
+
+int start_process(char* app_name, seL4_CPtr fault_ep) {
     int err;
 
     seL4_CPtr user_ep_cap;

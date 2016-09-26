@@ -26,6 +26,6 @@ struct PCB {
     struct app_addrspace *addrspace;
 };
 
-void start_process(char* app_name, seL4_CPtr fault_ep); 
+int start_process(char* app_name, seL4_CPtr fault_ep); 
 
 #endif

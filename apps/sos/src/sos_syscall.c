@@ -17,6 +17,7 @@ extern struct PCB *curproc;
 extern struct oft_entry of_table[MAX_OPEN_FILE];
 extern seL4_Word ofd_count;
 extern seL4_Word curr_free_ofd;
+extern _sos_ipc_ep_cap;
 
 /* Checks that user pointer range is a valid in userspace */
 static int legal_uaddr(seL4_Word base, uint32_t size) {
@@ -492,6 +493,18 @@ void syscall_close(seL4_CPtr reply_cap) {
 }
 
 void syscall_process_create(seL4_CPtr reply_cap){
-         
+    seL4_Word uaddr = seL4_GetMR(1);
+	seL4_Word sos_vaddr;
+    int err = sos_map_page(uaddr, &sos_vaddr);
+	char path_sos_vaddr[MAX_PATH_LEN];
+
+    sos_vaddr = PAGE_ALIGN_4K(sos_vaddr);
+    sos_vaddr |= (uaddr & PAGE_MASK_4K);
+
+    pin_frame_entry(uaddr, MAX_PATH_LEN);
+    err = get_safe_path(path_sos_vaddr, uaddr, sos_vaddr, MAX_PATH_LEN);
+    unpin_frame_entry(uaddr, MAX_PATH_LEN);	
+
+    return start_process(path_sos_vaddr,_sos_ipc_ep_cap);	
 }
 
