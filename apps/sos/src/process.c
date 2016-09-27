@@ -9,18 +9,45 @@
 #include <assert.h>
 #include <sys/panic.h>
 
-extern _cpio_archive[]; 
+extern _cpio_archive[];
 
 extern struct oft_entry of_table[];
 
-struct PCB tty_test_process;
+struct PCB *curproc;
 
-struct PCB *curproc = &tty_test_process;
+struct PCB *PCB_table[MAX_PROCESS];
 
-/* 255 process I can't remmeber which macro should we use*/
-struct PCB* PCB_table[255];
+static int curr_proc_id = 0;
 
-int start_process(char* app_name, seL4_CPtr fault_ep) {
+int process_new(char *app_name, seL4_CPtr fault_ep) {
+    int start_id = curr_proc_id;
+    int id = -1;
+    do {
+        if (PCB_table[curr_proc_id] == NULL) {
+            id = curr_proc_id;
+            break;
+        }
+        curr_proc_id = (curr_proc_id + 1) % MAX_PROCESS;
+    } while (start_id != curr_proc_id);
+
+    if (id != -1) {
+        conditional_panic(id == -1, "Max processes\n");
+        /* return -1; */
+    }
+
+    struct PCB *proc = malloc(sizeof(struct PCB));
+    if (proc == NULL) {
+        conditional_panic(proc == NULL, "Out of memory for PCB\n");
+        /* return -1; */
+    }
+    PCB_table[id] = proc;
+
+    /* Set first proc as curproc */
+    // TODO when do we change value of curproc?
+    if (curproc == NULL) {
+        curproc = proc;
+    }
+
     int err;
 
     seL4_CPtr user_ep_cap;
@@ -29,74 +56,75 @@ int start_process(char* app_name, seL4_CPtr fault_ep) {
     seL4_UserContext context;
 
     /* These required for loading program sections */
-    char* elf_base;
+    char *elf_base;
     unsigned long elf_size;
 
-    tty_test_process.addrspace = as_new();
+    proc->addrspace = as_new();
 
     /*open file table increase ref count*/
     //of_table[STDIN].ref_count++;
-    of_table[STDOUT].ref_count += 1;
+    //TODO is this right?
+    of_table[STDOUT].ref_count++;
 
     /* Create a VSpace */
-    tty_test_process.vroot_addr = ut_alloc(seL4_PageDirBits);
-    conditional_panic(!tty_test_process.vroot_addr, 
-                      "No memory for new Page Directory");
-    err = cspace_ut_retype_addr(tty_test_process.vroot_addr,
-                                seL4_ARM_PageDirectoryObject,
-                                seL4_PageDirBits,
-                                cur_cspace,
-                                &tty_test_process.vroot);
+    proc->vroot_addr = ut_alloc(seL4_PageDirBits);
+    conditional_panic(!proc->vroot_addr,
+            "No memory for new Page Directory");
+    err = cspace_ut_retype_addr(proc->vroot_addr,
+            seL4_ARM_PageDirectoryObject,
+            seL4_PageDirBits,
+            cur_cspace,
+            &proc->vroot);
     conditional_panic(err, "Failed to allocate page directory cap for client");
 
     /* Create a simple 1 level CSpace */
-    tty_test_process.croot = cspace_create(1);
-    assert(tty_test_process.croot != NULL);
+    proc->croot = cspace_create(1);
+    assert(proc->croot != NULL);
 
     /* IPC buffer region */
-    err = as_define_region(tty_test_process.addrspace,
-                           PROCESS_IPC_BUFFER,
-                           (1 << seL4_PageBits),
-                           seL4_AllRights);
+    err = as_define_region(proc->addrspace,
+            PROCESS_IPC_BUFFER,
+            (1 << seL4_PageBits),
+            seL4_AllRights);
     conditional_panic(err, "Could not define IPC buffer region");
 
     /* Create an IPC buffer */
     err = sos_map_page(PROCESS_IPC_BUFFER,
-                       &tty_test_process.ipc_buffer_addr);
-    tty_test_process.ipc_buffer_cap = get_cap(tty_test_process.ipc_buffer_addr);
+            &proc->ipc_buffer_addr);
+    proc->ipc_buffer_cap = get_cap(proc->ipc_buffer_addr);
     conditional_panic(err, "No memory for ipc buffer");
     /* TODO dud asid number
-    err = get_app_cap(tty_test_process.ipc_buffer_addr,
-                      tty_test_process.addrspace->page_table,
-                      &tty_test_process.ipc_buffer_cap);
-    conditional_panic(err, "Can't get app cap");*/
+       err = get_app_cap(proc->ipc_buffer_addr,
+       proc->addrspace->page_table,
+       &proc->ipc_buffer_cap);
+       conditional_panic(err, "Can't get app cap");*/
 
     /* Copy the fault endpoint to the user app to enable IPC */
-    user_ep_cap = cspace_mint_cap(tty_test_process.croot,
-                                  cur_cspace,
-                                  fault_ep,
-                                  seL4_AllRights, 
-                                  seL4_CapData_Badge_new(TTY_EP_BADGE));
-    
+    user_ep_cap = cspace_mint_cap(proc->croot,
+            cur_cspace,
+            fault_ep,
+            seL4_AllRights,
+            seL4_CapData_Badge_new(TTY_EP_BADGE));
+
     /* should be the first slot in the space, hack I know */
     assert(user_ep_cap == 1);
     assert(user_ep_cap == USER_EP_CAP);
 
     /* Create a new TCB object */
-    tty_test_process.tcb_addr = ut_alloc(seL4_TCBBits);
-    conditional_panic(!tty_test_process.tcb_addr, "No memory for new TCB");
-    err =  cspace_ut_retype_addr(tty_test_process.tcb_addr,
-                                 seL4_TCBObject,
-                                 seL4_TCBBits,
-                                 cur_cspace,
-                                 &tty_test_process.tcb_cap);
+    proc->tcb_addr = ut_alloc(seL4_TCBBits);
+    conditional_panic(!proc->tcb_addr, "No memory for new TCB");
+    err = cspace_ut_retype_addr(proc->tcb_addr,
+            seL4_TCBObject,
+            seL4_TCBBits,
+            cur_cspace,
+            &proc->tcb_cap);
     conditional_panic(err, "Failed to create TCB");
 
     /* Configure the TCB */
-    err = seL4_TCB_Configure(tty_test_process.tcb_cap, user_ep_cap, TTY_PRIORITY,
-                             tty_test_process.croot->root_cnode, seL4_NilData,
-                             tty_test_process.vroot, seL4_NilData, PROCESS_IPC_BUFFER,
-                             tty_test_process.ipc_buffer_cap);
+    err = seL4_TCB_Configure(proc->tcb_cap, user_ep_cap, TTY_PRIORITY,
+            proc->croot->root_cnode, seL4_NilData,
+            proc->vroot, seL4_NilData, PROCESS_IPC_BUFFER,
+            proc->ipc_buffer_cap);
     conditional_panic(err, "Unable to configure new TCB");
 
 
@@ -106,28 +134,28 @@ int start_process(char* app_name, seL4_CPtr fault_ep) {
     conditional_panic(!elf_base, "Unable to locate cpio header");
 
     /* load the elf image */
-    err = elf_load(tty_test_process.vroot, tty_test_process.addrspace, elf_base);
+    err = elf_load(proc->vroot, proc->addrspace, elf_base);
     conditional_panic(err, "Failed to load elf image");
 
     /* Heap region */
-    err = as_define_region(tty_test_process.addrspace,
-                           PROCESS_HEAP_START,
-                           0,
-                           seL4_AllRights);
+    err = as_define_region(proc->addrspace,
+            PROCESS_HEAP_START,
+            0,
+            seL4_AllRights);
     conditional_panic(err, "Could not define heap region");
 
     /* Stack region */
-    err = as_define_region(tty_test_process.addrspace,
-                           PROCESS_STACK_BOT,
-                           PROCESS_STACK_TOP - PROCESS_STACK_BOT,
-                           seL4_AllRights);
+    err = as_define_region(proc->addrspace,
+            PROCESS_STACK_BOT,
+            PROCESS_STACK_TOP - PROCESS_STACK_BOT,
+            seL4_AllRights);
     conditional_panic(err, "Could not define stack region");
 
     /* Start the new process */
     memset(&context, 0, sizeof(context));
     context.pc = elf_getEntryPoint(elf_base);
     context.sp = PROCESS_STACK_TOP;
-    seL4_TCB_WriteRegisters(tty_test_process.tcb_cap, 1, 0, 2, &context);
+    seL4_TCB_WriteRegisters(proc->tcb_cap, 1, 0, 2, &context);
+
+    return id;
 }
-
-

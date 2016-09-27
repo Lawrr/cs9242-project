@@ -493,18 +493,22 @@ void syscall_close(seL4_CPtr reply_cap) {
 }
 
 void syscall_process_create(seL4_CPtr reply_cap){
-    seL4_Word uaddr = seL4_GetMR(1);
-	seL4_Word sos_vaddr;
-    int err = sos_map_page(uaddr, &sos_vaddr);
-	char path_sos_vaddr[MAX_PATH_LEN];
+    seL4_Word path_uaddr = seL4_GetMR(1);
+
+    if (validate_uaddr(reply_cap, path_uaddr, 0)) return;
+
+    char path_sos_vaddr[MAX_PATH_LEN];
+    /* Make sure address is mapped */
+    seL4_Word sos_vaddr;
+    int err = sos_map_page(path_uaddr, &sos_vaddr);
 
     sos_vaddr = PAGE_ALIGN_4K(sos_vaddr);
-    sos_vaddr |= (uaddr & PAGE_MASK_4K);
+    sos_vaddr |= (path_uaddr & PAGE_MASK_4K);
 
-    pin_frame_entry(uaddr, MAX_PATH_LEN);
-    err = get_safe_path(path_sos_vaddr, uaddr, sos_vaddr, MAX_PATH_LEN);
-    unpin_frame_entry(uaddr, MAX_PATH_LEN);	
+    pin_frame_entry(path_uaddr, MAX_PATH_LEN);
+    err = get_safe_path(path_sos_vaddr, path_uaddr, sos_vaddr, MAX_PATH_LEN);
+    unpin_frame_entry(path_uaddr, MAX_PATH_LEN);	
+    if (err) return -1;
 
-    return start_process(path_sos_vaddr,_sos_ipc_ep_cap);	
+    return process_new(path_sos_vaddr,_sos_ipc_ep_cap);	
 }
-

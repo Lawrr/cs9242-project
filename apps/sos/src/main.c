@@ -81,13 +81,12 @@ extern char _cpio_archive[];
  */
 extern fhandle_t mnt_point;
 
+extern struct PCB *curproc;
+extern struct PCB *PCB_table[MAX_PROCESS];
+
 const seL4_BootInfo* _boot_info;
 
 jmp_buf syscall_loop_entry;
-
-
-
-//struct PCB PCB_Array[MAX_PROCESS];
 
 seL4_CPtr _sos_ipc_ep_cap;
 seL4_CPtr _sos_interrupt_ep_cap;
@@ -416,7 +415,8 @@ int main(void) {
     coroutine_init();
 
     /* Start the user application */
-    start_process(TTY_NAME, _sos_ipc_ep_cap);
+    int proc_id = process_new(TTY_NAME, _sos_ipc_ep_cap);
+    conditional_panic(proc_id == -1, "Could not start first process\n");
 
     /* Initialise the timer */
     void *epit1_vaddr = map_device(EPIT1_PADDR, EPIT_REGISTERS * sizeof(uint32_t));
