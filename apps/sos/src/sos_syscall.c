@@ -508,7 +508,33 @@ void syscall_process_create(seL4_CPtr reply_cap){
     pin_frame_entry(path_uaddr, MAX_PATH_LEN);
     err = get_safe_path(path_sos_vaddr, path_uaddr, sos_vaddr, MAX_PATH_LEN);
     unpin_frame_entry(path_uaddr, MAX_PATH_LEN);	
-    if (err) return -1;
+	/*TODO somthing needs to be done with this err*/
 
-    return process_new(path_sos_vaddr,_sos_ipc_ep_cap);	
+
+    err = process_new(path_sos_vaddr,_sos_ipc_ep_cap);	
+    seL4_SetMR(0,err);
+	send_reply(reply_cap);
+	return;
 }
+
+void syscall_process_delete(seL4_CPtr reply_cap){
+	seL4_Word pid = seL4_GetMR(1);
+	int err = process_destroy(pid);
+    seL4_SetMR(0,err);
+	send_reply(reply_cap);
+	return;
+}
+
+void syscall_process_id(seL4_CPtr reply_cap){
+
+}
+
+void syscall_process_wait(seL4_CPtr reply_cap){
+
+}
+
+void syscall_process_status(seL4_CPtr reply_cap){
+
+}
+
+

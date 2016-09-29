@@ -27,5 +27,5 @@ struct PCB {
 };
 
 int process_new(char* app_name, seL4_CPtr fault_ep); 
-
+int process_destroy(seL4_Word pid);
 #endif
