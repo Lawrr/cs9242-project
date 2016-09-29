@@ -113,10 +113,10 @@ map_device(void *paddr, int size) {
     return (void*)vstart;
 }
 
-int sos_unmap_page(seL4_Word vaddr) {
+int sos_unmap_page(seL4_Word vaddr,struct app_addrspace * addrspace) {
     struct app_cap *cap;
 
-    int err = get_app_cap(PAGE_ALIGN_4K(vaddr), &cap);
+    int err = get_app_cap(PAGE_ALIGN_4K(vaddr), &cap, addrspace);
     if (err != 0) return err;
 
     err = seL4_ARM_Page_Unmap(cap->cap);
@@ -229,7 +229,7 @@ sos_map_page(seL4_Word vaddr_unaligned, seL4_Word *sos_vaddr_ret) {
 
     seL4_CPtr cap = get_cap(new_frame_vaddr);
     struct app_cap *app_cap;
-    err = get_app_cap(new_frame_vaddr, &app_cap);
+    err = get_app_cap(new_frame_vaddr, &app_cap, curproc->addrspace);
     seL4_CPtr copied_cap;
     if (app_cap->cap == CSPACE_NULL) {
         copied_cap = cspace_copy_cap(cur_cspace,

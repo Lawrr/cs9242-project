@@ -50,5 +50,5 @@ int as_define_region(struct app_addrspace *as,
         seL4_Word permissions);
 
 struct region *get_region(seL4_Word uaddr);
-
+int as_destroy(struct app_addrspace ** addrspace);
 #endif /* _ADDRSPACE_H_ */

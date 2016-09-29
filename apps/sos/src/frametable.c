@@ -235,7 +235,7 @@ int32_t swap_out() {
     int err = swap_vnode->ops->vop_write(swap_vnode, &uio);
     conditional_panic(err, "Could not write\n");
 
-    err = sos_unmap_page(frame_vaddr);
+    err = sos_unmap_page(frame_vaddr,curproc->addrspace);
     conditional_panic(err, "Could not unmap\n");
 
     int index1 = root_index(uaddr);
@@ -424,8 +424,8 @@ int32_t insert_app_cap(seL4_Word vaddr, seL4_CPtr cap, struct app_addrspace *add
     return 0;
 }
 
-int32_t get_app_cap(seL4_Word vaddr, struct app_cap **cap_ret) {
-    struct page_table_entry **page_table = curproc->addrspace->page_table;
+int32_t get_app_cap(seL4_Word vaddr, struct app_cap **cap_ret, struct app_addrspace * addrspace) {
+    struct page_table_entry **page_table = addrspace->page_table;
 
     uint32_t index = frame_vaddr_to_index(vaddr);
     if (frame_table[index].cap == seL4_CapNull) {

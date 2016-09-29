@@ -4,7 +4,8 @@
 #include "vmem_layout.h"
 #include "file.h"
 #include "process.h"
-
+#include "addrspace.h"
+#include <utils/page.h>
 #define verbose 5
 #include <assert.h>
 #include <sys/panic.h>
@@ -161,5 +162,6 @@ int process_new(char *app_name, seL4_CPtr fault_ep) {
 }
 
 int process_destroy(seL4_Word pid){
-
+	struct PCB *pcb =  PCB_table[pid];
+    return as_destroy(pcb->addrspace);	
 }
