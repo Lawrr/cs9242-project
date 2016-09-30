@@ -72,7 +72,7 @@ void set_resume(int id) {
 }
 
 int start_coroutine(void (*task)(seL4_Word badge, int num_args),
-                    seL4_Word badge, int num_args) {
+                    seL4_Word badge, int num_args, struct PCB * pcb) {
     /* Check reached max coroutines */
     if (num_tasks == NUM_COROUTINES) return 1;
 
@@ -111,9 +111,14 @@ int start_coroutine(void (*task)(seL4_Word badge, int num_args),
     /* Change to new sp */
     asm volatile("mov sp, %[newsp]" : : [newsp] "r" (sptr) : "sp");
 
-    /* Run task */
-    task(badge_new, num_args_new);
 
+    /* Run task */
+	if (task == sos_map_page){
+		void (*cast_task)(seL4_Word, int, struct PCB *) = (void (*)(seL4_Word, int, struct PCB *))task;
+		cast_task(badge_new, num_args_new,pcb);
+	}	else{
+		task(badge_new, num_args_new);
+	}
     /* Task finished */
     free_list[task_id] = 1;
     start_index = task_id;

@@ -135,9 +135,9 @@ get_uaddr(seL4_Word sos_vaddr,
 }
 
 int
-sos_map_page(seL4_Word vaddr_unaligned, seL4_Word *sos_vaddr_ret) {
-    seL4_ARM_PageDirectory pd = curproc->vroot;
-    struct app_addrspace *as = curproc->addrspace;
+sos_map_page(seL4_Word vaddr_unaligned, seL4_Word *sos_vaddr_ret,struct PCB *pcb) {
+	seL4_ARM_PageDirectory pd = pcb->vroot;
+    struct app_addrspace *as = pcb->addrspace;
     int err;
 
     seL4_Word vaddr = PAGE_ALIGN_4K(vaddr_unaligned);
@@ -274,7 +274,7 @@ sos_map_page(seL4_Word vaddr_unaligned, seL4_Word *sos_vaddr_ret) {
 	}
 
     *sos_vaddr_ret = new_frame_vaddr;
-    return 0;
+	return 0;
 }
 
 inline seL4_Word uaddr_to_sos_vaddr(seL4_Word uaddr) {

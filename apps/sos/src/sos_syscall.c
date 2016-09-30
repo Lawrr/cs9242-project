@@ -118,7 +118,7 @@ static int get_safe_path(char *dst, seL4_Word uaddr,
         if (len == safe_len) {
             /* Make sure address is mapped */
             seL4_Word sos_vaddr_next;
-            int err = sos_map_page(uaddr_next_page, &sos_vaddr_next);
+            int err = sos_map_page(uaddr_next_page, &sos_vaddr_next,curproc);
 
             sos_vaddr_next = PAGE_ALIGN_4K(sos_vaddr_next);
             sos_vaddr_next |= (uaddr_next_page & PAGE_MASK_4K);
@@ -249,7 +249,7 @@ void syscall_stat(seL4_CPtr reply_cap) {
     char path_sos_vaddr[MAX_PATH_LEN];
     /* Make sure path address is mapped */
     seL4_Word sos_vaddr;
-    int err = sos_map_page(uaddr, &sos_vaddr);
+    int err = sos_map_page(uaddr, &sos_vaddr, curproc);
 
     sos_vaddr = PAGE_ALIGN_4K(sos_vaddr);
     sos_vaddr |= (uaddr & PAGE_MASK_4K);
@@ -319,7 +319,9 @@ void syscall_write(seL4_CPtr reply_cap) {
         err = 1;
     } else {
         pin_frame_entry(uaddr, ubuf_size);
-        err = vnode->ops->vop_write(vnode, &uio);
+        
+	    printf("In syscall write%x\n",vnode->ops->vop_write);
+		err = vnode->ops->vop_write(vnode, &uio);
         unpin_frame_entry(uaddr, ubuf_size);
         entry->offset = uio.offset;
     }
@@ -327,7 +329,7 @@ void syscall_write(seL4_CPtr reply_cap) {
         send_err(reply_cap, -1);
         return;
     }
-
+    printf("After syscall write\n");
     /* Reply */
     seL4_SetMR(0, uio.size - uio.remaining);
     send_reply(reply_cap);
@@ -400,7 +402,7 @@ void syscall_open(seL4_CPtr reply_cap) {
     char path_sos_vaddr[MAX_PATH_LEN];
     /* Make sure address is mapped */
     seL4_Word sos_vaddr;
-    int err = sos_map_page(uaddr, &sos_vaddr);
+    int err = sos_map_page(uaddr, &sos_vaddr, curproc);
 
     sos_vaddr = PAGE_ALIGN_4K(sos_vaddr);
     sos_vaddr |= (uaddr & PAGE_MASK_4K);
@@ -500,7 +502,7 @@ void syscall_process_create(seL4_CPtr reply_cap){
     char path_sos_vaddr[MAX_PATH_LEN];
     /* Make sure address is mapped */
     seL4_Word sos_vaddr;
-    int err = sos_map_page(path_uaddr, &sos_vaddr);
+    int err = sos_map_page(path_uaddr, &sos_vaddr, curproc);
 
     sos_vaddr = PAGE_ALIGN_4K(sos_vaddr);
     sos_vaddr |= (path_uaddr & PAGE_MASK_4K);

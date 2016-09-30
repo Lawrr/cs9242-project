@@ -264,9 +264,11 @@ static int vnode_getdirent(struct vnode *vnode, struct uio *uio) {
     do {
         set_routine_arg(curr_coroutine_id, 0, uio);
         nfs_readdir(&mnt_point, cookies, vnode_readdir_cb, curr_coroutine_id);
-        yield();
+        set_routine_arg(curr_coroutine_id, 2, curproc);
+		yield();
         int err = arg[0];
         cookies = arg[1];
+
     } while (uio->offset > 0 && cookies != 0);
 
     /* Error - reached over the end */
@@ -300,14 +302,15 @@ static void vnode_readdir_cb(uintptr_t token, enum nfs_stat status,
         seL4_Word uaddr_end = uio->uaddr + len;
 
         seL4_Word sos_vaddr;
-        int err = sos_map_page(uaddr, &sos_vaddr);
+		struct PCB * pcb = get_routine_arg((int)token,2);
+        int err = sos_map_page(uaddr, &sos_vaddr,pcb);
         sos_vaddr = PAGE_ALIGN_4K(sos_vaddr);
         sos_vaddr |= (uaddr & PAGE_MASK_4K);
         if (PAGE_ALIGN_4K(uaddr) != PAGE_ALIGN_4K(uaddr_end)) {
             seL4_Word uaddr_next = PAGE_ALIGN_4K(uaddr) + PAGE_SIZE_4K;
 
             seL4_Word sos_vaddr_next;
-            err = sos_map_page(uaddr_next, &sos_vaddr_next);
+            err = sos_map_page(uaddr_next, &sos_vaddr_next,pcb);
 
             sos_vaddr_next = PAGE_ALIGN_4K(sos_vaddr_next);
 
@@ -351,7 +354,7 @@ static int vnode_stat(struct vnode *vnode, sos_stat_t *stat) {
     if (err == NFS_OK) {
         seL4_Word sos_vaddr;
         seL4_Word uaddr = (seL4_Word) stat;
-        int err = sos_map_page(uaddr, &sos_vaddr);
+        int err = sos_map_page(uaddr, &sos_vaddr,curproc);
         /* Add offset */
         sos_vaddr = PAGE_ALIGN_4K(sos_vaddr);
         sos_vaddr |= (uaddr & PAGE_MASK_4K);
@@ -372,7 +375,7 @@ static int vnode_stat(struct vnode *vnode, sos_stat_t *stat) {
 
         if (PAGE_ALIGN_4K(uaddr + sizeof(stat)) != PAGE_ALIGN_4K(uaddr)) {
             seL4_Word sos_vaddr_next;
-            int err = sos_map_page(PAGE_ALIGN_4K(uaddr + sizeof(stat)), &sos_vaddr_next);
+            int err = sos_map_page(PAGE_ALIGN_4K(uaddr + sizeof(stat)), &sos_vaddr_next, curproc);
 
             sos_vaddr_next = PAGE_ALIGN_4K(sos_vaddr);
 
@@ -539,7 +542,7 @@ static int vnode_read(struct vnode *vnode, struct uio *uio) {
         /* Set sos_vaddr */
         if (uio->uaddr != NULL) {
             /* uaddr */
-            err = sos_map_page((seL4_Word) uaddr, &sos_vaddr);
+            err = sos_map_page((seL4_Word) uaddr, &sos_vaddr, curproc);
             if (err && err != ERR_ALREADY_MAPPED) {
                 return 1;
             }
@@ -608,7 +611,7 @@ static int vnode_write(struct vnode *vnode, struct uio *uio) {
     if (uio->uaddr != NULL) {
         /* uaddr */
         uaddr = uio->uaddr;
-        err = sos_map_page((seL4_Word) uaddr, &sos_vaddr);
+        err = sos_map_page((seL4_Word) uaddr, &sos_vaddr, curproc);
         if (err && err != ERR_ALREADY_MAPPED) {
             return 1;
         }
@@ -640,7 +643,7 @@ static int vnode_write(struct vnode *vnode, struct uio *uio) {
             /* Update uaddr's sos_vaddr */
             sos_vaddr_next = uaddr_to_sos_vaddr(uaddr_next);
             if (uaddr_next < end_uaddr) {
-                err = sos_map_page((seL4_Word) uaddr_next, &sos_vaddr_next);
+                err = sos_map_page((seL4_Word) uaddr_next, &sos_vaddr_next, curproc);
                 if (err && err != ERR_ALREADY_MAPPED) {
                     return 1;
                 }

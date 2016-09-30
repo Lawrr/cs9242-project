@@ -103,7 +103,7 @@ static int load_segment_into_vspace(seL4_ARM_PageDirectory dest_pd,
         struct app_addrspace *dest_as,
         char *src, unsigned long segment_size,
         unsigned long file_size, unsigned long dst,
-        unsigned long permissions) {
+        unsigned long permissions, struct PCB * pcb) {
 
     /* Overview of ELF segment loading
 
@@ -146,7 +146,7 @@ zero-filling a newly allocated frame.
         /* Map the frame into address space */
         int reenter = setjmp(syscall_loop_entry);
         if (!reenter) {
-            start_coroutine(sos_map_page, dst, &sos_vaddr);
+            start_coroutine(sos_map_page, dst, &sos_vaddr, pcb);
         } else {
             seL4_Word req_mask = get_routine_arg(0, 0);
             if (req_mask) {
@@ -175,12 +175,13 @@ zero-filling a newly allocated frame.
     return 0;
 }
 
-int elf_load(seL4_ARM_PageDirectory dest_pd, struct app_addrspace *dest_as, char *elf_file) {
+int elf_load(seL4_ARM_PageDirectory dest_pd, struct PCB * pcb, char *elf_file) {
 
     int num_headers;
     int err;
     int i;
 
+	struct app_addrspace *dest_as = pcb->addrspace;
     /* Ensure that the ELF file looks sane. */
     if (elf_checkFile(elf_file)){
         return seL4_InvalidArgument;
@@ -212,7 +213,13 @@ int elf_load(seL4_ARM_PageDirectory dest_pd, struct app_addrspace *dest_as, char
         }
 
         /* Load segment */
-        err = load_segment_into_vspace(dest_pd, dest_as, source_addr, segment_size, file_size, vaddr, get_sel4_rights_from_elf(flags) & seL4_AllRights);
+        err = load_segment_into_vspace(dest_pd, 
+				                       dest_as, 
+									   source_addr, 
+									   segment_size, 
+									   file_size, vaddr, 
+									   get_sel4_rights_from_elf(flags) & seL4_AllRights, 
+									   pcb);
         if (err) {
             return err;
         }

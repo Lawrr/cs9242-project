@@ -18,7 +18,7 @@ extern int curr_coroutine_id;
 static struct serial *serial_handle;
 static struct vnode *console_vnode;
 static struct uio *console_uio;
-
+static struct PCB * myProc;
 static int my_coroutine_id;
 
 static void console_serial_handler(struct serial *serial, char c) {
@@ -54,6 +54,7 @@ int console_write(struct vnode *vnode, struct uio *uio) {
     seL4_Word ubuf_size = uio->size;
     seL4_Word end_uaddr = uaddr + ubuf_size;
 
+
     while (ubuf_size > 0) {
         seL4_Word uaddr_next = PAGE_ALIGN_4K(uaddr) + PAGE_SIZE_4K;
         seL4_Word size;
@@ -66,7 +67,7 @@ int console_write(struct vnode *vnode, struct uio *uio) {
         /* Though we can assume the buffer is mapped because it is a write operation,
          * we still use sos_map_page to find the mapping address if it is already mapped */
         seL4_Word sos_vaddr;
-        int err = sos_map_page(uaddr, &sos_vaddr);
+        int err = sos_map_page(uaddr, &sos_vaddr,myProc);
         if (err && err != ERR_ALREADY_MAPPED) {
             return 1;
         }
@@ -105,7 +106,7 @@ int console_read(struct vnode *vnode, struct uio *uio) {
         }
 
         seL4_CPtr sos_vaddr;
-        int err = sos_map_page(curr_uaddr, &sos_vaddr);
+        int err = sos_map_page(curr_uaddr, &sos_vaddr,myProc);
 
         curr_size -= size;
         curr_uaddr = uaddr_next;
@@ -134,7 +135,7 @@ int console_close(struct vnode *vnode) {
     return 0;
 }
 
-void console_init(struct vnode **ret_vnode) {
+void console_init(struct vnode **ret_vnode, struct PCB *pcb) {
     /* Initialise serial driver */
     serial_handle = serial_init();
     serial_register_handler(serial_handle, console_serial_handler);
@@ -148,6 +149,7 @@ void console_init(struct vnode **ret_vnode) {
     console_ops->vop_stat = NULL;
     console_ops->vop_getdirent = NULL;
 
+	myProc = pcb;
     int err = dev_add("console", console_ops);
     conditional_panic(err, "Could not add console serial device");
 

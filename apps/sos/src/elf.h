@@ -13,7 +13,7 @@
 
 #include <sel4/sel4.h>
 #include "addrspace.h"
-
-int elf_load(seL4_ARM_PageDirectory dest_pd, struct app_addrspace *dest_as, char* elf_file);
+#include "process.h"
+int elf_load(seL4_ARM_PageDirectory dest_pd, struct PCB * pcb, char* elf_file);
 
 #endif /* _LIBOS_ELF_H_ */
