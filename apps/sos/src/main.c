@@ -71,11 +71,11 @@ char *sys_name[14] = {
     "Sos timestamp",
     "Sos getdirent",
     "Sos stat",
-	"Sos process create",
-	"Sos process delete",
-	"Sos process Id",
-	"Sos process wait",
-	"Sos process status"
+    "Sos process create",
+    "Sos process delete",
+    "Sos process id",
+    "Sos process wait",
+    "Sos process status"
 };
 /* The linker will link this symbol to the start address  *
  * of an archive of attached applications.                */
@@ -103,7 +103,7 @@ seL4_Word curr_free_ofd = 1;
 static void of_table_init() {
     /* Add console device */
     struct vnode *console_vnode;
-    console_init(&console_vnode,curproc);
+    console_init(&console_vnode, curproc);
 
     /* Set up of table */
     //of_table[STDIN].vnode = console_vnode;
@@ -113,12 +113,12 @@ static void of_table_init() {
 }
 
 void handle_syscall(seL4_Word badge, int num_args) {
-	seL4_Word syscall_number;
+    seL4_Word syscall_number;
     seL4_CPtr reply_cap;
 
     syscall_number = seL4_GetMR(0);
 
-    printf("Syscall :%s  -- received from user application\n",sys_name[syscall_number]);
+    printf("Syscall :%s  -- received from user application\n", sys_name[syscall_number]);
 
     /* Save the caller */
     reply_cap = cspace_save_reply_cap(cur_cspace);
@@ -221,7 +221,7 @@ void syscall_loop(seL4_CPtr ep) {
     while (1) {
         setjmp(syscall_loop_entry);
         printf("sysloop\n");
-		message = seL4_Wait(ep, &badge);
+        message = seL4_Wait(ep, &badge);
         label = seL4_MessageInfo_get_label(message);
         if (badge & IRQ_EP_BADGE) {
             /* Interrupt */
@@ -234,13 +234,12 @@ void syscall_loop(seL4_CPtr ep) {
 
         } else if (label == seL4_VMFault) {
             /* Page fault */
-			start_coroutine(&vm_fault_handler, badge,
+            start_coroutine(&vm_fault_handler, badge,
                             seL4_MessageInfo_get_length(message) - 1, NULL);
 
         } else if (label == seL4_NoFault) {
             /* System call */
-
-			start_coroutine(&handle_syscall, badge,
+            start_coroutine(&handle_syscall, badge,
                             seL4_MessageInfo_get_length(message) - 1, NULL);
         } else {
             printf("Rootserver got an unknown message\n");
@@ -412,8 +411,6 @@ int main(void) {
 
     /* Initialise the network hardware */
     network_init(badge_irq_ep(_sos_interrupt_ep_cap, IRQ_BADGE_NETWORK));
-
- 
 
     /* Initialise coroutines */
     coroutine_init();

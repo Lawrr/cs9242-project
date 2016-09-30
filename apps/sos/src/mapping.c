@@ -113,10 +113,10 @@ map_device(void *paddr, int size) {
     return (void*)vstart;
 }
 
-int sos_unmap_page(seL4_Word vaddr,struct app_addrspace * addrspace) {
+int sos_unmap_page(seL4_Word vaddr,struct app_addrspace *as) {
     struct app_cap *cap;
 
-    int err = get_app_cap(PAGE_ALIGN_4K(vaddr), &cap, addrspace);
+    int err = get_app_cap(PAGE_ALIGN_4K(vaddr), &cap, as);
     if (err != 0) return err;
 
     err = seL4_ARM_Page_Unmap(cap->cap);
@@ -135,8 +135,8 @@ get_uaddr(seL4_Word sos_vaddr,
 }
 
 int
-sos_map_page(seL4_Word vaddr_unaligned, seL4_Word *sos_vaddr_ret,struct PCB *pcb) {
-	seL4_ARM_PageDirectory pd = pcb->vroot;
+sos_map_page(seL4_Word vaddr_unaligned, seL4_Word *sos_vaddr_ret, struct PCB *pcb) {
+    seL4_ARM_PageDirectory pd = pcb->vroot;
     struct app_addrspace *as = pcb->addrspace;
     int err;
 
@@ -229,7 +229,7 @@ sos_map_page(seL4_Word vaddr_unaligned, seL4_Word *sos_vaddr_ret,struct PCB *pcb
 
     seL4_CPtr cap = get_cap(new_frame_vaddr);
     struct app_cap *app_cap;
-    err = get_app_cap(new_frame_vaddr, &app_cap, curproc->addrspace);
+    err = get_app_cap(new_frame_vaddr, curproc->addrspace, &app_cap);
     seL4_CPtr copied_cap;
     if (app_cap->cap == CSPACE_NULL) {
         copied_cap = cspace_copy_cap(cur_cspace,
@@ -274,7 +274,7 @@ sos_map_page(seL4_Word vaddr_unaligned, seL4_Word *sos_vaddr_ret,struct PCB *pcb
 	}
 
     *sos_vaddr_ret = new_frame_vaddr;
-	return 0;
+    return 0;
 }
 
 inline seL4_Word uaddr_to_sos_vaddr(seL4_Word uaddr) {

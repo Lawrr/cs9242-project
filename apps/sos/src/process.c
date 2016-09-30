@@ -45,10 +45,9 @@ int process_new(char *app_name, seL4_CPtr fault_ep) {
 
     /* Set first proc as curproc */
     // TODO when do we change value of curproc?
-	if (curproc == NULL){
-		curproc = proc;
-	}
-
+    if (curproc == NULL) {
+        curproc = proc;
+    }
 
     int err;
 
@@ -90,13 +89,13 @@ int process_new(char *app_name, seL4_CPtr fault_ep) {
             seL4_AllRights);
     conditional_panic(err, "Could not define IPC buffer region");
 
-	printf("mapping IPC buffer\n");
+    printf("mapping IPC buffer\n");
     /* Create an IPC buffer */
     err = sos_map_page(PROCESS_IPC_BUFFER,
-            &proc->ipc_buffer_addr,proc);
-	printf("finish mapping ipc buffer");
+            &proc->ipc_buffer_addr, proc);
+    printf("finish mapping ipc buffer\n");
     proc->ipc_buffer_cap = get_cap(proc->ipc_buffer_addr);
-	conditional_panic(err, "No memory for ipc buffer\n");
+    conditional_panic(err, "No memory for ipc buffer\n");
     /* TODO dud asid number
        err = get_app_cap(proc->ipc_buffer_addr,
        proc->addrspace->page_table,
@@ -137,7 +136,7 @@ int process_new(char *app_name, seL4_CPtr fault_ep) {
     elf_base = cpio_get_file(_cpio_archive, app_name, &elf_size);
     conditional_panic(!elf_base, "Unable to locate cpio header");
 
-	printf("Before elf loading####################\n");
+    printf("Before elf loading####################\n");
     /* load the elf image */
     err = elf_load(proc->vroot, proc, elf_base);
     conditional_panic(err, "Failed to load elf image");
@@ -165,7 +164,7 @@ int process_new(char *app_name, seL4_CPtr fault_ep) {
     return id;
 }
 
-int process_destroy(seL4_Word pid){
-	struct PCB *pcb =  PCB_table[pid];
-    return as_destroy(pcb->addrspace);	
+int process_destroy(seL4_Word pid) {
+    struct PCB *pcb = PCB_table[pid];
+    return as_destroy(pcb->addrspace);
 }

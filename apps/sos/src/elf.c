@@ -28,12 +28,12 @@
 #include <sys/panic.h>
 
 /* Minimum of two values. */
-#define MIN(a,b) (((a)<(b))?(a):(b))
+#define MIN(a, b) (((a)<(b))?(a):(b))
 
-#define PAGESIZE              (1 << (seL4_PageBits))
-#define PAGEMASK              ((PAGESIZE) - 1)
-#define PAGE_ALIGN(addr)      ((addr) & ~(PAGEMASK))
-#define IS_PAGESIZE_ALIGNED(addr) !((addr) &  (PAGEMASK))
+#define PAGESIZE (1 << (seL4_PageBits))
+#define PAGEMASK ((PAGESIZE) - 1)
+#define PAGE_ALIGN(addr) ((addr) & ~(PAGEMASK))
+#define IS_PAGESIZE_ALIGNED(addr) !((addr) & (PAGEMASK))
 
 #define LOWER_BITS_SHIFT 20
 
@@ -41,7 +41,7 @@
  * badge to the async endpoint. The badge that we receive will
  * be the bitwise 'OR' of the async endpoint badge and the badges
  * of all pending notifications. */
-#define IRQ_EP_BADGE         (1 << (seL4_BadgeBits - 1))
+#define IRQ_EP_BADGE (1 << (seL4_BadgeBits - 1))
 /* All badged IRQs set high bet, then we use uniq bits to
  * distinguish interrupt sources */
 #define IRQ_BADGE_NETWORK (1 << 0)
@@ -103,7 +103,7 @@ static int load_segment_into_vspace(seL4_ARM_PageDirectory dest_pd,
         struct app_addrspace *dest_as,
         char *src, unsigned long segment_size,
         unsigned long file_size, unsigned long dst,
-        unsigned long permissions, struct PCB * pcb) {
+        unsigned long permissions, struct PCB *pcb) {
 
     /* Overview of ELF segment loading
 
@@ -118,7 +118,7 @@ file itself, or both.
 The split between file content and zeros is a follows.
 
 File content: [dst, dst + file_size)
-Zeros:        [dst + file_size, dst + segment_size)
+Zeros: [dst + file_size, dst + segment_size)
 
 Note: if file_size == segment_size, there is no zero-filled region.
 Note: if file_size == 0, the whole segment is just zero filled.
@@ -136,8 +136,8 @@ zero-filling a newly allocated frame.
 
     /* We work a page at a time in the destination vspace. */
     pos = 0;
-	
-	seL4_Word isFirstProcess = (syscall_loop_entry == NULL);
+
+    seL4_Word is_first_proc = (syscall_loop_entry == NULL);
 
     while(pos < segment_size) {
         seL4_Word sos_vaddr;
@@ -146,64 +146,64 @@ zero-filling a newly allocated frame.
         int err;
 
         /* Map the frame into address space */
-        
-		if (isFirstProcess){
-			int reenter = setjmp(syscall_loop_entry);
-			if (!reenter) {
-				start_coroutine(sos_map_page, dst, &sos_vaddr, pcb);
-			} else {
-				seL4_Word req_mask = get_routine_arg(0, 0);
-				if (req_mask) {
-					mapping_loop(_sos_ipc_ep_cap);
-					resume();
-				} else {
-					/* Now copy our data into the destination vspace. */
-					nbytes = PAGESIZE - (dst & PAGEMASK);
-					if (pos < file_size){
-						memcpy((void*) (sos_vaddr | ((dst << LOWER_BITS_SHIFT) >> LOWER_BITS_SHIFT)),
-								(void*)src, MIN(nbytes, file_size - pos));
-					}
-					sos_cap = get_cap(sos_vaddr);
 
-					/* Not observable to I-cache yet so flush the frame */
-					seL4_ARM_Page_Unify_Instruction(sos_cap, 0, PAGESIZE);
+        if (is_first_proc) {
+            int reenter = setjmp(syscall_loop_entry);
+            if (!reenter) {
+                start_coroutine(sos_map_page, dst, &sos_vaddr, pcb);
+            } else {
+                seL4_Word req_mask = get_routine_arg(0, 0);
+                if (req_mask) {
+                    mapping_loop(_sos_ipc_ep_cap);
+                    resume();
+                } else {
+                    /* Now copy our data into the destination vspace. */
+                    nbytes = PAGESIZE - (dst & PAGEMASK);
+                    if (pos < file_size) {
+                        memcpy((void*) (sos_vaddr | ((dst << LOWER_BITS_SHIFT) >> LOWER_BITS_SHIFT)),
+                                (void*)src, MIN(nbytes, file_size - pos));
+                    }
+                    sos_cap = get_cap(sos_vaddr);
 
-					pos += nbytes;
-					dst += nbytes;
-					src += nbytes;    
-				}
-			}
-		}	else{
-			
-			sos_map_page(dst, &sos_vaddr, pcb);
+                    /* Not observable to I-cache yet so flush the frame */
+                    seL4_ARM_Page_Unify_Instruction(sos_cap, 0, PAGESIZE);
 
-			nbytes = PAGESIZE - (dst & PAGEMASK);
-			if (pos < file_size){
-				memcpy((void*) (sos_vaddr | ((dst << LOWER_BITS_SHIFT) >> LOWER_BITS_SHIFT)),
-						(void*)src, MIN(nbytes, file_size - pos));
-			}
-			sos_cap = get_cap(sos_vaddr);
+                    pos += nbytes;
+                    dst += nbytes;
+                    src += nbytes;
+                }
+            }
+        } else {
+            sos_map_page(dst, &sos_vaddr, pcb);
 
-			/* Not observable to I-cache yet so flush the frame */
-			seL4_ARM_Page_Unify_Instruction(sos_cap, 0, PAGESIZE);
+            nbytes = PAGESIZE - (dst & PAGEMASK);
+            if (pos < file_size) {
+                memcpy((void*) (sos_vaddr | ((dst << LOWER_BITS_SHIFT) >> LOWER_BITS_SHIFT)),
+                        (void*)src, MIN(nbytes, file_size - pos));
+            }
+            sos_cap = get_cap(sos_vaddr);
 
-			pos += nbytes;
-			dst += nbytes;
-			src += nbytes;
-		}
+            /* Not observable to I-cache yet so flush the frame */
+            seL4_ARM_Page_Unify_Instruction(sos_cap, 0, PAGESIZE);
+
+            pos += nbytes;
+            dst += nbytes;
+            src += nbytes;
+        }
     }
     return 0;
 }
 
-int elf_load(seL4_ARM_PageDirectory dest_pd, struct PCB * pcb, char *elf_file) {
+int elf_load(seL4_ARM_PageDirectory dest_pd, struct PCB *pcb, char *elf_file) {
 
     int num_headers;
     int err;
     int i;
 
-	struct app_addrspace *dest_as = pcb->addrspace;
+    struct app_addrspace *dest_as = pcb->addrspace;
+
     /* Ensure that the ELF file looks sane. */
-    if (elf_checkFile(elf_file)){
+    if (elf_checkFile(elf_file)) {
         return seL4_InvalidArgument;
     }
 
@@ -233,13 +233,13 @@ int elf_load(seL4_ARM_PageDirectory dest_pd, struct PCB * pcb, char *elf_file) {
         }
 
         /* Load segment */
-        err = load_segment_into_vspace(dest_pd, 
-				                       dest_as, 
-									   source_addr, 
-									   segment_size, 
-									   file_size, vaddr, 
-									   get_sel4_rights_from_elf(flags) & seL4_AllRights, 
-									   pcb);
+        err = load_segment_into_vspace(dest_pd,
+                                       dest_as,
+                                       source_addr,
+                                       segment_size,
+                                       file_size, vaddr,
+                                       get_sel4_rights_from_elf(flags) & seL4_AllRights,
+                                       pcb);
         if (err) {
             return err;
         }

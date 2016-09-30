@@ -72,7 +72,7 @@ void set_resume(int id) {
 }
 
 int start_coroutine(void (*task)(seL4_Word badge, int num_args),
-                    seL4_Word badge, int num_args, struct PCB * pcb) {
+                    seL4_Word badge, int num_args, struct PCB *pcb) {
     /* Check reached max coroutines */
     if (num_tasks == NUM_COROUTINES) return 1;
 
@@ -91,7 +91,7 @@ int start_coroutine(void (*task)(seL4_Word badge, int num_args),
 
     /* Clean frame before using */
     memset(PAGE_ALIGN_4K((seL4_Word) sptr), 0, PAGE_SIZE_4K);
-    
+
     /* Move stack ptr up by a frame (since stack grows down) */
     sptr += PAGE_SIZE_4K;
 
@@ -113,18 +113,19 @@ int start_coroutine(void (*task)(seL4_Word badge, int num_args),
 
 
     /* Run task */
-	if (task == sos_map_page){
-		void (*cast_task)(seL4_Word, int, struct PCB *) = (void (*)(seL4_Word, int, struct PCB *))task;
-		cast_task(badge_new, num_args_new,pcb);
-	}	else{
-		task(badge_new, num_args_new);
-	}
+    if (task == sos_map_page) {
+        void (*cast_task)(seL4_Word, int, struct PCB *) = (void (*)(seL4_Word, int, struct PCB *)) task;
+        cast_task(badge_new, num_args_new, pcb);
+    } else {
+        task(badge_new, num_args_new);
+    }
+
     /* Task finished */
     free_list[task_id] = 1;
     start_index = task_id;
     num_tasks--;
 
-	printf("Finish corouintine\n");
+    printf("Finish corouintine\n");
     /* Return to main loop */
     longjmp(syscall_loop_entry, 1);
 

@@ -18,7 +18,7 @@ extern int curr_coroutine_id;
 static struct serial *serial_handle;
 static struct vnode *console_vnode;
 static struct uio *console_uio;
-static struct PCB * myProc;
+static struct PCB *my_proc;
 static int my_coroutine_id;
 
 static void console_serial_handler(struct serial *serial, char c) {
@@ -67,7 +67,7 @@ int console_write(struct vnode *vnode, struct uio *uio) {
         /* Though we can assume the buffer is mapped because it is a write operation,
          * we still use sos_map_page to find the mapping address if it is already mapped */
         seL4_Word sos_vaddr;
-        int err = sos_map_page(uaddr, &sos_vaddr,myProc);
+        int err = sos_map_page(uaddr, &sos_vaddr, my_proc);
         if (err && err != ERR_ALREADY_MAPPED) {
             return 1;
         }
@@ -106,7 +106,7 @@ int console_read(struct vnode *vnode, struct uio *uio) {
         }
 
         seL4_CPtr sos_vaddr;
-        int err = sos_map_page(curr_uaddr, &sos_vaddr,myProc);
+        int err = sos_map_page(curr_uaddr, &sos_vaddr, my_proc);
 
         curr_size -= size;
         curr_uaddr = uaddr_next;
@@ -149,7 +149,7 @@ void console_init(struct vnode **ret_vnode, struct PCB *pcb) {
     console_ops->vop_stat = NULL;
     console_ops->vop_getdirent = NULL;
 
-	myProc = pcb;
+    my_proc = pcb;
     int err = dev_add("console", console_ops);
     conditional_panic(err, "Could not add console serial device");
 

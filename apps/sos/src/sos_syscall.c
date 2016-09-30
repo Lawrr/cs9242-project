@@ -118,7 +118,7 @@ static int get_safe_path(char *dst, seL4_Word uaddr,
         if (len == safe_len) {
             /* Make sure address is mapped */
             seL4_Word sos_vaddr_next;
-            int err = sos_map_page(uaddr_next_page, &sos_vaddr_next,curproc);
+            int err = sos_map_page(uaddr_next_page, &sos_vaddr_next, curproc);
 
             sos_vaddr_next = PAGE_ALIGN_4K(sos_vaddr_next);
             sos_vaddr_next |= (uaddr_next_page & PAGE_MASK_4K);
@@ -319,9 +319,9 @@ void syscall_write(seL4_CPtr reply_cap) {
         err = 1;
     } else {
         pin_frame_entry(uaddr, ubuf_size);
-        
-	    printf("In syscall write%x\n",vnode->ops->vop_write);
-		err = vnode->ops->vop_write(vnode, &uio);
+
+        printf("In syscall write%x\n", vnode->ops->vop_write);
+        err = vnode->ops->vop_write(vnode, &uio);
         unpin_frame_entry(uaddr, ubuf_size);
         entry->offset = uio.offset;
     }
@@ -462,6 +462,7 @@ void syscall_open(seL4_CPtr reply_cap) {
 
         curproc->addrspace->fdt_status = (fd_count << TWO_BYTE_BITS) | free_fd;
     }
+
     /* Reply */
     send_reply(reply_cap);
 }
@@ -494,7 +495,7 @@ void syscall_close(seL4_CPtr reply_cap) {
     send_reply(reply_cap);
 }
 
-void syscall_process_create(seL4_CPtr reply_cap){
+void syscall_process_create(seL4_CPtr reply_cap) {
     seL4_Word path_uaddr = seL4_GetMR(1);
 
     if (validate_uaddr(reply_cap, path_uaddr, 0)) return;
@@ -509,34 +510,32 @@ void syscall_process_create(seL4_CPtr reply_cap){
 
     pin_frame_entry(path_uaddr, MAX_PATH_LEN);
     err = get_safe_path(path_sos_vaddr, path_uaddr, sos_vaddr, MAX_PATH_LEN);
-    unpin_frame_entry(path_uaddr, MAX_PATH_LEN);	
-	/*TODO somthing needs to be done with this err*/
+    unpin_frame_entry(path_uaddr, MAX_PATH_LEN);
+    /* TODO something needs to be done with this err */
 
-    err = process_new(path_sos_vaddr,_sos_ipc_ep_cap);	
-    
-	
-	seL4_SetMR(0,err);
-	send_reply(reply_cap);
-	return;
+    err = process_new(path_sos_vaddr, _sos_ipc_ep_cap);
+    seL4_SetMR(0, err);
+    send_reply(reply_cap);
+    return;
 }
 
-void syscall_process_delete(seL4_CPtr reply_cap){
-	seL4_Word pid = seL4_GetMR(1);
-	int err = process_destroy(pid);
-    seL4_SetMR(0,err);
-	send_reply(reply_cap);
-	return;
+void syscall_process_delete(seL4_CPtr reply_cap) {
+    seL4_Word pid = seL4_GetMR(1);
+    int err = process_destroy(pid);
+    seL4_SetMR(0, err);
+    send_reply(reply_cap);
+    return;
 }
 
-void syscall_process_id(seL4_CPtr reply_cap){
-
-}
-
-void syscall_process_wait(seL4_CPtr reply_cap){
+void syscall_process_id(seL4_CPtr reply_cap) {
 
 }
 
-void syscall_process_status(seL4_CPtr reply_cap){
+void syscall_process_wait(seL4_CPtr reply_cap) {
+
+}
+
+void syscall_process_status(seL4_CPtr reply_cap) {
 
 }
 
