@@ -512,9 +512,10 @@ void syscall_process_create(seL4_CPtr reply_cap){
     unpin_frame_entry(path_uaddr, MAX_PATH_LEN);	
 	/*TODO somthing needs to be done with this err*/
 
-
     err = process_new(path_sos_vaddr,_sos_ipc_ep_cap);	
-    seL4_SetMR(0,err);
+    
+	
+	seL4_SetMR(0,err);
 	send_reply(reply_cap);
 	return;
 }

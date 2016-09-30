@@ -124,6 +124,7 @@ int start_coroutine(void (*task)(seL4_Word badge, int num_args),
     start_index = task_id;
     num_tasks--;
 
+	printf("Finish corouintine\n");
     /* Return to main loop */
     longjmp(syscall_loop_entry, 1);
 

@@ -220,7 +220,8 @@ void syscall_loop(seL4_CPtr ep) {
     seL4_MessageInfo_t message;
     while (1) {
         setjmp(syscall_loop_entry);
-        message = seL4_Wait(ep, &badge);
+        printf("sysloop\n");
+		message = seL4_Wait(ep, &badge);
         label = seL4_MessageInfo_get_label(message);
         if (badge & IRQ_EP_BADGE) {
             /* Interrupt */

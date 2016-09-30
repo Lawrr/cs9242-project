@@ -136,6 +136,8 @@ zero-filling a newly allocated frame.
 
     /* We work a page at a time in the destination vspace. */
     pos = 0;
+	
+	seL4_Word isFirstProcess = (syscall_loop_entry == NULL);
 
     while(pos < segment_size) {
         seL4_Word sos_vaddr;
@@ -144,33 +146,51 @@ zero-filling a newly allocated frame.
         int err;
 
         /* Map the frame into address space */
-        int reenter = setjmp(syscall_loop_entry);
-        if (!reenter) {
-            start_coroutine(sos_map_page, dst, &sos_vaddr, pcb);
-        } else {
-            seL4_Word req_mask = get_routine_arg(0, 0);
-            if (req_mask) {
-                mapping_loop(_sos_ipc_ep_cap);
-                resume();
-            } else {
-               /* Now copy our data into the destination vspace. */
-                nbytes = PAGESIZE - (dst & PAGEMASK);
-                if (pos < file_size){
-                    memcpy((void*) (sos_vaddr | ((dst << LOWER_BITS_SHIFT) >> LOWER_BITS_SHIFT)),
-                            (void*)src, MIN(nbytes, file_size - pos));
-                }
-                sos_cap = get_cap(sos_vaddr);
+        
+		if (isFirstProcess){
+			int reenter = setjmp(syscall_loop_entry);
+			if (!reenter) {
+				start_coroutine(sos_map_page, dst, &sos_vaddr, pcb);
+			} else {
+				seL4_Word req_mask = get_routine_arg(0, 0);
+				if (req_mask) {
+					mapping_loop(_sos_ipc_ep_cap);
+					resume();
+				} else {
+					/* Now copy our data into the destination vspace. */
+					nbytes = PAGESIZE - (dst & PAGEMASK);
+					if (pos < file_size){
+						memcpy((void*) (sos_vaddr | ((dst << LOWER_BITS_SHIFT) >> LOWER_BITS_SHIFT)),
+								(void*)src, MIN(nbytes, file_size - pos));
+					}
+					sos_cap = get_cap(sos_vaddr);
 
-                /* Not observable to I-cache yet so flush the frame */
-                seL4_ARM_Page_Unify_Instruction(sos_cap, 0, PAGESIZE);
+					/* Not observable to I-cache yet so flush the frame */
+					seL4_ARM_Page_Unify_Instruction(sos_cap, 0, PAGESIZE);
 
-                pos += nbytes;
-                dst += nbytes;
-                src += nbytes;    
-            }
-        }
+					pos += nbytes;
+					dst += nbytes;
+					src += nbytes;    
+				}
+			}
+		}	else{
+			
+			sos_map_page(dst, &sos_vaddr, pcb);
 
+			nbytes = PAGESIZE - (dst & PAGEMASK);
+			if (pos < file_size){
+				memcpy((void*) (sos_vaddr | ((dst << LOWER_BITS_SHIFT) >> LOWER_BITS_SHIFT)),
+						(void*)src, MIN(nbytes, file_size - pos));
+			}
+			sos_cap = get_cap(sos_vaddr);
 
+			/* Not observable to I-cache yet so flush the frame */
+			seL4_ARM_Page_Unify_Instruction(sos_cap, 0, PAGESIZE);
+
+			pos += nbytes;
+			dst += nbytes;
+			src += nbytes;
+		}
     }
     return 0;
 }
