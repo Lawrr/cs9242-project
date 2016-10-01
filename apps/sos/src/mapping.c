@@ -116,7 +116,7 @@ map_device(void *paddr, int size) {
 int sos_unmap_page(seL4_Word vaddr,struct app_addrspace *as) {
     struct app_cap *cap;
 
-    int err = get_app_cap(PAGE_ALIGN_4K(vaddr), &cap, as);
+    int err = get_app_cap(PAGE_ALIGN_4K(vaddr), as, &cap);
     if (err != 0) return err;
 
     err = seL4_ARM_Page_Unmap(cap->cap);
