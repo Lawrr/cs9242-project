@@ -28,16 +28,23 @@ struct app_addrspace *as_new() {
     as->page_table = CSPACE_NULL;
 
     /* File descriptors */
-    as->fdt_status = 3 << TWO_BYTE_BITS | 3;
+    /*            fd_count             free_fd */
+    as->fdt_status = 2 << TWO_BYTE_BITS | 0;
 
     as->fd_table = malloc(sizeof(struct fdt_entry) * PROCESS_MAX_FILES);
     for (int i = 0 ; i < PROCESS_MAX_FILES; i++) {
         as->fd_table[i].ofd = -1;
     }
 
-    as->fd_table[0].ofd = 0; /* STDIN */
-    as->fd_table[1].ofd = 1; /* STDOUT */
-    as->fd_table[2].ofd = 1; /* STDERR */
+    /* Note: Below line is not needed. Client must explicitly open STDIN */
+    // as->fd_table[0].ofd = 0; /* STDIN */
+
+    // TODO is it possible STDOUT is not 0?? (maybe no more references)
+    as->fd_table[1].ofd = STDOUT; /* STDOUT */
+    as->fd_table[2].ofd = STDOUT; /* STDERR */
+
+    /*open file table increase ref count*/
+    of_table[STDOUT].ref_count += 2;
 
     return as;
 }

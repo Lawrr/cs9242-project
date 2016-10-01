@@ -439,6 +439,8 @@ void syscall_open(seL4_CPtr reply_cap) {
     if (err) {
         seL4_SetMR(0, -1);
     } else {
+        seL4_SetMR(0, free_fd);
+
         of_table[curr_free_ofd].vnode = ret_vnode;
 
         of_table[curr_free_ofd].file_info.st_fmode = sos_access_mode;
@@ -457,8 +459,6 @@ void syscall_open(seL4_CPtr reply_cap) {
 
         /* Compute free_fd */
         fd_count++;
-
-        seL4_SetMR(0, free_fd);
 
         if (fd_count != PROCESS_MAX_FILES) {
             while (curproc->addrspace->fd_table[free_fd].ofd != -1) {

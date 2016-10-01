@@ -98,7 +98,7 @@ seL4_CPtr _sos_interrupt_ep_cap;
 
 struct oft_entry of_table[MAX_OPEN_FILE];
 seL4_Word ofd_count = 0;
-seL4_Word curr_free_ofd = 1;
+seL4_Word curr_free_ofd = 0;
 
 static void of_table_init() {
     /* Add console device */
@@ -106,10 +106,15 @@ static void of_table_init() {
     console_init(&console_vnode);
 
     /* Set up of table */
+
+    /* Note: Below line is not needed. Client must explicitly open STDIN */
     //of_table[STDIN].vnode = console_vnode;
     //of_table[STDIN].file_info.st_fmode = FM_READ;
+    
     of_table[STDOUT].vnode = console_vnode;
     of_table[STDOUT].file_info.st_fmode = FM_WRITE;
+    ofd_count++;
+    curr_free_ofd++;
 }
 
 void handle_syscall(seL4_Word badge, int num_args) {

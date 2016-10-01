@@ -62,11 +62,6 @@ int process_new(char *app_name, seL4_CPtr fault_ep) {
 
     proc->addrspace = as_new();
 
-    /*open file table increase ref count*/
-    //of_table[STDIN].ref_count++;
-    //TODO is this right?
-    of_table[STDOUT].ref_count++;
-
     /* Create a VSpace */
     proc->vroot_addr = ut_alloc(seL4_PageDirBits);
     conditional_panic(!proc->vroot_addr,
