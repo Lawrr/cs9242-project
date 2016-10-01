@@ -167,7 +167,7 @@ void handle_syscall(seL4_Word badge, int num_args) {
             break;
 
         case SOS_PROCESS_DELETE_SYSCALL:
-            syscall_process_delete(reply_cap);
+            syscall_process_delete(reply_cap, badge);
             break;
 
         case SOS_PROCESS_ID_SYSCALL:

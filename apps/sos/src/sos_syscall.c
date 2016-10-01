@@ -519,11 +519,13 @@ void syscall_process_create(seL4_CPtr reply_cap) {
     return;
 }
 
-void syscall_process_delete(seL4_CPtr reply_cap) {
+void syscall_process_delete(seL4_CPtr reply_cap, seL4_Word badge) {
     seL4_Word pid = seL4_GetMR(1);
     int err = process_destroy(pid);
-    seL4_SetMR(0, err);
-    send_reply(reply_cap);
+    if (pid != badge) {
+        seL4_SetMR(0, err);
+        send_reply(reply_cap);
+    }
     return;
 }
 
