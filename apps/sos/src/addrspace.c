@@ -13,7 +13,7 @@
 #define PAGE_ENTRIES 1024
 
 extern struct PCB *curproc;
-extern struct oft_entry *of_table;
+extern struct oft_entry of_table[MAX_OPEN_FILE];
 extern seL4_Word curr_free_ofd;
 extern seL4_Word ofd_count;
 
