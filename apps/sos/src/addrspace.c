@@ -28,8 +28,8 @@ struct app_addrspace *as_new() {
     as->page_table = CSPACE_NULL;
 
     /* File descriptors */
-    /*            fd_count             free_fd */
-    as->fdt_status = 2 << TWO_BYTE_BITS | 0;
+    /* STDIN and STDERR */
+    as->fd_count = 2;
 
     as->fd_table = malloc(sizeof(struct fdt_entry) * PROCESS_MAX_FILES);
     for (int i = 0 ; i < PROCESS_MAX_FILES; i++) {

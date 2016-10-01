@@ -12,12 +12,15 @@
 #include "vmem_layout.h"
 #include "process.h"
 #include "vnode.h"
+#include <pthread.h>
 
 extern struct PCB *curproc;
 extern struct oft_entry of_table[MAX_OPEN_FILE];
 extern seL4_Word ofd_count;
 extern seL4_Word curr_free_ofd;
 extern seL4_CPtr _sos_ipc_ep_cap;
+
+static pthread_spinlock_t of_lock;
 
 /* Checks that user pointer range is a valid in userspace */
 static int legal_uaddr(seL4_Word base, uint32_t size) {
@@ -393,16 +396,21 @@ void syscall_read(seL4_CPtr reply_cap) {
 }
 
 void syscall_open(seL4_CPtr reply_cap) {
-    seL4_Word fdt_status = curproc->addrspace->fdt_status;
-    seL4_Word free_fd = fdt_status & LOWER_TWO_BYTE_MASK;
-    seL4_Word fd_count = fdt_status >> TWO_BYTE_BITS;
+    seL4_Word fd_count = curproc->addrspace->fd_count;
 
     seL4_Word uaddr = seL4_GetMR(1);
     fmode_t access_mode = seL4_GetMR(2);
 
     if (validate_max_fd(reply_cap, fd_count)) return;
-    if (validate_max_ofd(reply_cap, ofd_count)) return;
-    if (validate_uaddr(reply_cap, uaddr, 0)) return;
+    pthread_spin_lock(&of_lock);
+    if (validate_max_ofd(reply_cap, ofd_count)) {
+        pthread_spin_unlock(&of_lock);
+        return;
+    }
+    if (validate_uaddr(reply_cap, uaddr, 0)) {
+        pthread_spin_unlock(&of_lock);
+        return;
+    }
 
     char path_sos_vaddr[MAX_PATH_LEN];
     /* Make sure address is mapped */
@@ -416,6 +424,7 @@ void syscall_open(seL4_CPtr reply_cap) {
     err = get_safe_path(path_sos_vaddr, uaddr, sos_vaddr, MAX_PATH_LEN);
     unpin_frame_entry(uaddr, MAX_PATH_LEN);
     if (err) {
+        pthread_spin_unlock(&of_lock);
         send_err(reply_cap, -1);
         return;
     }
@@ -439,14 +448,25 @@ void syscall_open(seL4_CPtr reply_cap) {
     if (err) {
         seL4_SetMR(0, -1);
     } else {
+        /* FD Table */
+        int free_fd = 0;
+        for (int i = 0; i < PROCESS_MAX_FILES; i++) {
+            if (curproc->addrspace->fd_table[i].ofd == -1) {
+                free_fd = i;
+                break;
+            }
+        }
+
+        /* Set FD */
+        curproc->addrspace->fd_count++;
         seL4_SetMR(0, free_fd);
 
+        /* OF Table */
+        curproc->addrspace->fd_table[free_fd].ofd = curr_free_ofd;
         of_table[curr_free_ofd].vnode = ret_vnode;
 
         of_table[curr_free_ofd].file_info.st_fmode = sos_access_mode;
         of_table[curr_free_ofd].ref_count++;
-
-        curproc->addrspace->fd_table[free_fd].ofd = curr_free_ofd;
 
         ofd_count++;
         if (ofd_count != MAX_OPEN_FILE) {
@@ -456,20 +476,8 @@ void syscall_open(seL4_CPtr reply_cap) {
         } else {
             curr_free_ofd = -1;
         }
-
-        /* Compute free_fd */
-        fd_count++;
-
-        if (fd_count != PROCESS_MAX_FILES) {
-            while (curproc->addrspace->fd_table[free_fd].ofd != -1) {
-                free_fd = (free_fd + 1) % PROCESS_MAX_FILES;
-            }
-        } else {
-            free_fd = 0;
-        }
-
-        curproc->addrspace->fdt_status = (fd_count << TWO_BYTE_BITS) | free_fd;
     }
+    pthread_spin_unlock(&of_lock);
 
     /* Reply */
     send_reply(reply_cap);
@@ -483,11 +491,8 @@ void syscall_close(seL4_CPtr reply_cap) {
     if (validate_ofd(reply_cap, ofd)) return;
 
     curproc->addrspace->fd_table[fd].ofd = -1;
-
-    seL4_Word fdt_status = curproc->addrspace->fdt_status;
-    seL4_Word fd_count = (fdt_status >> TWO_BYTE_BITS) - 1;
-    curproc->addrspace->fdt_status = (fd_count << TWO_BYTE_BITS) | fd;
-
+    curproc->addrspace->fd_count--;
+    pthread_spin_lock(&of_lock);
     of_table[ofd].ref_count--;
 
     if (of_table[ofd].ref_count == 0) {
@@ -500,6 +505,8 @@ void syscall_close(seL4_CPtr reply_cap) {
         of_table[ofd].offset = 0;
         curr_free_ofd = ofd;
     }
+    pthread_spin_unlock(&of_lock);
+
     /* Reply */
     seL4_SetMR(0, 0);
     send_reply(reply_cap);
