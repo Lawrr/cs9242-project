@@ -527,8 +527,10 @@ void syscall_process_delete(seL4_CPtr reply_cap) {
     return;
 }
 
-void syscall_process_id(seL4_CPtr reply_cap) {
-
+void syscall_process_id(seL4_CPtr reply_cap, seL4_Word badge) {
+    seL4_SetMR(0, badge);
+    send_reply(reply_cap);
+    return;
 }
 
 void syscall_process_wait(seL4_CPtr reply_cap) {
@@ -538,5 +540,3 @@ void syscall_process_wait(seL4_CPtr reply_cap) {
 void syscall_process_status(seL4_CPtr reply_cap) {
 
 }
-
-

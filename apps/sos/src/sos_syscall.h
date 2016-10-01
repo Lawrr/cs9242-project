@@ -40,7 +40,7 @@ void syscall_process_create(seL4_CPtr reply_cap);
 
 void syscall_process_delete(seL4_CPtr reply_cap);
 
-void syscall_process_id(seL4_CPtr reply_cap);
+void syscall_process_id(seL4_CPtr reply_cap, seL4_Word badge);
 
 void syscall_process_wait(seL4_CPtr reply_cap);
 
