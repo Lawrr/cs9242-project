@@ -5,7 +5,7 @@
 
 #define TTY_NAME             CONFIG_SOS_STARTUP_APP
 #define TTY_PRIORITY         (0)
-#define TTY_EP_BADGE         (101)
+/* #define TTY_EP_BADGE         (101) */
 
 /* This is the index where a clients syscall enpoint will
  * be stored in the clients cspace. */

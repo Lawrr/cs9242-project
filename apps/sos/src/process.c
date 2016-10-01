@@ -107,7 +107,7 @@ int process_new(char *app_name, seL4_CPtr fault_ep) {
             cur_cspace,
             fault_ep,
             seL4_AllRights,
-            seL4_CapData_Badge_new(TTY_EP_BADGE));
+            seL4_CapData_Badge_new(id));
 
     /* should be the first slot in the space, hack I know */
     assert(user_ep_cap == 1);

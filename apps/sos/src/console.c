@@ -13,12 +13,13 @@
 #include <sys/debug.h>
 #include <sys/panic.h>
 
+extern struct PCB *curproc;
 extern int curr_coroutine_id;
 
 static struct serial *serial_handle;
 static struct vnode *console_vnode;
 static struct uio *console_uio;
-static struct PCB *my_proc;
+static struct PCB *read_proc;
 static int my_coroutine_id;
 
 static void console_serial_handler(struct serial *serial, char c) {
@@ -67,7 +68,7 @@ int console_write(struct vnode *vnode, struct uio *uio) {
         /* Though we can assume the buffer is mapped because it is a write operation,
          * we still use sos_map_page to find the mapping address if it is already mapped */
         seL4_Word sos_vaddr;
-        int err = sos_map_page(uaddr, &sos_vaddr, my_proc);
+        int err = sos_map_page(uaddr, &sos_vaddr, curproc);
         if (err && err != ERR_ALREADY_MAPPED) {
             return 1;
         }
@@ -87,6 +88,8 @@ int console_write(struct vnode *vnode, struct uio *uio) {
 }
 
 int console_read(struct vnode *vnode, struct uio *uio) {
+    read_proc = curproc;
+
     seL4_Word uaddr = uio->uaddr;
     seL4_Word ubuf_size = uio->size;
 
@@ -106,7 +109,7 @@ int console_read(struct vnode *vnode, struct uio *uio) {
         }
 
         seL4_CPtr sos_vaddr;
-        int err = sos_map_page(curr_uaddr, &sos_vaddr, my_proc);
+        int err = sos_map_page(curr_uaddr, &sos_vaddr, read_proc);
 
         curr_size -= size;
         curr_uaddr = uaddr_next;
@@ -135,7 +138,7 @@ int console_close(struct vnode *vnode) {
     return 0;
 }
 
-void console_init(struct vnode **ret_vnode, struct PCB *pcb) {
+void console_init(struct vnode **ret_vnode) {
     /* Initialise serial driver */
     serial_handle = serial_init();
     serial_register_handler(serial_handle, console_serial_handler);
@@ -149,7 +152,6 @@ void console_init(struct vnode **ret_vnode, struct PCB *pcb) {
     console_ops->vop_stat = NULL;
     console_ops->vop_getdirent = NULL;
 
-    my_proc = pcb;
     int err = dev_add("console", console_ops);
     conditional_panic(err, "Could not add console serial device");
 

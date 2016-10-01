@@ -103,7 +103,7 @@ seL4_Word curr_free_ofd = 1;
 static void of_table_init() {
     /* Add console device */
     struct vnode *console_vnode;
-    console_init(&console_vnode, curproc);
+    console_init(&console_vnode);
 
     /* Set up of table */
     //of_table[STDIN].vnode = console_vnode;
@@ -118,7 +118,7 @@ void handle_syscall(seL4_Word badge, int num_args) {
 
     syscall_number = seL4_GetMR(0);
 
-    printf("Syscall :%s  -- received from user application\n", sys_name[syscall_number]);
+    printf("[App #%d] Syscall :%s  -- received from user application\n", badge, sys_name[syscall_number]);
 
     /* Save the caller */
     reply_cap = cspace_save_reply_cap(cur_cspace);
@@ -185,6 +185,7 @@ static void vm_fault_handler(seL4_Word badge, int num_args) {
     
 	int isInstruction = seL4_GetMR(2);		
     /* Check whether instruction fault or data fault */
+    printf("[App #%d] ", badge);
     if (isInstruction) {
         /* Instruction fault */
         printf("Instruction fault - ");
@@ -220,7 +221,7 @@ void syscall_loop(seL4_CPtr ep) {
     seL4_MessageInfo_t message;
     while (1) {
         setjmp(syscall_loop_entry);
-        printf("sysloop\n");
+        /* printf("sysloop\n"); */
         message = seL4_Wait(ep, &badge);
         label = seL4_MessageInfo_get_label(message);
         if (badge & IRQ_EP_BADGE) {
@@ -234,11 +235,13 @@ void syscall_loop(seL4_CPtr ep) {
 
         } else if (label == seL4_VMFault) {
             /* Page fault */
+            curproc = PCB_table[badge];
             start_coroutine(&vm_fault_handler, badge,
                             seL4_MessageInfo_get_length(message) - 1, NULL);
 
         } else if (label == seL4_NoFault) {
             /* System call */
+            curproc = PCB_table[badge];
             start_coroutine(&handle_syscall, badge,
                             seL4_MessageInfo_get_length(message) - 1, NULL);
         } else {

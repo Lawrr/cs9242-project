@@ -3,6 +3,6 @@
 
 #include <process.h>
 
-void console_init(struct vnode **vnode, struct PCB *pcb);
+void console_init(struct vnode **vnode);
 
 #endif
