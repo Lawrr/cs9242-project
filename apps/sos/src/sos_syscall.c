@@ -226,7 +226,9 @@ void syscall_getdirent(seL4_CPtr reply_cap) {
         err = 1;
     } else {
         pin_frame_entry(uaddr, nbyte);
+        struct PCB *proc = curproc;
         err = vnode->ops->vop_getdirent(vnode, &uio);
+        curproc = proc;
         unpin_frame_entry(uaddr, nbyte);
     }
     if (err) {
@@ -273,7 +275,9 @@ void syscall_stat(seL4_CPtr reply_cap) {
         return;
     }
 
+    struct PCB *proc = curproc;
     err = vnode->ops->vop_stat(vnode, ustat_buf);
+    curproc = proc;
     unpin_frame_entry(ustat_buf, sizeof(sos_stat_t));
     if (err) {
         send_err(reply_cap, -1);
@@ -319,9 +323,9 @@ void syscall_write(seL4_CPtr reply_cap) {
         err = 1;
     } else {
         pin_frame_entry(uaddr, ubuf_size);
-
-        printf("In syscall write%x\n", vnode->ops->vop_write);
+        struct PCB *proc = curproc;
         err = vnode->ops->vop_write(vnode, &uio);
+        curproc = proc;
         unpin_frame_entry(uaddr, ubuf_size);
         entry->offset = uio.offset;
     }
@@ -329,7 +333,6 @@ void syscall_write(seL4_CPtr reply_cap) {
         send_err(reply_cap, -1);
         return;
     }
-    printf("After syscall write\n");
     /* Reply */
     seL4_SetMR(0, uio.size - uio.remaining);
     send_reply(reply_cap);
@@ -370,7 +373,9 @@ void syscall_read(seL4_CPtr reply_cap) {
         err = 1;
     } else {
         pin_frame_entry(uaddr, ubuf_size);
+        struct PCB *proc = curproc;
         err = vnode->ops->vop_read(vnode, &uio);
+        curproc = proc;
         unpin_frame_entry(uaddr, ubuf_size);
         entry->offset = uio.offset;
     }
@@ -426,7 +431,10 @@ void syscall_open(seL4_CPtr reply_cap) {
     }
 
     struct vnode *ret_vnode;
+
+    struct PCB *proc = curproc;
     err = vfs_open((char *) path_sos_vaddr, sos_access_mode, &ret_vnode);
+    curproc = proc;
 
     if (err) {
         seL4_SetMR(0, -1);
@@ -483,7 +491,9 @@ void syscall_close(seL4_CPtr reply_cap) {
     of_table[ofd].ref_count--;
 
     if (of_table[ofd].ref_count == 0) {
+        struct PCB *proc = curproc;
         vfs_close(of_table[ofd].vnode, of_table[ofd].file_info.st_fmode);
+        curproc = proc;
         of_table[ofd].file_info.st_fmode = 0;
         of_table[ofd].vnode = NULL;
         ofd_count--;
