@@ -110,7 +110,7 @@ static void of_table_init() {
     /* Note: Below line is not needed. Client must explicitly open STDIN */
     //of_table[STDIN].vnode = console_vnode;
     //of_table[STDIN].file_info.st_fmode = FM_READ;
-    
+
     of_table[STDOUT].vnode = console_vnode;
     of_table[STDOUT].file_info.st_fmode = FM_WRITE;
     ofd_count++;
