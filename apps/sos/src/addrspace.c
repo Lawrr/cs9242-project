@@ -125,7 +125,7 @@ int as_destroy(struct app_addrspace *as) {
                     free_swap_index(as->swap_table[i][j].swap_index);
                 } else {
                     seL4_Word sos_vaddr = PAGE_ALIGN_4K(as->page_table[i][j].sos_vaddr);
-                    err = sos_unmap_page((i << 20) | (j << 10), as);
+                    err = sos_unmap_page(sos_vaddr, as);
                     conditional_panic(err, "Could not unmap\n");
 
                     frame_free(sos_vaddr);
