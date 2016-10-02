@@ -160,7 +160,7 @@ int process_new(char *app_name, seL4_CPtr fault_ep) {
     context.sp = PROCESS_STACK_TOP;
     seL4_TCB_WriteRegisters(proc->tcb_cap, 1, 0, 2, &context);
 
-    proc->stime = time_stamp();
+    proc->stime = time_stamp()/1000;
     // TODO do we need strnlen?
     proc->app_name = malloc(strlen(app_name));
     strcpy(proc->app_name, app_name);

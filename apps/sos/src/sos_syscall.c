@@ -541,7 +541,7 @@ void syscall_process_create(seL4_CPtr reply_cap,seL4_Word badge) {
 
 void syscall_process_delete(seL4_CPtr reply_cap, seL4_Word badge) {
     seL4_Word pid = seL4_GetMR(1);
-    int parent = curproc->parent;
+    int parent = process_status(pid)->parent;
 	struct PCB * pcb = process_status(parent);
     struct PCB * cpcb = process_status(pid);
     if (cpcb->wait != -1){
@@ -550,8 +550,6 @@ void syscall_process_delete(seL4_CPtr reply_cap, seL4_Word badge) {
         if (pcb != NULL && pcb->wait == pid) 
             set_resume(pcb->coroutine_id);
     }
-
-
 
 	int err = process_destroy(pid);
     if (pid != badge) {

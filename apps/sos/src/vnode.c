@@ -371,8 +371,8 @@ static int vnode_stat(struct vnode *vnode, sos_stat_t *stat) {
         buffer[0] = fattr->type;
         buffer[1] = fattr->mode;
         buffer[2] = fattr->size;
-        buffer[3] = fattr->ctime.seconds * 1000 + fattr->ctime.seconds / 1000;
-        buffer[4] = fattr->atime.seconds * 1000 + fattr->atime.seconds / 1000;
+        buffer[3] = fattr->ctime.seconds * 1000 + fattr->ctime.useconds / 1000;
+        buffer[4] = fattr->atime.seconds * 1000 + fattr->atime.useconds / 1000;
 
         if (PAGE_ALIGN_4K(uaddr + sizeof(stat)) != PAGE_ALIGN_4K(uaddr)) {
             seL4_Word sos_vaddr_next;
