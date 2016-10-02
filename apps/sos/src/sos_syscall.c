@@ -557,5 +557,48 @@ void syscall_process_wait(seL4_CPtr reply_cap) {
 }
 
 void syscall_process_status(seL4_CPtr reply_cap) {
+	sos_process_t *uaddr = seL4_GetMR(1);
+	seL4_Word max = seL4_GetMR(2);
 
+    seL4_Word size = sizeof(sos_process_t) *max;
+    seL4_Word sos_vaddr;	
+    int  pid = 0;
+
+	sos_process_t buffer; 
+    pin_frame_entry(uaddr, size);
+	for (int i = 0; i < max && pid < MAX_PROCESS; i++){
+    	struct PCB* pcb;
+		do {
+           pcb = process_status(pid++); 
+		}	while (pcb == NULL);
+				
+	    buffer.pid = pid - 1;
+	    buffer.size = pcb->addrspace->page_count;
+		buffer.stime = pcb->stime;
+		strcpy(buffer.command,pcb->app_name);
+	    
+		seL4_Word sos_vaddr;
+        int err = sos_map_page((&uaddr[i]), &sos_vaddr, curproc);
+        /* Add offset */
+        sos_vaddr = PAGE_ALIGN_4K(sos_vaddr);
+        seL4_Word cast_uaddr = (seL4_Word)(&uaddr[i]);
+        sos_vaddr |= (cast_uaddr & PAGE_MASK_4K);
+	    
+	    if (PAGE_ALIGN_4K(cast_uaddr + sizeof(sos_process_t)) != PAGE_ALIGN_4K(cast_uaddr)) {
+            seL4_Word sos_vaddr_next;
+            int err = sos_map_page(PAGE_ALIGN_4K(cast_uaddr + sizeof(sos_process_t)), &sos_vaddr_next, curproc);
+
+            sos_vaddr_next = PAGE_ALIGN_4K(sos_vaddr);
+
+            seL4_Word first_half = (PAGE_ALIGN_4K(cast_uaddr + sizeof(sos_process_t)) - (seL4_Word) cast_uaddr);
+
+            /* Boundary */
+            memcpy(sos_vaddr, &buffer, first_half);
+            memcpy(sos_vaddr_next, &buffer + first_half, sizeof(sos_process_t) - first_half);
+          
+        }   else{
+            memcpy(sos_vaddr,&buffer,sizeof(sos_process_t));         
+		}	
+	}
+    unpin_frame_entry(uaddr, size);
 }

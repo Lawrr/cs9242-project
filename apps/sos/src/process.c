@@ -6,6 +6,7 @@
 #include "process.h"
 #include "addrspace.h"
 #include <utils/page.h>
+#include <clock/clock.h>
 #define verbose 5
 #include <assert.h>
 #include <sys/panic.h>
@@ -156,10 +157,20 @@ int process_new(char *app_name, seL4_CPtr fault_ep) {
     context.sp = PROCESS_STACK_TOP;
     seL4_TCB_WriteRegisters(proc->tcb_cap, 1, 0, 2, &context);
 
-    return id;
+	proc->stime = time_stamp(); 
+    proc->app_name = malloc(strlen(app_name));
+    proc->app_name = strcpy(proc->app_name,app_name);	
+	return id;
 }
 
 int process_destroy(seL4_Word pid) {
     struct PCB *pcb = PCB_table[pid];
-    return as_destroy(pcb->addrspace);
+    int err =  as_destroy(pcb->addrspace);
+	if (err) return err;
+	free(pcb);
+	return err;
+}
+
+struct PCB* process_status(int pid){
+    return PCB_table[pid]; 
 }
