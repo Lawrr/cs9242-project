@@ -613,9 +613,7 @@ void syscall_process_status(seL4_CPtr reply_cap) {
         buffer.pid = pid - 1;
         buffer.size = pcb->addrspace->page_count;
         buffer.stime = pcb->stime;
-        printf("hi\n");
         strcpy(buffer.command, pcb->app_name);
-        printf("hello\n");
 
         seL4_Word sos_vaddr;
         int err = sos_map_page(&uaddr[procs], &sos_vaddr, curproc);

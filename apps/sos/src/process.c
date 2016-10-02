@@ -91,11 +91,9 @@ int process_new(char *app_name, seL4_CPtr fault_ep, int parent_pid) {
             seL4_AllRights);
     conditional_panic(err, "Could not define IPC buffer region");
 
-    printf("mapping IPC buffer\n");
     /* Create an IPC buffer */
     err = sos_map_page(PROCESS_IPC_BUFFER,
             &proc->ipc_buffer_addr, proc);
-    printf("finish mapping ipc buffer\n");
     proc->ipc_buffer_cap = get_cap(proc->ipc_buffer_addr);
     conditional_panic(err, "No memory for ipc buffer\n");
     /* TODO dud asid number
@@ -138,7 +136,6 @@ int process_new(char *app_name, seL4_CPtr fault_ep, int parent_pid) {
     elf_base = cpio_get_file(_cpio_archive, app_name, &elf_size);
     conditional_panic(!elf_base, "Unable to locate cpio header");
 
-    printf("Before elf loading####################\n");
     /* load the elf image */
     err = elf_load(proc->vroot, proc, elf_base);
     conditional_panic(err, "Failed to load elf image");
