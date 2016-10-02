@@ -2,7 +2,7 @@
 #include <alloca.h>
 #include <sys/panic.h>
 #include <utils/page.h>
-
+#include "process.h"
 #include "coroutine.h"
 #include "frametable.h"
 
@@ -29,6 +29,8 @@ static int free_list[NUM_COROUTINES];
 static seL4_Word routine_args[NUM_COROUTINES][5];
 static char *routine_frames[NUM_COROUTINES];
 
+extern struct PCB * curproc;
+
 void coroutine_init() {
     int err;
     for (int i = 0; i < NUM_COROUTINES; i++) {
@@ -38,13 +40,15 @@ void coroutine_init() {
     }
 }
 
-yield() {
-    int id = setjmp(coroutines[curr_coroutine_id]);
+yield() { 
+    int pid = curproc->pid;
+    int id = setjmp(coroutines[curr_coroutine_id]); 
     if (id == 0) {
         /* First time */
         longjmp(syscall_loop_entry, 1);
     } else {
         /* Returning to coroutine's function */
+        curproc = process_status(pid);
         return;
     }
 

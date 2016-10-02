@@ -27,6 +27,7 @@ struct PCB {
     char *app_name;
     long *stime;
 
+    int pid;
     int wait;
     int coroutine_id;
     int parent;	

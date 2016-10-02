@@ -266,6 +266,7 @@ static int vnode_getdirent(struct vnode *vnode, struct uio *uio) {
         set_routine_arg(curr_coroutine_id, 1, curproc);
         nfs_readdir(&mnt_point, cookies, vnode_readdir_cb, curr_coroutine_id);
         yield();
+        if (curproc == NULL) return 0;
         int err = arg[0];
         cookies = arg[1];
 
@@ -346,7 +347,8 @@ static void vnode_readdir_cb(uintptr_t token, enum nfs_stat status,
 static int vnode_stat(struct vnode *vnode, sos_stat_t *stat) {
     nfs_lookup(&mnt_point, vnode->path, (nfs_lookup_cb_t) vnode_stat_cb, curr_coroutine_id);
     yield();
-
+    if (curproc == NULL) return 0;
+   
     int err = (int) arg[0];
     fattr_t *fattr = (fattr_t *) arg[1];
 
@@ -463,7 +465,9 @@ static int vnode_open(struct vnode *vnode, fmode_t mode) {
     nfs_lookup(&mnt_point, vnode->path, (nfs_lookup_cb_t) vnode_open_cb, curr_coroutine_id);
     set_routine_arg(curr_coroutine_id, 0, 1);
     yield();
+    if (curproc == NULL) return 0;
     int err = (int) arg[0];
+
 
     if (err == NFS_OK) {
         vnode->fh = (fhandle_t *) arg[1];
@@ -562,7 +566,7 @@ static int vnode_read(struct vnode *vnode, struct uio *uio) {
         set_routine_arg(curr_coroutine_id, 1, sos_vaddr);
 
         yield();
-
+        if (curproc == NULL) return 0;
         seL4_Word count = arg[0];
 
         buf_size -= count;
@@ -694,7 +698,7 @@ static int vnode_write(struct vnode *vnode, struct uio *uio) {
         }
 
         yield();
-
+        if (curproc == NULL) return 0;
         seL4_Word count = get_routine_arg(curr_coroutine_id, 1);
 
         buf_size -= count;
