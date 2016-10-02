@@ -22,7 +22,7 @@ struct PCB *PCB_table[MAX_PROCESS];
 
 static int curr_proc_id = 0;
 
-int process_new(char *app_name, seL4_CPtr fault_ep) {
+int process_new(char *app_name, seL4_CPtr fault_ep, int parent_pid) {
     int start_id = curr_proc_id;
     int id = -1;
     do {
@@ -40,7 +40,7 @@ int process_new(char *app_name, seL4_CPtr fault_ep) {
 
     struct PCB *proc = malloc(sizeof(struct PCB));
     proc->wait = -1;
-    
+
     if (proc == NULL) {
         conditional_panic(proc == NULL, "Out of memory for PCB\n");
         /* return -1; */
@@ -160,7 +160,8 @@ int process_new(char *app_name, seL4_CPtr fault_ep) {
     context.sp = PROCESS_STACK_TOP;
     seL4_TCB_WriteRegisters(proc->tcb_cap, 1, 0, 2, &context);
 
-    proc->stime = time_stamp()/1000;
+    proc->parent = parent_pid;
+    proc->stime = time_stamp() / 1000;
     // TODO do we need strnlen?
     proc->app_name = malloc(strlen(app_name));
     strcpy(proc->app_name, app_name);
@@ -173,6 +174,7 @@ int process_destroy(pid_t pid) {
     if (pcb == NULL) return -1;
     int err = as_destroy(pcb->addrspace);
     if (err) return err;
+    free(pcb->app_name);
     free(pcb);
     PCB_table[pid] = NULL;
     return 0;
