@@ -244,6 +244,7 @@ void syscall_loop(seL4_CPtr ep) {
     while (1) {
         setjmp(syscall_loop_entry); 
         resume();
+        
         message = seL4_Wait(ep, &badge);
         /* printf("sysloop - %d\n", badge); */
         label = seL4_MessageInfo_get_label(message);

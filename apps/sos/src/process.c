@@ -154,6 +154,7 @@ int process_new(char *app_name, seL4_CPtr fault_ep, int parent_pid) {
     memset(&context, 0, sizeof(context));
     context.pc = elf_getEntryPoint(elf_base);
     context.sp = PROCESS_STACK_TOP;
+    printf("%d\n",proc->pid);
     seL4_TCB_WriteRegisters(proc->tcb_cap, 1, 0, 2, &context);
 
     proc->wait = -1;

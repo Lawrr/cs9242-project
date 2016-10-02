@@ -577,6 +577,7 @@ void syscall_process_delete(seL4_CPtr reply_cap, seL4_Word badge) {
             parent_pcb->wait = child_pcb->wait;
             wait_pcb->parent = parent;
         } else if (parent_pcb->wait == pid) {
+            parent_pcb->wait = -1;
             set_resume(parent_pcb->coroutine_id);
         }
     }
