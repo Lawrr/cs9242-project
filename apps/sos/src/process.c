@@ -97,11 +97,6 @@ int process_new(char *app_name, seL4_CPtr fault_ep, int parent_pid) {
             &proc->ipc_buffer_addr, proc);
     proc->ipc_buffer_cap = get_cap(proc->ipc_buffer_addr);
     conditional_panic(err, "No memory for ipc buffer\n");
-    /* TODO dud asid number
-       err = get_app_cap(proc->ipc_buffer_addr,
-       proc->addrspace->page_table,
-       &proc->ipc_buffer_cap);
-       conditional_panic(err, "Can't get app cap");*/
 
     /* Copy the fault endpoint to the user app to enable IPC */
     user_ep_cap = cspace_mint_cap(proc->croot,
@@ -172,15 +167,34 @@ int process_new(char *app_name, seL4_CPtr fault_ep, int parent_pid) {
 }
 
 int process_destroy(pid_t pid) {
+    if (pid < 0 || pid >= MAX_PROCESS) return -1;
+
     pthread_spin_lock(&pcb_lock);
+
     struct PCB *pcb = PCB_table[pid];
     if (pcb == NULL) return -1;
-    int err = as_destroy(pcb->addrspace);
-    if (err) return err;
+
+    /* Addrspace */
+    as_destroy(pcb->addrspace);
+
+    /* TCB */
+    cspace_delete_cap(cur_cspace, pcb->tcb_cap);
+    ut_free(pcb->tcb_addr, seL4_TCBBits);
+
+    /* VSpace */
+    cspace_delete_cap(cur_cspace, pcb->vroot);
+    ut_free(pcb->vroot_addr, seL4_PageDirBits);
+
+    /* CSpace */
+    cspace_destroy(pcb->croot);
+
+    /* PCB */
     free(pcb->app_name);
     free(pcb);
+
     PCB_table[pid] = NULL;
     pthread_spin_unlock(&pcb_lock);
+
     return 0;
 }
 

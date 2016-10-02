@@ -119,6 +119,8 @@ struct region *get_region(seL4_Word uaddr) {
 }
 
 int as_destroy(struct app_addrspace *as) {
+    if (as == NULL) return -1;
+
     int err;
 
     /* Free page table and swap table */

@@ -555,6 +555,15 @@ void syscall_process_create(seL4_CPtr reply_cap, seL4_Word badge) {
 void syscall_process_delete(seL4_CPtr reply_cap, seL4_Word badge) {
     seL4_Word pid = seL4_GetMR(1);
 
+    /* Validate pid */
+    if (pid < 0 || pid >= MAX_PROCESS) {
+        send_err(reply_cap, -1);
+        return;
+    } else if (process_status(pid) == NULL) {
+        send_err(reply_cap, -1);
+        return;
+    }
+
     int parent = process_status(pid)->parent;
     struct PCB *parent_pcb = NULL;
     if (parent >= 0) {
@@ -572,15 +581,13 @@ void syscall_process_delete(seL4_CPtr reply_cap, seL4_Word badge) {
         }
     }
 
-    int err = process_destroy(pid);
-    if (err) {
-        send_err(reply_cap, -1);
-        return;
-    }
+    process_destroy(pid);
+
     if (pid != badge) {
-        seL4_SetMR(0, err);
+        seL4_SetMR(0, 0);
         send_reply(reply_cap);
     }
+
     return;
 }
 
