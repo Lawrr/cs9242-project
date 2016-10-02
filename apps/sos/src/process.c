@@ -171,6 +171,7 @@ int process_destroy(pid_t pid) {
     if (pcb == NULL) return -1;
     int err = as_destroy(pcb->addrspace);
     if (err) return err;
+    free(pcb->app_name);
     free(pcb);
     PCB_table[pid] = NULL;
     return 0;

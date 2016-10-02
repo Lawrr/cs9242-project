@@ -19,6 +19,7 @@ extern struct oft_entry of_table[MAX_OPEN_FILE];
 extern seL4_Word ofd_count;
 extern seL4_Word curr_free_ofd;
 extern seL4_CPtr _sos_ipc_ep_cap;
+extern seL4_Word curr_coroutine_id;
 
 static pthread_spinlock_t of_lock;
 
@@ -512,7 +513,7 @@ void syscall_close(seL4_CPtr reply_cap) {
     send_reply(reply_cap);
 }
 
-void syscall_process_create(seL4_CPtr reply_cap,seL4_Word badge) {
+void syscall_process_create(seL4_CPtr reply_cap, seL4_Word badge) {
     seL4_Word path_uaddr = seL4_GetMR(1);
 
     if (validate_uaddr(reply_cap, path_uaddr, 0)) return;
@@ -530,28 +531,36 @@ void syscall_process_create(seL4_CPtr reply_cap,seL4_Word badge) {
     unpin_frame_entry(path_uaddr, MAX_PATH_LEN);
     /* TODO something needs to be done with this err */
 
-    err = process_new(path_sos_vaddr, _sos_ipc_ep_cap);
-   
-    struct PCB * pcb = process_status(err);
-	pcb -> parent = badge; 
-	seL4_SetMR(0, err);
+    int new_pid = process_new(path_sos_vaddr, _sos_ipc_ep_cap);
+    if (new_pid < 0) {
+        send_err(reply_cap, -1);
+        return;
+    }
+
+    struct PCB *pcb = process_status(new_pid);
+    pcb->parent = badge;
+    seL4_SetMR(0, new_pid);
     send_reply(reply_cap);
+
     return;
 }
 
 void syscall_process_delete(seL4_CPtr reply_cap, seL4_Word badge) {
     seL4_Word pid = seL4_GetMR(1);
     int parent = curproc->parent;
-	struct PCB * pcb = process_status(parent);
-    
-    printf("pcb%d\n",pcb);
-    if (pcb != NULL) printf("wait:%d\n",pcb->wait);
-    if (pcb != NULL && pcb->wait == pid){
-       
-	   set_resume(pcb->coroutine_id);
-	}
+    struct PCB * pcb = process_status(parent);
 
-	int err = process_destroy(pid);
+    printf("pcb%d\n", pcb);
+    if (pcb != NULL) printf("wait:%d\n", pcb->wait);
+    if (pcb != NULL && pcb->wait == pid) {
+        set_resume(pcb->coroutine_id);
+    }
+
+    int err = process_destroy(pid);
+    if (err) {
+        send_err(reply_cap, -1);
+        return;
+    }
     if (pid != badge) {
         seL4_SetMR(0, err);
         send_reply(reply_cap);
@@ -568,11 +577,10 @@ void syscall_process_id(seL4_CPtr reply_cap, seL4_Word badge) {
 
 void syscall_process_wait(seL4_CPtr reply_cap) {
     int pid = seL4_GetMR(1);
-	curproc -> wait = pid;
-    extern seL4_Word curr_coroutine_id;
-    curproc -> coroutine_id = curr_coroutine_id;
-	yield();
-	send_reply(reply_cap);
+    curproc->wait = pid;
+    curproc->coroutine_id = curr_coroutine_id;
+    yield();
+    send_reply(reply_cap);
     return;
 }
 

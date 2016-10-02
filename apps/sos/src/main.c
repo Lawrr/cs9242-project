@@ -168,7 +168,7 @@ void handle_syscall(seL4_Word badge, int num_args) {
             break;
 
         case SOS_PROCESS_CREATE_SYSCALL:
-            syscall_process_create(reply_cap,badge);
+            syscall_process_create(reply_cap, badge);
             break;
 
         case SOS_PROCESS_DELETE_SYSCALL:
@@ -243,7 +243,7 @@ void syscall_loop(seL4_CPtr ep) {
     while (1) {
         setjmp(syscall_loop_entry); 
         resume();
-		message = seL4_Wait(ep, &badge);
+        message = seL4_Wait(ep, &badge);
         /* printf("sysloop - %d\n", badge); */
         label = seL4_MessageInfo_get_label(message);
         if (badge & IRQ_EP_BADGE) {
@@ -269,7 +269,6 @@ void syscall_loop(seL4_CPtr ep) {
         } else {
             printf("Rootserver got an unknown message\n");
         }
-
     }
 }
 
