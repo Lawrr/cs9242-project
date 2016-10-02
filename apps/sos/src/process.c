@@ -1,5 +1,6 @@
 #include <cspace/cspace.h>
 #include <cpio/cpio.h>
+#include <pthread.h>
 
 #include "vmem_layout.h"
 #include "file.h"
@@ -22,7 +23,10 @@ struct PCB *PCB_table[MAX_PROCESS];
 
 static int curr_proc_id = 0;
 
+static pthread_spinlock_t pcb_lock;
+
 int process_new(char *app_name, seL4_CPtr fault_ep, int parent_pid) {
+    pthread_spin_lock(&pcb_lock);
     int start_id = curr_proc_id;
     int id = -1;
     do {
@@ -32,6 +36,7 @@ int process_new(char *app_name, seL4_CPtr fault_ep, int parent_pid) {
         }
         curr_proc_id = (curr_proc_id + 1) % MAX_PROCESS;
     } while (start_id != curr_proc_id);
+    pthread_spin_unlock(&pcb_lock);
 
     if (id != -1) {
         conditional_panic(id == -1, "Max processes\n");
@@ -39,8 +44,6 @@ int process_new(char *app_name, seL4_CPtr fault_ep, int parent_pid) {
     }
 
     struct PCB *proc = malloc(sizeof(struct PCB));
-    proc->wait = -1;
-
     if (proc == NULL) {
         conditional_panic(proc == NULL, "Out of memory for PCB\n");
         /* return -1; */
@@ -160,6 +163,7 @@ int process_new(char *app_name, seL4_CPtr fault_ep, int parent_pid) {
     context.sp = PROCESS_STACK_TOP;
     seL4_TCB_WriteRegisters(proc->tcb_cap, 1, 0, 2, &context);
 
+    proc->wait = -1;
     proc->parent = parent_pid;
     proc->stime = time_stamp() / 1000;
     // TODO do we need strnlen?
@@ -170,6 +174,7 @@ int process_new(char *app_name, seL4_CPtr fault_ep, int parent_pid) {
 }
 
 int process_destroy(pid_t pid) {
+    pthread_spin_lock(&pcb_lock);
     struct PCB *pcb = PCB_table[pid];
     if (pcb == NULL) return -1;
     int err = as_destroy(pcb->addrspace);
@@ -177,6 +182,7 @@ int process_destroy(pid_t pid) {
     free(pcb->app_name);
     free(pcb);
     PCB_table[pid] = NULL;
+    pthread_spin_unlock(&pcb_lock);
     return 0;
 }
 
