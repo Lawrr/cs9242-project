@@ -567,10 +567,12 @@ void syscall_process_id(seL4_CPtr reply_cap, seL4_Word badge) {
 
 void syscall_process_wait(seL4_CPtr reply_cap) {
     int pid = seL4_GetMR(1);
-	curproc -> wait = pid;
-    extern seL4_Word curr_coroutine_id;
-    curproc -> coroutine_id = curr_coroutine_id;
-	yield();
+	if (process_status(pid) != NULL){
+        curproc -> wait = pid;
+        extern seL4_Word curr_coroutine_id;
+        curproc -> coroutine_id = curr_coroutine_id;
+        yield();
+    }
 	send_reply(reply_cap);
     return;
 }
