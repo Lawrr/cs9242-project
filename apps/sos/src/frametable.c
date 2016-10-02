@@ -6,6 +6,7 @@
 #include <cspace/cspace.h>
 #include <utils/page.h>
 #include <fcntl.h>
+#include <pthread.h>
 
 #include "ut_manager/ut.h"
 #include "mapping.h"
@@ -83,6 +84,8 @@ static int32_t free_index;
 struct vnode *swap_vnode;
 
 uint32_t swap_victim_index = 0;
+
+static pthread_spinlock_t ft_lock;
 
 void frame_init(seL4_Word high, seL4_Word low) {
     int32_t err;
@@ -296,6 +299,7 @@ int32_t frame_alloc(seL4_Word *vaddr) {
     int err;
     seL4_Word frame_vaddr;
 
+    pthread_spin_lock(&ft_lock);
     if (free_index == -1) {
         /* Free list is empty but there is still memory */
 
@@ -315,6 +319,7 @@ int32_t frame_alloc(seL4_Word *vaddr) {
             err = swap_out();
             conditional_panic(err, "Swap out failed\n");
             *vaddr = get_free_frame();
+            pthread_spin_unlock(&ft_lock);
             return 0;
         }
 
@@ -328,6 +333,7 @@ int32_t frame_alloc(seL4_Word *vaddr) {
         if (err) {
             ut_free(frame_paddr, seL4_PageBits);
             *vaddr = NULL;
+            pthread_spin_unlock(&ft_lock);
             return 2;
         }
 
@@ -342,6 +348,7 @@ int32_t frame_alloc(seL4_Word *vaddr) {
             cspace_delete_cap(cur_cspace, frame_cap);
             ut_free(frame_paddr, seL4_PageBits);
             *vaddr = NULL;
+            pthread_spin_unlock(&ft_lock);
             return 3;
         }
 
@@ -354,6 +361,7 @@ int32_t frame_alloc(seL4_Word *vaddr) {
         /* Reuse a frame in the free list */
         frame_vaddr = get_free_frame();
     }
+    pthread_spin_unlock(&ft_lock);
 
     /* Clear frame */
     memset(frame_vaddr, 0, PAGE_SIZE);
@@ -370,8 +378,10 @@ int32_t frame_free(seL4_Word vaddr) {
 
     /* Set free list index */
     frame_table[index].mask = 0;
+    pthread_spin_lock(&ft_lock);
     frame_table[index].next_index = free_index;
     free_index = index;
+    pthread_spin_unlock(&ft_lock);
 
     return 0;
 }

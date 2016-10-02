@@ -23,7 +23,10 @@
 #include <sos.h>
 
 int main(void) {
-    printf("\nHello World!\n");
+    for (int i = 0; i < 1000; i++) {
+        printf("\nHello World %d!\n", i);
+        sleep(1);
+    }
 
     return 0;
 }

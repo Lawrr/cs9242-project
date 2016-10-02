@@ -583,16 +583,11 @@ void syscall_process_id(seL4_CPtr reply_cap, seL4_Word badge) {
 
 void syscall_process_wait(seL4_CPtr reply_cap) {
     int pid = seL4_GetMR(1);
-	if (process_status(pid) != NULL){
-        curproc -> wait = pid;
-        extern seL4_Word curr_coroutine_id;
-        curproc -> coroutine_id = curr_coroutine_id;
+    if (process_status(pid) != NULL){
+        curproc->wait = pid;
+        curproc->coroutine_id = curr_coroutine_id;
         yield();
     }
-	send_reply(reply_cap);
-    curproc->wait = pid;
-    curproc->coroutine_id = curr_coroutine_id;
-    yield();
     send_reply(reply_cap);
     return;
 }
@@ -619,9 +614,7 @@ void syscall_process_status(seL4_CPtr reply_cap) {
         buffer.pid = pid - 1;
         buffer.size = pcb->addrspace->page_count;
         buffer.stime = pcb->stime;
-        printf("hi\n");
         strcpy(buffer.command, pcb->app_name);
-        printf("hello\n");
 
         seL4_Word sos_vaddr;
         int err = sos_map_page(&uaddr[procs], &sos_vaddr, curproc);
