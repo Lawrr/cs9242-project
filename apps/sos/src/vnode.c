@@ -266,6 +266,7 @@ static int vnode_getdirent(struct vnode *vnode, struct uio *uio) {
         set_routine_arg(curr_coroutine_id, 1, curproc);
         nfs_readdir(&mnt_point, cookies, vnode_readdir_cb, curr_coroutine_id);
         yield();
+
         if (curproc == NULL) return 0;
         int err = arg[0];
         cookies = arg[1];

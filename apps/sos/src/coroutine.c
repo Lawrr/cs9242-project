@@ -48,6 +48,7 @@ yield() {
         longjmp(syscall_loop_entry, 1);
     } else {
         /* Returning to coroutine's function */
+        
         curproc = process_status(pid);
         return;
     }

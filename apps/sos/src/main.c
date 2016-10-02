@@ -265,6 +265,7 @@ void syscall_loop(seL4_CPtr ep) {
         } else if (label == seL4_NoFault) {
             /* System call */
             curproc = PCB_table[badge];
+            
             start_coroutine(&handle_syscall, badge,
                             seL4_MessageInfo_get_length(message) - 1, NULL);
         } else {

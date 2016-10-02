@@ -26,6 +26,7 @@
 #define verbose 0
 #include <sys/debug.h>
 #include <sys/panic.h>
+#include "process.h"
 
 /* Minimum of two values. */
 #define MIN(a, b) (((a)<(b))?(a):(b))
@@ -175,7 +176,8 @@ zero-filling a newly allocated frame.
             }
         } else {
             sos_map_page(dst, &sos_vaddr, pcb);
-            if (curproc == NULL) return;
+            extern struct PCB * curproc;
+            if (curproc == NULL) return 0;
             nbytes = PAGESIZE - (dst & PAGEMASK);
             if (pos < file_size) {
                 memcpy((void*) (sos_vaddr | ((dst << LOWER_BITS_SHIFT) >> LOWER_BITS_SHIFT)),

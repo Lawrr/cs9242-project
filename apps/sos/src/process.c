@@ -49,6 +49,7 @@ int process_new(char *app_name, seL4_CPtr fault_ep, int parent_pid) {
         /* return -1; */
     }
     PCB_table[id] = proc;
+    proc->pid = id;
 
     /* Set first proc as curproc */
     // TODO when do we change value of curproc?

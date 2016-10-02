@@ -121,7 +121,7 @@ int console_read(struct vnode *vnode, struct uio *uio) {
     console_uio = uio;
 
     yield();
-  
+ 
     console_vnode = NULL;
     console_uio = NULL;
 
