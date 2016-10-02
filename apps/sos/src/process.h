@@ -34,7 +34,7 @@ struct PCB {
     struct app_addrspace *addrspace;
 };
 
-int process_new(char* app_name, seL4_CPtr fault_ep);
+int process_new(char* app_name, seL4_CPtr fault_ep, int parent_pid);
 
 int process_destroy(pid_t pid);
 

@@ -22,7 +22,7 @@ struct PCB *PCB_table[MAX_PROCESS];
 
 static int curr_proc_id = 0;
 
-int process_new(char *app_name, seL4_CPtr fault_ep) {
+int process_new(char *app_name, seL4_CPtr fault_ep, int parent_pid) {
     int start_id = curr_proc_id;
     int id = -1;
     do {
@@ -160,6 +160,7 @@ int process_new(char *app_name, seL4_CPtr fault_ep) {
     context.sp = PROCESS_STACK_TOP;
     seL4_TCB_WriteRegisters(proc->tcb_cap, 1, 0, 2, &context);
 
+    proc->parent = parent_pid;
     proc->stime = time_stamp() / 1000;
     // TODO do we need strnlen?
     proc->app_name = malloc(strlen(app_name));

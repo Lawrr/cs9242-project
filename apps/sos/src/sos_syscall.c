@@ -531,14 +531,13 @@ void syscall_process_create(seL4_CPtr reply_cap, seL4_Word badge) {
     unpin_frame_entry(path_uaddr, MAX_PATH_LEN);
     /* TODO something needs to be done with this err */
 
-    int new_pid = process_new(path_sos_vaddr, _sos_ipc_ep_cap);
+    int new_pid = process_new(path_sos_vaddr, _sos_ipc_ep_cap, badge);
     if (new_pid < 0) {
         send_err(reply_cap, -1);
         return;
     }
 
     struct PCB *pcb = process_status(new_pid);
-    pcb->parent = badge;
     seL4_SetMR(0, new_pid);
     send_reply(reply_cap);
 
@@ -549,13 +548,18 @@ void syscall_process_delete(seL4_CPtr reply_cap, seL4_Word badge) {
     seL4_Word pid = seL4_GetMR(1);
 
     int parent = process_status(pid)->parent;
-    struct PCB *parent_pcb = process_status(parent);
+    struct PCB *parent_pcb = NULL;
+    if (parent >= 0) {
+        parent_pcb = process_status(parent);
+    }
     struct PCB *child_pcb = process_status(pid);
-    if (child_pcb->wait != -1) {
-        parent_pcb->wait = child_pcb->wait;
-    } else {
-        /* Resume */
-        if (parent_pcb != NULL && parent_pcb->wait == pid) {
+
+    if (parent_pcb != NULL) {
+        if (child_pcb->wait != -1) {
+            struct PCB *wait_pcb = process_status(child_pcb->wait);
+            parent_pcb->wait = child_pcb->wait;
+            wait_pcb->parent = parent;
+        } else if (parent_pcb->wait == pid) {
             set_resume(parent_pcb->coroutine_id);
         }
     }
