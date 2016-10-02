@@ -87,7 +87,7 @@ extern char _cpio_archive[];
 extern fhandle_t mnt_point;
 
 extern struct PCB *curproc;
-extern struct PCB *PCB_table[MAX_PROCESS];
+extern struct PCB *PCB_table[MAX_PROCESSES];
 
 const seL4_BootInfo* _boot_info;
 

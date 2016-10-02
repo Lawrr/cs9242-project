@@ -6,7 +6,7 @@
 #include "coroutine.h"
 #include "frametable.h"
 
-#define NUM_COROUTINES 8
+#define NUM_COROUTINES MAX_PROCESSES
 
 /* jmp_buf for syscall loop */
 extern jmp_buf syscall_loop_entry;

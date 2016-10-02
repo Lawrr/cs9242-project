@@ -6,7 +6,6 @@
 #include "sos.h"
 
 #define MAX_OPEN_FILE 255
-#define MAX_PROCESS 255
 
 #define STDOUT 0
 

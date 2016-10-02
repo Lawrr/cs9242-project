@@ -19,7 +19,7 @@ extern struct oft_entry of_table[MAX_OPEN_FILE];
 
 struct PCB *curproc;
 
-struct PCB *PCB_table[MAX_PROCESS];
+struct PCB *PCB_table[MAX_PROCESSES];
 
 static int curr_proc_id = 0;
 
@@ -34,7 +34,7 @@ int process_new(char *app_name, seL4_CPtr fault_ep, int parent_pid) {
             id = curr_proc_id;
             break;
         }
-        curr_proc_id = (curr_proc_id + 1) % MAX_PROCESS;
+        curr_proc_id = (curr_proc_id + 1) % MAX_PROCESSES;
     } while (start_id != curr_proc_id);
     pthread_spin_unlock(&pcb_lock);
 
@@ -168,7 +168,7 @@ int process_new(char *app_name, seL4_CPtr fault_ep, int parent_pid) {
 }
 
 int process_destroy(pid_t pid) {
-    if (pid < 0 || pid >= MAX_PROCESS) return -1;
+    if (pid < 0 || pid >= MAX_PROCESSES) return -1;
 
     pthread_spin_lock(&pcb_lock);
 

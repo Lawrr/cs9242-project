@@ -556,7 +556,7 @@ void syscall_process_delete(seL4_CPtr reply_cap, seL4_Word badge) {
     seL4_Word pid = seL4_GetMR(1);
 
     /* Validate pid */
-    if (pid < 0 || pid >= MAX_PROCESS) {
+    if (pid < 0 || pid >= MAX_PROCESSES) {
         send_err(reply_cap, -1);
         return;
     } else if (process_status(pid) == NULL) {
@@ -618,12 +618,12 @@ void syscall_process_status(seL4_CPtr reply_cap) {
     int procs = 0;
 
     pin_frame_entry(uaddr, size);
-    for (procs = 0; procs < max_req_procs && pid < MAX_PROCESS; procs++) {
+    for (procs = 0; procs < max_req_procs && pid < MAX_PROCESSES; procs++) {
         struct PCB *pcb;
         /* Find a valid process */
         do {
             pcb = process_status(pid++);
-        } while (pcb == NULL && pid < MAX_PROCESS);
+        } while (pcb == NULL && pid < MAX_PROCESSES);
         if (pcb == NULL) break;
 
         /* Set buffer data */

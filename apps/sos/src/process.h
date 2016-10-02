@@ -12,6 +12,8 @@
  * be stored in the clients cspace. */
 #define USER_EP_CAP          (1)
 
+#define MAX_PROCESSES 255
+
 struct PCB {
     seL4_Word tcb_addr;
     seL4_TCB tcb_cap;

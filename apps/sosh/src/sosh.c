@@ -104,7 +104,7 @@ static int cp(int argc, char **argv) {
     return 0;
 }
 
-#define MAX_PROCESSES 10
+#define MAX_PROCESSES 32
 
 static int ps(int argc, char **argv) {
     sos_process_t *process;
