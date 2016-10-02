@@ -284,7 +284,7 @@ void syscall_stat(seL4_CPtr reply_cap) {
     err = vnode->ops->vop_stat(vnode, ustat_buf);
     unpin_frame_entry(ustat_buf, sizeof(sos_stat_t));
     if (curproc == NULL) return;
-    
+
     if (err) {
         send_err(reply_cap, -1);
         return;
@@ -429,9 +429,9 @@ void syscall_open(seL4_CPtr reply_cap) {
     pin_frame_entry(uaddr, MAX_PATH_LEN);
     err = get_safe_path(path_sos_vaddr, uaddr, sos_vaddr, MAX_PATH_LEN);
     unpin_frame_entry(uaddr, MAX_PATH_LEN);
-    
+
     if (curproc == NULL) return;
-    
+
     if (err) {
         pthread_spin_unlock(&of_lock);
         send_err(reply_cap, -1);
@@ -600,7 +600,7 @@ void syscall_process_id(seL4_CPtr reply_cap, seL4_Word badge) {
 
 void syscall_process_wait(seL4_CPtr reply_cap) {
     int pid = seL4_GetMR(1);
-    if (process_status(pid) != NULL){
+    if (process_status(pid) != NULL) {
         curproc->wait = pid;
         curproc->coroutine_id = curr_coroutine_id;
         yield();
@@ -635,7 +635,7 @@ void syscall_process_status(seL4_CPtr reply_cap) {
 
         seL4_Word sos_vaddr;
         int err = sos_map_page(&uaddr[procs], &sos_vaddr, curproc);
-        
+
         if (curproc == NULL) return 0;
         /* Add offset */
         sos_vaddr = PAGE_ALIGN_4K(sos_vaddr);

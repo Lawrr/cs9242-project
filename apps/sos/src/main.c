@@ -186,7 +186,7 @@ void handle_syscall(seL4_Word badge, int num_args) {
         case SOS_PROCESS_STATUS_SYSCALL:
             syscall_process_status(reply_cap);
             break;
-         
+
         default:
             printf("Unknown syscall %d\n", syscall_number);
             /* we don't want to reply to an unknown syscall */
@@ -203,8 +203,8 @@ static void vm_fault_handler(seL4_Word badge, int num_args) {
 
     int err;
     seL4_Word sos_vaddr, map_vaddr, instruction_vaddr;
-    
-	int isInstruction = seL4_GetMR(2);		
+
+    int isInstruction = seL4_GetMR(2);
     /* Check whether instruction fault or data fault */
     printf("[App #%d] ", badge);
     if (isInstruction) {

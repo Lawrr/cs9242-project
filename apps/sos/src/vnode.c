@@ -231,7 +231,7 @@ static struct vnode *vnode_new(char *path) {
     vnode->fattr = NULL;
 
     if (dev_id != -1) {
-        /* Handle device */ 
+        /* Handle device */
         vnode->ops = dev_list[dev_id].ops;
     } else {
         /* Handle file */
@@ -349,7 +349,7 @@ static int vnode_stat(struct vnode *vnode, sos_stat_t *stat) {
     nfs_lookup(&mnt_point, vnode->path, (nfs_lookup_cb_t) vnode_stat_cb, curr_coroutine_id);
     yield();
     if (curproc == NULL) return 0;
-   
+
     int err = (int) arg[0];
     fattr_t *fattr = (fattr_t *) arg[1];
 
@@ -528,7 +528,7 @@ static int vnode_read(struct vnode *vnode, struct uio *uio) {
     while (buf_size > 0) {
         seL4_Word size;
         seL4_Word end_uaddr, uaddr_next;
-        
+
         if (uio->uaddr != NULL) {
             /* uaddr */
 
@@ -632,7 +632,7 @@ static int vnode_write(struct vnode *vnode, struct uio *uio) {
 
         if (uio->uaddr != NULL) {
             /* uaddr */
-            
+
             /* We must find the sos_vaddrs for each page */
             end_uaddr = (seL4_Word) uaddr + buf_size;
             uaddr_next = PAGE_ALIGN_4K((seL4_Word) uaddr) + PAGE_SIZE_4K;
