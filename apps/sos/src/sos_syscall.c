@@ -542,13 +542,13 @@ void syscall_process_create(seL4_CPtr reply_cap,seL4_Word badge) {
 void syscall_process_delete(seL4_CPtr reply_cap, seL4_Word badge) {
     seL4_Word pid = seL4_GetMR(1);
     int parent = process_status(pid)->parent;
-	struct PCB * pcb = process_status(parent);
-    struct PCB * cpcb = process_status(pid);
-    if (cpcb->wait != -1){
-        pcb->wait = cpcb->wait;
+	struct PCB * parent_pcb = process_status(parent);
+    struct PCB * child_pcb = process_status(pid);
+    if (child_pcb->wait != -1){
+        parent_pcb->wait = child_pcb->wait;
     }   else{
-        if (pcb != NULL && pcb->wait == pid) 
-            set_resume(pcb->coroutine_id);
+        if (parent_pcb != NULL && parent_pcb->wait == pid) 
+            set_resume(parent_pcb->coroutine_id);
     }
 
 	int err = process_destroy(pid);
@@ -556,7 +556,6 @@ void syscall_process_delete(seL4_CPtr reply_cap, seL4_Word badge) {
         seL4_SetMR(0, err);
         send_reply(reply_cap);
     }
-    printf("finish\n");
     return;
 }
 
