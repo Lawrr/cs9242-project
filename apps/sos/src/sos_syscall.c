@@ -547,6 +547,7 @@ void syscall_process_delete(seL4_CPtr reply_cap, seL4_Word badge) {
     printf("pcb%d\n",pcb);
     if (pcb != NULL) printf("wait:%d\n",pcb->wait);
     if (pcb != NULL && pcb->wait == pid){
+       
 	   set_resume(pcb->coroutine_id);
 	}
 
@@ -555,6 +556,7 @@ void syscall_process_delete(seL4_CPtr reply_cap, seL4_Word badge) {
         seL4_SetMR(0, err);
         send_reply(reply_cap);
     }
+    printf("finish\n");
     return;
 }
 
@@ -567,8 +569,11 @@ void syscall_process_id(seL4_CPtr reply_cap, seL4_Word badge) {
 void syscall_process_wait(seL4_CPtr reply_cap) {
     int pid = seL4_GetMR(1);
 	curproc -> wait = pid;
+    extern seL4_Word curr_coroutine_id;
+    curproc -> coroutine_id = curr_coroutine_id;
 	yield();
 	send_reply(reply_cap);
+    return;
 }
 
 void syscall_process_status(seL4_CPtr reply_cap) {
