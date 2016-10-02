@@ -26,7 +26,7 @@ struct app_addrspace *as_new() {
     /* Initialise addrspace variables */
     as->regions = NULL;
     as->page_table = CSPACE_NULL;
-	as->page_count = 0;
+    as->page_count = 0;
 
     /* File descriptors */
     /* STDIN and STDERR */

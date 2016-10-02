@@ -5,11 +5,9 @@
 #define PTE_SWAP (1 << 4)
 
 struct app_addrspace {
-    /* Higher 16 bit: fd count
-     * Lower 16 bit: free_fd */
     seL4_Word fd_count;
     seL4_Word page_count;
-	struct region *regions;
+    struct region *regions;
     struct fdt_entry *fd_table;
     struct page_table_entry **page_table;
     struct swap_table_entry **swap_table;

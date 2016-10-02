@@ -275,7 +275,7 @@ sos_map_page(seL4_Word vaddr_unaligned, seL4_Word *sos_vaddr_ret, struct PCB *pc
 
     *sos_vaddr_ret = new_frame_vaddr;
     pcb->addrspace->page_count += 1;
-	return 0;
+    return 0;
 }
 
 inline seL4_Word uaddr_to_sos_vaddr(seL4_Word uaddr) {

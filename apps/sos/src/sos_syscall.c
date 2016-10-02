@@ -3,11 +3,11 @@
 #include <clock/clock.h>
 #include <utils/page.h>
 #include <fcntl.h>
+#include <sos.h>
 
 #include "addrspace.h"
 #include "sos_syscall.h"
 #include "mapping.h"
-#include "sos.h"
 #include "file.h"
 #include "vmem_layout.h"
 #include "process.h"
@@ -557,34 +557,37 @@ void syscall_process_wait(seL4_CPtr reply_cap) {
 }
 
 void syscall_process_status(seL4_CPtr reply_cap) {
-	sos_process_t *uaddr = seL4_GetMR(1);
-	seL4_Word max = seL4_GetMR(2);
+    sos_process_t *uaddr = seL4_GetMR(1);
+    seL4_Word max_req_procs = seL4_GetMR(2);
 
-    seL4_Word size = sizeof(sos_process_t) *max;
-    seL4_Word sos_vaddr;	
-    int  pid = 0;
+    seL4_Word size = sizeof(sos_process_t) * max_req_procs;
+    pid_t pid = 0;
+    int procs = 0;
 
-	sos_process_t buffer; 
     pin_frame_entry(uaddr, size);
-	for (int i = 0; i < max && pid < MAX_PROCESS; i++){
-    	struct PCB* pcb;
-		do {
-           pcb = process_status(pid++); 
-		}	while (pcb == NULL);
-				
-	    buffer.pid = pid - 1;
-	    buffer.size = pcb->addrspace->page_count;
-		buffer.stime = pcb->stime;
-		strcpy(buffer.command,pcb->app_name);
-	    
-		seL4_Word sos_vaddr;
-        int err = sos_map_page((&uaddr[i]), &sos_vaddr, curproc);
+    for (procs = 0; procs < max_req_procs && pid < MAX_PROCESS; procs++) {
+        struct PCB *pcb;
+        /* Find a valid process */
+        do {
+            pcb = process_status(pid++);
+        } while (pcb == NULL && pid < MAX_PROCESS);
+        if (pcb == NULL) break;
+
+        /* Set buffer data */
+        sos_process_t buffer;
+        buffer.pid = pid - 1;
+        buffer.size = pcb->addrspace->page_count;
+        buffer.stime = pcb->stime;
+        strcpy(buffer.command, pcb->app_name);
+
+        seL4_Word sos_vaddr;
+        int err = sos_map_page(&uaddr[procs], &sos_vaddr, curproc);
         /* Add offset */
         sos_vaddr = PAGE_ALIGN_4K(sos_vaddr);
-        seL4_Word cast_uaddr = (seL4_Word)(&uaddr[i]);
+        seL4_Word cast_uaddr = (seL4_Word) (&uaddr[procs]);
         sos_vaddr |= (cast_uaddr & PAGE_MASK_4K);
-	    
-	    if (PAGE_ALIGN_4K(cast_uaddr + sizeof(sos_process_t)) != PAGE_ALIGN_4K(cast_uaddr)) {
+
+        if (PAGE_ALIGN_4K(cast_uaddr + sizeof(sos_process_t)) != PAGE_ALIGN_4K(cast_uaddr)) {
             seL4_Word sos_vaddr_next;
             int err = sos_map_page(PAGE_ALIGN_4K(cast_uaddr + sizeof(sos_process_t)), &sos_vaddr_next, curproc);
 
@@ -595,10 +598,12 @@ void syscall_process_status(seL4_CPtr reply_cap) {
             /* Boundary */
             memcpy(sos_vaddr, &buffer, first_half);
             memcpy(sos_vaddr_next, &buffer + first_half, sizeof(sos_process_t) - first_half);
-          
-        }   else{
-            memcpy(sos_vaddr,&buffer,sizeof(sos_process_t));         
-		}	
-	}
+        } else {
+            memcpy(sos_vaddr, &buffer, sizeof(sos_process_t));
+        }
+    }
     unpin_frame_entry(uaddr, size);
+
+    seL4_SetMR(0, procs);
+    send_reply(reply_cap);
 }
