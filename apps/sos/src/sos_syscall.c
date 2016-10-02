@@ -543,13 +543,15 @@ void syscall_process_delete(seL4_CPtr reply_cap, seL4_Word badge) {
     seL4_Word pid = seL4_GetMR(1);
     int parent = curproc->parent;
 	struct PCB * pcb = process_status(parent);
-    
-    printf("pcb%d\n",pcb);
-    if (pcb != NULL) printf("wait:%d\n",pcb->wait);
-    if (pcb != NULL && pcb->wait == pid){
-       
-	   set_resume(pcb->coroutine_id);
-	}
+    struct PCB * cpcb = process_status(pid);
+    if (cpcb->wait != -1){
+        pcb->wait = cpcb->wait;
+    }   else{
+        if (pcb != NULL && pcb->wait == pid) 
+            set_resume(pcb->coroutine_id);
+    }
+
+
 
 	int err = process_destroy(pid);
     if (pid != badge) {

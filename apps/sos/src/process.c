@@ -39,6 +39,8 @@ int process_new(char *app_name, seL4_CPtr fault_ep) {
     }
 
     struct PCB *proc = malloc(sizeof(struct PCB));
+    proc->wait = -1;
+    
     if (proc == NULL) {
         conditional_panic(proc == NULL, "Out of memory for PCB\n");
         /* return -1; */
