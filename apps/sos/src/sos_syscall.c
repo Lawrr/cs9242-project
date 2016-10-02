@@ -512,7 +512,7 @@ void syscall_close(seL4_CPtr reply_cap) {
     send_reply(reply_cap);
 }
 
-void syscall_process_create(seL4_CPtr reply_cap) {
+void syscall_process_create(seL4_CPtr reply_cap,seL4_Word badge) {
     seL4_Word path_uaddr = seL4_GetMR(1);
 
     if (validate_uaddr(reply_cap, path_uaddr, 0)) return;
@@ -531,14 +531,23 @@ void syscall_process_create(seL4_CPtr reply_cap) {
     /* TODO something needs to be done with this err */
 
     err = process_new(path_sos_vaddr, _sos_ipc_ep_cap);
-    seL4_SetMR(0, err);
+   
+    struct PCB * pcb = process_status(err);
+	pcb -> parent = badge; 
+	seL4_SetMR(0, err);
     send_reply(reply_cap);
     return;
 }
 
 void syscall_process_delete(seL4_CPtr reply_cap, seL4_Word badge) {
     seL4_Word pid = seL4_GetMR(1);
-    int err = process_destroy(pid);
+    int parent = curproc->parent;
+	struct PCB * pcb = process_status(parent);
+    if (pcb != NULL && pcb->wait == pid){
+	   set_resume(pcb->coroutine_id);
+	}
+
+	int err = process_destroy(pid);
     if (pid != badge) {
         seL4_SetMR(0, err);
         send_reply(reply_cap);
@@ -553,7 +562,10 @@ void syscall_process_id(seL4_CPtr reply_cap, seL4_Word badge) {
 }
 
 void syscall_process_wait(seL4_CPtr reply_cap) {
-
+    int pid = seL4_GetMR(0);
+	curproc -> wait = pid;
+	yield();
+	send_reply(reply_cap);
 }
 
 void syscall_process_status(seL4_CPtr reply_cap) {
