@@ -25,7 +25,10 @@ struct PCB {
 
 	char * app_name;
 	long * stime;
-  		
+
+    int wait;
+    int coroutine_id;
+    int parent;	
     struct app_addrspace *addrspace;
 };
 
