@@ -52,6 +52,7 @@ extern seL4_ARM_PageDirectory dest_as;
 
 extern jmp_buf syscall_loop_entry;
 extern seL4_CPtr _sos_ipc_ep_cap;
+extern struct PCB *curproc;
 
 /*
  * Convert ELF permissions into seL4 permissions.
@@ -176,7 +177,6 @@ zero-filling a newly allocated frame.
             }
         } else {
             sos_map_page(dst, &sos_vaddr, pcb);
-            extern struct PCB * curproc;
             if (curproc == NULL) return 0;
             nbytes = PAGESIZE - (dst & PAGEMASK);
             if (pos < file_size) {
