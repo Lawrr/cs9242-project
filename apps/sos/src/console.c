@@ -72,6 +72,8 @@ int console_write(struct vnode *vnode, struct uio *uio) {
         if (err && err != ERR_ALREADY_MAPPED) {
             return 1;
         }
+        
+        if (curproc == NULL) return 0;
         sos_vaddr = PAGE_ALIGN_4K(sos_vaddr);
         /* Add offset */
         sos_vaddr |= (uaddr & PAGE_MASK_4K);
@@ -119,7 +121,7 @@ int console_read(struct vnode *vnode, struct uio *uio) {
     console_uio = uio;
 
     yield();
-
+  
     console_vnode = NULL;
     console_uio = NULL;
 

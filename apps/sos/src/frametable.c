@@ -188,7 +188,8 @@ static seL4_Word get_free_frame() {
 int32_t unswappable_alloc(seL4_Word *vaddr) {
     int err = frame_alloc(vaddr);
     if (err) return err;
-
+    if (curproc == NULL) return 0;
+    
     /* Set unswappable */
     uint32_t index = frame_vaddr_to_index(*vaddr);
     frame_table[index].mask &= (~FRAME_SWAPPABLE);
@@ -318,6 +319,8 @@ int32_t frame_alloc(seL4_Word *vaddr) {
             *vaddr = NULL;
             err = swap_out();
             conditional_panic(err, "Swap out failed\n");
+            
+            if (curproc == NULL) return 0;
             *vaddr = get_free_frame();
             pthread_spin_unlock(&ft_lock);
             return 0;

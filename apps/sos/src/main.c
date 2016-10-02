@@ -224,6 +224,7 @@ static void vm_fault_handler(seL4_Word badge, int num_args) {
     err = sos_map_page(map_vaddr, &sos_vaddr,curproc);
     if (err) printf("ERR: %d\n", err);
     conditional_panic(err, "Could not map page\n");
+    if (curproc == NULL) return 0;
 
     if (!isInstruction) {
         unpin_frame_entry(PAGE_ALIGN_4K(instruction_vaddr), PAGE_SIZE_4K);
