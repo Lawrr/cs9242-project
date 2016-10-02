@@ -230,10 +230,9 @@ void syscall_getdirent(seL4_CPtr reply_cap) {
         err = 1;
     } else {
         pin_frame_entry(uaddr, nbyte);
-        struct PCB *proc = curproc;
         err = vnode->ops->vop_getdirent(vnode, &uio);
-        curproc = proc;
         unpin_frame_entry(uaddr, nbyte);
+        if (curproc == NULL) return;
     }
     if (err) {
         send_err(reply_cap, -1);
@@ -264,6 +263,7 @@ void syscall_stat(seL4_CPtr reply_cap) {
     pin_frame_entry(uaddr, MAX_PATH_LEN);
     err = get_safe_path(path_sos_vaddr, uaddr, sos_vaddr, MAX_PATH_LEN);
     unpin_frame_entry(uaddr, MAX_PATH_LEN);
+    
     if (err) {
         unpin_frame_entry(ustat_buf, sizeof(sos_stat_t));
         send_err(reply_cap, -1);
@@ -279,10 +279,10 @@ void syscall_stat(seL4_CPtr reply_cap) {
         return;
     }
 
-    struct PCB *proc = curproc;
     err = vnode->ops->vop_stat(vnode, ustat_buf);
-    curproc = proc;
     unpin_frame_entry(ustat_buf, sizeof(sos_stat_t));
+    if (curproc == NULL) return;
+    
     if (err) {
         send_err(reply_cap, -1);
         return;
@@ -327,12 +327,14 @@ void syscall_write(seL4_CPtr reply_cap) {
         err = 1;
     } else {
         pin_frame_entry(uaddr, ubuf_size);
-        struct PCB *proc = curproc;
         err = vnode->ops->vop_write(vnode, &uio);
-        curproc = proc;
         unpin_frame_entry(uaddr, ubuf_size);
         entry->offset = uio.offset;
     }
+
+
+    if (curproc == NULL) return;
+
     if (err) {
         send_err(reply_cap, -1);
         return;
@@ -377,15 +379,15 @@ void syscall_read(seL4_CPtr reply_cap) {
         err = 1;
     } else {
         pin_frame_entry(uaddr, ubuf_size);
-        struct PCB *proc = curproc;
         err = vnode->ops->vop_read(vnode, &uio);
-        curproc = proc;
         unpin_frame_entry(uaddr, ubuf_size);
         entry->offset = uio.offset;
     }
 
     vnode->data = NULL;
     free(data);
+
+    if (curproc == NULL) return;
 
     if (err) {
         send_err(reply_cap, -1);
@@ -442,9 +444,8 @@ void syscall_open(seL4_CPtr reply_cap) {
 
     struct vnode *ret_vnode;
 
-    struct PCB *proc = curproc;
     err = vfs_open((char *) path_sos_vaddr, sos_access_mode, &ret_vnode);
-    curproc = proc;
+    if (curproc == NULL) return 0;
 
     if (err) {
         seL4_SetMR(0, -1);
@@ -497,9 +498,7 @@ void syscall_close(seL4_CPtr reply_cap) {
     of_table[ofd].ref_count--;
 
     if (of_table[ofd].ref_count == 0) {
-        struct PCB *proc = curproc;
         vfs_close(of_table[ofd].vnode, of_table[ofd].file_info.st_fmode);
-        curproc = proc;
         of_table[ofd].file_info.st_fmode = 0;
         of_table[ofd].vnode = NULL;
         ofd_count--;

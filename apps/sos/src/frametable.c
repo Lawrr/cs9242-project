@@ -216,6 +216,7 @@ int32_t swap_out() {
     if (swap_vnode == NULL) {
         /* First time opening swapfile */
         vfs_open(swapfile, FM_READ | FM_WRITE, &swap_vnode);
+        if (curproc == NULL) return 0;
     }
 
     /* Get swap offset */
