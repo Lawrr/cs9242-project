@@ -168,9 +168,11 @@ int process_new(char *app_name, seL4_CPtr fault_ep) {
 
 int process_destroy(pid_t pid) {
     struct PCB *pcb = PCB_table[pid];
+    if (pcb == NULL) return -1;
     int err = as_destroy(pcb->addrspace);
     if (err) return err;
     free(pcb);
+    PCB_table[pid] = NULL;
     return 0;
 }
 
