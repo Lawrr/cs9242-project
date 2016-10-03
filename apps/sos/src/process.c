@@ -1,5 +1,6 @@
 #include <cspace/cspace.h>
 #include <cpio/cpio.h>
+#include <limits.h>
 
 #include "vmem_layout.h"
 #include "file.h"
@@ -18,20 +19,20 @@ extern struct oft_entry of_table[MAX_OPEN_FILE];
 
 struct PCB *curproc;
 
-struct PCB *PCB_table[MAX_PROCESSES];
-
-static int curr_proc_id = 0;
+static struct PCB *PCB_table[MAX_PROCESSES];
+static unsigned int PCB_end_time[MAX_PROCESSES];
 
 int process_new(char *app_name, seL4_CPtr fault_ep, int parent_pid) {
-    int start_id = curr_proc_id;
     int id = -1;
-    do {
-        if (PCB_table[curr_proc_id] == NULL) {
-            id = curr_proc_id;
-            break;
+    unsigned int end_time = UINT_MAX;
+
+    for (int i = 0; i < MAX_PROCESSES; i++) {
+        if (PCB_table[i] != NULL) continue;
+        if (PCB_end_time[i] < end_time) {
+            id = i;
+            end_time = PCB_end_time[i];
         }
-        curr_proc_id = (curr_proc_id + 1) % MAX_PROCESSES;
-    } while (start_id != curr_proc_id);
+    }
 
     if (id != -1) {
         conditional_panic(id == -1, "Max processes\n");
@@ -189,6 +190,7 @@ int process_destroy(pid_t pid) {
     free(pcb);
 
     PCB_table[pid] = NULL;
+    PCB_end_time[pid] = time_stamp() / 1000;
 
     return 0;
 }

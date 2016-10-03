@@ -87,7 +87,6 @@ extern char _cpio_archive[];
 extern fhandle_t mnt_point;
 
 extern struct PCB *curproc;
-extern struct PCB *PCB_table[MAX_PROCESSES];
 
 const seL4_BootInfo* _boot_info;
 
@@ -259,13 +258,13 @@ void syscall_loop(seL4_CPtr ep) {
 
         } else if (label == seL4_VMFault) {
             /* Page fault */
-            curproc = PCB_table[badge];
+            curproc = process_status(badge);
             start_coroutine(&vm_fault_handler, badge,
                             seL4_MessageInfo_get_length(message) - 1, NULL);
 
         } else if (label == seL4_NoFault) {
             /* System call */
-            curproc = PCB_table[badge];
+            curproc = process_status(badge);
             
             start_coroutine(&handle_syscall, badge,
                             seL4_MessageInfo_get_length(message) - 1, NULL);
