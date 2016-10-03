@@ -12,7 +12,6 @@
 #include "vmem_layout.h"
 #include "process.h"
 #include "vnode.h"
-#include <pthread.h>
 
 extern struct PCB *curproc;
 extern struct oft_entry of_table[MAX_OPEN_FILE];
@@ -20,8 +19,6 @@ extern seL4_Word ofd_count;
 extern seL4_Word curr_free_ofd;
 extern seL4_CPtr _sos_ipc_ep_cap;
 extern seL4_Word curr_coroutine_id;
-
-static pthread_spinlock_t of_lock;
 
 /* Checks that user pointer range is a valid in userspace */
 static int legal_uaddr(seL4_Word base, uint32_t size) {
@@ -410,13 +407,10 @@ void syscall_open(seL4_CPtr reply_cap) {
     fmode_t access_mode = seL4_GetMR(2);
 
     if (validate_max_fd(reply_cap, fd_count)) return;
-    pthread_spin_lock(&of_lock);
     if (validate_max_ofd(reply_cap, ofd_count)) {
-        pthread_spin_unlock(&of_lock);
         return;
     }
     if (validate_uaddr(reply_cap, uaddr, 0)) {
-        pthread_spin_unlock(&of_lock);
         return;
     }
 
@@ -434,7 +428,6 @@ void syscall_open(seL4_CPtr reply_cap) {
 
 
     if (err) {
-        pthread_spin_unlock(&of_lock);
         send_err(reply_cap, -1);
         return;
     }
@@ -485,7 +478,6 @@ void syscall_open(seL4_CPtr reply_cap) {
             curr_free_ofd = -1;
         }
     }
-    pthread_spin_unlock(&of_lock);
 
     /* Reply */
     send_reply(reply_cap);
@@ -500,7 +492,6 @@ void syscall_close(seL4_CPtr reply_cap) {
 
     curproc->addrspace->fd_table[fd].ofd = -1;
     curproc->addrspace->fd_count--;
-    pthread_spin_lock(&of_lock);
     of_table[ofd].ref_count--;
 
     if (of_table[ofd].ref_count == 0) {
@@ -511,7 +502,6 @@ void syscall_close(seL4_CPtr reply_cap) {
         of_table[ofd].offset = 0;
         curr_free_ofd = ofd;
     }
-    pthread_spin_unlock(&of_lock);
 
     /* Reply */
     seL4_SetMR(0, 0);
