@@ -164,7 +164,6 @@ int process_new(char *app_name, seL4_CPtr fault_ep, int parent_pid) {
 int process_destroy(pid_t pid) {
     if (pid < 0 || pid >= MAX_PROCESSES) return -1;
 
-
     struct PCB *pcb = PCB_table[pid];
     if (pcb == NULL) return -1;
 

@@ -27,7 +27,7 @@ struct PCB {
     cspace_t *croot;
 
     char *app_name;
-    long *stime;
+    unsigned int stime;
 
     int pid;
     int wait;
