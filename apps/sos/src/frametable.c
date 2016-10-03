@@ -17,7 +17,7 @@
 #include <sys/panic.h>
 
 
-/* #define LIMIT_FRAMES */
+#define LIMIT_FRAMES
 
 #ifdef LIMIT_FRAMES
 int frames_to_alloc = 0;

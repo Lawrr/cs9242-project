@@ -54,7 +54,7 @@ extern jmp_buf syscall_loop_entry;
 extern seL4_CPtr _sos_ipc_ep_cap;
 extern struct PCB *curproc;
 
-static seL4_Word is_first_proc;
+static seL4_Word is_first_proc = 1;
 
 /*
  * Convert ELF permissions into seL4 permissions.
@@ -210,8 +210,6 @@ int elf_load(seL4_ARM_PageDirectory dest_pd, struct PCB *pcb, char *elf_file) {
         return seL4_InvalidArgument;
     }
 
-    is_first_proc = (syscall_loop_entry == NULL);
-
     num_headers = elf_getNumProgramHeaders(elf_file);
     for (i = 0; i < num_headers; i++) {
         char *source_addr;
@@ -246,10 +244,12 @@ int elf_load(seL4_ARM_PageDirectory dest_pd, struct PCB *pcb, char *elf_file) {
                                        get_sel4_rights_from_elf(flags) & seL4_AllRights,
                                        pcb);
         if (err) {
+            is_first_proc = 0;
             return err;
         }
         conditional_panic(err != 0, "Elf loading failed!\n");
     }
+    is_first_proc = 0;
 
     return 0;
 }

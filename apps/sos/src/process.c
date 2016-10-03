@@ -50,6 +50,16 @@ int process_new(char *app_name, seL4_CPtr fault_ep, int parent_pid) {
         curproc = proc;
     }
 
+    /* Set proc */
+    PCB_table[id] = proc;
+    proc->app_name = malloc(strlen(app_name));
+    strcpy(proc->app_name, app_name);
+    proc->stime = time_stamp() / 1000;
+    proc->pid = id;
+    proc->wait = PROCESS_WAIT_NONE;
+    proc->coroutine_id = -1;
+    proc->parent = parent_pid;
+
     int err;
 
     seL4_CPtr user_ep_cap;
@@ -148,16 +158,6 @@ int process_new(char *app_name, seL4_CPtr fault_ep, int parent_pid) {
     context.pc = elf_getEntryPoint(elf_base);
     context.sp = PROCESS_STACK_TOP;
     seL4_TCB_WriteRegisters(proc->tcb_cap, 1, 0, 2, &context);
-
-    PCB_table[id] = proc;
-    // TODO do we need strnlen?
-    proc->app_name = malloc(strlen(app_name));
-    strcpy(proc->app_name, app_name);
-    proc->stime = time_stamp() / 1000;
-    proc->pid = id;
-    proc->wait = PROCESS_WAIT_NONE;
-    proc->coroutine_id = -1;
-    proc->parent = parent_pid;
 
     return id;
 }

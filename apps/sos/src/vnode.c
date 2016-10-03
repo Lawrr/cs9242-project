@@ -266,6 +266,7 @@ static int vnode_getdirent(struct vnode *vnode, struct uio *uio) {
         set_routine_arg(curr_coroutine_id, 1, curproc);
 
         seL4_Word *token = malloc(sizeof(seL4_Word) * 3);
+        conditional_panic(token == NULL, "Out of memory\n");
         token[0] = curr_coroutine_id;
         token[1] = curproc->pid;
         token[2] = curproc->stime;
@@ -364,6 +365,7 @@ static void vnode_readdir_cb(uintptr_t token_ptr, enum nfs_stat status, int num_
  */
 static int vnode_stat(struct vnode *vnode, sos_stat_t *stat) {
     seL4_Word *token = malloc(sizeof(seL4_Word) * 3);
+    conditional_panic(token == NULL, "Out of memory\n");
     token[0] = curr_coroutine_id;
     token[1] = curproc->pid;
     token[2] = curproc->stime;
@@ -470,6 +472,7 @@ static int file_create(struct vnode *vnode) {
     };
 
     seL4_Word *token = malloc(sizeof(seL4_Word) * 3);
+    conditional_panic(token == NULL, "Out of memory\n");
     token[0] = curr_coroutine_id;
     token[1] = curproc->pid;
     token[2] = curproc->stime;
@@ -518,6 +521,7 @@ static int vnode_open(struct vnode *vnode, fmode_t mode) {
     if (vnode->fh != NULL) return 0;
 
     seL4_Word *token = malloc(sizeof(seL4_Word) * 3);
+    conditional_panic(token == NULL, "Out of memory\n");
     token[0] = curr_coroutine_id;
     token[1] = curproc->pid;
     token[2] = curproc->stime;
@@ -633,6 +637,7 @@ static int vnode_read(struct vnode *vnode, struct uio *uio) {
         }
 
         seL4_Word *token = malloc(sizeof(seL4_Word) * 3);
+        conditional_panic(token == NULL, "Out of memory\n");
         token[0] = curr_coroutine_id;
         token[1] = curproc->pid;
         token[2] = curproc->stime;
@@ -752,6 +757,7 @@ static int vnode_write(struct vnode *vnode, struct uio *uio) {
         int req_id = 0;
         while (size > 0) {
             seL4_Word *token = malloc(sizeof(seL4_Word) * 4);
+            conditional_panic(token == NULL, "Out of memory\n");
             token[0] = curr_coroutine_id;
             token[1] = req_id;
             token[2] = curproc->pid;

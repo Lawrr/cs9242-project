@@ -42,7 +42,7 @@ void coroutine_init() {
     }
 }
 
-yield() { 
+void yield() { 
     int pid = curproc->pid;
     int id = setjmp(coroutines[curr_coroutine_id]); 
     if (id == 0) {
@@ -136,14 +136,17 @@ int start_coroutine(void (*task)(seL4_Word badge, int num_args),
     sptr -= sizeof(int);
     *sptr = num_args;
 
+    struct PCB *pcb_new = pcb;
+    sptr -= sizeof(struct PCB *);
+    *sptr = pcb;
+
     /* Change to new sp */
     asm volatile("mov sp, %[newsp]" : : [newsp] "r" (sptr) : "sp");
-
 
     /* Run task */
     if (task == sos_map_page) {
         void (*cast_task)(seL4_Word, int, struct PCB *) = (void (*)(seL4_Word, int, struct PCB *)) task;
-        cast_task(badge_new, num_args_new, pcb);
+        cast_task(badge_new, num_args_new, pcb_new);
     } else {
         task(badge_new, num_args_new);
     }
