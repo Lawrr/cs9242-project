@@ -112,7 +112,7 @@ int process_new(char *app_name, seL4_CPtr fault_ep, int parent_pid) {
     conditional_panic(err, "Failed to create TCB");
 
     /* Configure the TCB */
-    err = seL4_TCB_Configure(proc->tcb_cap, user_ep_cap, TTY_PRIORITY,
+    err = seL4_TCB_Configure(proc->tcb_cap, user_ep_cap, APP_PRIORITY,
             proc->croot->root_cnode, seL4_NilData,
             proc->vroot, seL4_NilData, PROCESS_IPC_BUFFER,
             proc->ipc_buffer_cap);
