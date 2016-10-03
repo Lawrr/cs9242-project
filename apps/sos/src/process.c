@@ -23,6 +23,14 @@ static struct PCB *PCB_table[MAX_PROCESSES];
 static unsigned int PCB_end_time[MAX_PROCESSES];
 
 int process_new(char *app_name, seL4_CPtr fault_ep, int parent_pid) {
+    /* These required for loading program sections */
+    char *elf_base;
+    unsigned long elf_size;
+    elf_base = cpio_get_file(_cpio_archive, app_name, &elf_size);
+    if (elf_base == NULL) {
+        return -1;
+    }
+
     int id = -1;
     unsigned int end_time = UINT_MAX;
 
@@ -66,10 +74,6 @@ int process_new(char *app_name, seL4_CPtr fault_ep, int parent_pid) {
 
     /* These required for setting up the TCB */
     seL4_UserContext context;
-
-    /* These required for loading program sections */
-    char *elf_base;
-    unsigned long elf_size;
 
     proc->addrspace = as_new();
 
@@ -132,8 +136,6 @@ int process_new(char *app_name, seL4_CPtr fault_ep, int parent_pid) {
 
     /* parse the cpio image */
     dprintf(1, "\nStarting \"%s\"...\n", app_name);
-    elf_base = cpio_get_file(_cpio_archive, app_name, &elf_size);
-    conditional_panic(!elf_base, "Unable to locate cpio header");
 
     /* load the elf image */
     err = elf_load(proc->vroot, proc, elf_base);

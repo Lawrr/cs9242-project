@@ -42,18 +42,21 @@ void coroutine_init() {
 }
 
 void yield() { 
+    int stime = curproc->stime;
     int pid = curproc->pid;
     int id = setjmp(coroutines[curr_coroutine_id]); 
     if (id == 0) {
         /* First time */
         longjmp(syscall_loop_entry, 1);
     } else {
-        curproc = process_status(pid);
-        if (curproc == NULL) {
+        struct PCB *proc = process_status(pid);
+        if (proc == NULL || proc->stime != stime) {
             /* Process was deleted */
             set_cleanup_coroutine(curr_coroutine_id);
             longjmp(syscall_loop_entry, 1);
         }
+
+        curproc = proc;
 
         /* Returning to coroutine's function */
         return;
