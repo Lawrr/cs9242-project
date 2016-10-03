@@ -180,7 +180,7 @@ void handle_syscall(seL4_Word badge, int num_args) {
             break;
 
         case SOS_PROCESS_WAIT_SYSCALL:
-            syscall_process_wait(reply_cap);
+            syscall_process_wait(reply_cap, badge);
             break;
 
         case SOS_PROCESS_STATUS_SYSCALL:

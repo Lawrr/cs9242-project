@@ -14,6 +14,9 @@
 
 #define MAX_PROCESSES 255
 
+#define PROCESS_WAIT_NONE -2
+#define PROCESS_WAIT_ANY -1
+
 struct PCB {
     seL4_Word tcb_addr;
     seL4_TCB tcb_cap;

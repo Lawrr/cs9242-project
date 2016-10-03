@@ -154,7 +154,7 @@ int process_new(char *app_name, seL4_CPtr fault_ep, int parent_pid) {
     strcpy(proc->app_name, app_name);
     proc->stime = time_stamp() / 1000;
     proc->pid = id;
-    proc->wait = -1;
+    proc->wait = PROCESS_WAIT_NONE;
     proc->coroutine_id = -1;
     proc->parent = parent_pid;
 
