@@ -10,8 +10,7 @@
 
 /* jmp_buf for syscall loop */
 extern jmp_buf syscall_loop_entry;
-
-int curr_coroutine_id = 0;
+extern struct PCB *curproc;
 
 /* Number of current tasks */
 static int num_tasks = 0;
@@ -31,7 +30,7 @@ static int free_list[NUM_COROUTINES];
 static seL4_Word routine_args[NUM_COROUTINES][5];
 static char *routine_frames[NUM_COROUTINES];
 
-extern struct PCB * curproc;
+int curr_coroutine_id = 0;
 
 void coroutine_init() {
     int err;
@@ -154,6 +153,7 @@ int start_coroutine(void (*task)(seL4_Word badge, int num_args),
     /* Clean up any old coroutines */
     if (next_cleanup_id != -1) cleanup_coroutine();
     set_cleanup_coroutine(task_id);
+    cleanup_coroutine();
 
     /* Return to main loop */
     longjmp(syscall_loop_entry, 1);

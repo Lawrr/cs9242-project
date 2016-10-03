@@ -233,9 +233,7 @@ int32_t swap_out() {
     
     printf("Swap out - uaddr: %p, vaddr: %p, swap_index: %d\n", uaddr, frame_vaddr, swap_offset);
 
-    struct PCB *proc = curproc;
     int err = swap_vnode->ops->vop_write(swap_vnode, &uio);
-    curproc = proc;
     conditional_panic(err, "Could not write\n");
 
     err = sos_unmap_page(frame_vaddr, curproc->addrspace);
@@ -272,9 +270,7 @@ int32_t swap_in(seL4_Word uaddr, seL4_Word sos_vaddr) {
         .remaining = PAGE_SIZE_4K
     };
 
-    struct PCB *proc = curproc;
     int err = swap_vnode->ops->vop_read(swap_vnode, &uio);
-    curproc = proc;
     conditional_panic(err, "Could not read\n");
 
     /* Mark page in pagefile as free */
