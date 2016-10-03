@@ -221,10 +221,9 @@ static void vm_fault_handler(seL4_Word badge, int num_args) {
 
     printf("In vm_fault_handler for uaddr: %p, instr: %p\n", map_vaddr, seL4_GetMR(0));
 
-    err = sos_map_page(map_vaddr, &sos_vaddr,curproc);
+    err = sos_map_page(map_vaddr, &sos_vaddr, curproc);
     if (err) printf("ERR: %d\n", err);
     conditional_panic(err, "Could not map page\n");
-    if (curproc == NULL) return 0;
 
     if (!isInstruction) {
         unpin_frame_entry(PAGE_ALIGN_4K(instruction_vaddr), PAGE_SIZE_4K);
@@ -243,6 +242,7 @@ void syscall_loop(seL4_CPtr ep) {
     seL4_MessageInfo_t message;
     while (1) {
         setjmp(syscall_loop_entry); 
+        cleanup_coroutine();
         resume();
         
         message = seL4_Wait(ep, &badge);

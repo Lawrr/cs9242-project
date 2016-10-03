@@ -172,7 +172,6 @@ sos_map_page(seL4_Word vaddr_unaligned, seL4_Word *sos_vaddr_ret, struct PCB *pc
         /* First level */
         err = unswappable_alloc((seL4_Word *) page_table_vaddr);
         if (err) return ERR_NO_MEMORY;
-        if (curproc == NULL) return 0;
 
         err = unswappable_alloc((seL4_Word *) swap_table_vaddr);
         if (err) {
@@ -182,7 +181,6 @@ sos_map_page(seL4_Word vaddr_unaligned, seL4_Word *sos_vaddr_ret, struct PCB *pc
 
         /* Second level */
         err = unswappable_alloc((seL4_Word *) &(*page_table_vaddr)[index1]);
-        if (curproc == NULL) return 0;
 
         if (err) {
             frame_free(page_table_vaddr);
@@ -202,10 +200,8 @@ sos_map_page(seL4_Word vaddr_unaligned, seL4_Word *sos_vaddr_ret, struct PCB *pc
         /* Second level */
         err = unswappable_alloc((seL4_Word *) &(*page_table_vaddr)[index1]);
         if (err) return ERR_NO_MEMORY;
-        if (curproc == NULL) return 0;
 
         err = unswappable_alloc((seL4_Word *) &(*swap_table_vaddr)[index1]);
-        if (curproc == NULL) return 0;
         if (err) {
             frame_free(&(*page_table_vaddr)[index1]);
             return ERR_NO_MEMORY;
@@ -225,10 +221,8 @@ sos_map_page(seL4_Word vaddr_unaligned, seL4_Word *sos_vaddr_ret, struct PCB *pc
     seL4_Word new_frame_vaddr;
     if (vaddr >= PROCESS_IPC_BUFFER) {
         err = unswappable_alloc(&new_frame_vaddr);
-        if (curproc == NULL) return 0;
     } else {
         err = frame_alloc(&new_frame_vaddr);
-        if (curproc == NULL) return 0;
     }
     if (err) {
         return ERR_NO_MEMORY;
@@ -278,7 +272,6 @@ sos_map_page(seL4_Word vaddr_unaligned, seL4_Word *sos_vaddr_ret, struct PCB *pc
 
     if (pte.sos_vaddr & PTE_SWAP) {
         swap_in(vaddr, PAGE_ALIGN_4K(new_frame_vaddr));
-        if (curproc == NULL) return 0;
     }
 
     *sos_vaddr_ret = new_frame_vaddr;

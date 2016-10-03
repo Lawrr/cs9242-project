@@ -11,6 +11,9 @@ void yield();
 void resume();
 void set_resume(int id);
 
+void cleanup_coroutine();
+void set_cleanup_coroutine(int id);
+
 int start_coroutine(void (*task)(seL4_Word badge, int num_args),
                     seL4_Word badge, int num_args, struct PCB *pcb);
 

@@ -188,7 +188,6 @@ static seL4_Word get_free_frame() {
 int32_t unswappable_alloc(seL4_Word *vaddr) {
     int err = frame_alloc(vaddr);
     if (err) return err;
-    if (curproc == NULL) return 0;
     
     /* Set unswappable */
     uint32_t index = frame_vaddr_to_index(*vaddr);
@@ -220,7 +219,6 @@ int32_t swap_out() {
     if (swap_vnode == NULL) {
         /* First time opening swapfile */
         vfs_open(swapfile, FM_READ | FM_WRITE, &swap_vnode);
-        if (curproc == NULL) return 0;
     }
 
     /* Get swap offset */
@@ -320,7 +318,6 @@ int32_t frame_alloc(seL4_Word *vaddr) {
             err = swap_out();
             conditional_panic(err, "Swap out failed\n");
             
-            if (curproc == NULL) return 0;
             *vaddr = get_free_frame();
             pthread_spin_unlock(&ft_lock);
             return 0;

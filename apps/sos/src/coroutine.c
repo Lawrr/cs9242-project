@@ -17,6 +17,8 @@ int curr_coroutine_id = 0;
 static int num_tasks = 0;
 /* Next task to resume to */
 static int next_resume_id = -1;
+/* Next task to cleanup */
+static int next_cleanup_id = -1;
 
 static int start_index = 0;
 
@@ -47,15 +49,19 @@ yield() {
         /* First time */
         longjmp(syscall_loop_entry, 1);
     } else {
-        /* Returning to coroutine's function */
         curproc = process_status(pid);
+        if (curproc == NULL) {
+            /* Process was deleted */
+            set_cleanup_coroutine(curr_coroutine_id);
+            longjmp(syscall_loop_entry, 1);
+        }
+
+        /* Returning to coroutine's function */
         return;
     }
 
     /* Never reached */
 }
-
-
 
 void resume() {
     if (next_resume_id != -1) {
@@ -75,6 +81,22 @@ void set_resume(int id) {
     next_resume_id = id;
 }
 
+void cleanup_coroutine() {
+    if (next_cleanup_id >= 0 && next_cleanup_id < NUM_COROUTINES) {
+        if (free_list[next_cleanup_id] == 0) {
+            /* Cleanup coroutine */
+            free_list[next_cleanup_id] = 1;
+            start_index = next_cleanup_id;
+            num_tasks--;
+        }
+        next_cleanup_id = -1;
+    }
+}
+
+void set_cleanup_coroutine(int id) {
+    next_cleanup_id = id;
+}
+
 int start_coroutine(void (*task)(seL4_Word badge, int num_args),
                     seL4_Word badge, int num_args, struct PCB *pcb) {
     /* Check reached max coroutines */
@@ -89,6 +111,8 @@ int start_coroutine(void (*task)(seL4_Word badge, int num_args),
     }
     free_list[task_id] = 0;
     curr_coroutine_id = task_id;
+
+    curproc->coroutine_id = curr_coroutine_id;
 
     /* Allocate new stack frame */
     char *sptr = routine_frames[curr_coroutine_id];
@@ -124,10 +148,9 @@ int start_coroutine(void (*task)(seL4_Word badge, int num_args),
         task(badge_new, num_args_new);
     }
 
-    /* Task finished */
-    free_list[task_id] = 1;
-    start_index = task_id;
-    num_tasks--;
+    /* Clean up any old coroutines */
+    if (next_cleanup_id != -1) cleanup_coroutine();
+    set_cleanup_coroutine(task_id);
 
     /* Return to main loop */
     longjmp(syscall_loop_entry, 1);

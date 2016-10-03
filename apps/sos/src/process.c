@@ -48,11 +48,8 @@ int process_new(char *app_name, seL4_CPtr fault_ep, int parent_pid) {
         conditional_panic(proc == NULL, "Out of memory for PCB\n");
         /* return -1; */
     }
-    PCB_table[id] = proc;
-    proc->pid = id;
 
     /* Set first proc as curproc */
-    // TODO when do we change value of curproc?
     if (curproc == NULL) {
         curproc = proc;
     }
@@ -154,15 +151,17 @@ int process_new(char *app_name, seL4_CPtr fault_ep, int parent_pid) {
     memset(&context, 0, sizeof(context));
     context.pc = elf_getEntryPoint(elf_base);
     context.sp = PROCESS_STACK_TOP;
-    printf("%d\n",proc->pid);
     seL4_TCB_WriteRegisters(proc->tcb_cap, 1, 0, 2, &context);
 
-    proc->wait = -1;
-    proc->parent = parent_pid;
-    proc->stime = time_stamp() / 1000;
+    PCB_table[id] = proc;
     // TODO do we need strnlen?
     proc->app_name = malloc(strlen(app_name));
     strcpy(proc->app_name, app_name);
+    proc->stime = time_stamp() / 1000;
+    proc->pid = id;
+    proc->wait = -1;
+    proc->coroutine_id = -1;
+    proc->parent = parent_pid;
 
     return id;
 }
@@ -190,6 +189,9 @@ int process_destroy(pid_t pid) {
     cspace_destroy(pcb->croot);
 
     /* PCB */
+    if (pcb->coroutine_id != -1) {
+        set_cleanup_coroutine(pcb->coroutine_id);
+    }
     free(pcb->app_name);
     free(pcb);
 

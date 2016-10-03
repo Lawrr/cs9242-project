@@ -123,7 +123,6 @@ static int get_safe_path(char *dst, seL4_Word uaddr,
             /* Make sure address is mapped */
             seL4_Word sos_vaddr_next;
             int err = sos_map_page(uaddr_next_page, &sos_vaddr_next, curproc);
-            if (curproc == NULL) return 0;
             sos_vaddr_next = PAGE_ALIGN_4K(sos_vaddr_next);
             sos_vaddr_next |= (uaddr_next_page & PAGE_MASK_4K);
             len = strnlen(sos_vaddr_next, max_len - safe_len);
@@ -244,7 +243,6 @@ void syscall_getdirent(seL4_CPtr reply_cap) {
         pin_frame_entry(uaddr, nbyte);
         err = vnode->ops->vop_getdirent(vnode, &uio);
         unpin_frame_entry(uaddr, nbyte);
-        if (curproc == NULL) return;
     }
     if (err) {
         send_err(reply_cap, -1);
@@ -268,7 +266,6 @@ void syscall_stat(seL4_CPtr reply_cap) {
     seL4_Word sos_vaddr;
     int err = sos_map_page(uaddr, &sos_vaddr, curproc);
 
-    if (curproc == NULL) return 0;
     sos_vaddr = PAGE_ALIGN_4K(sos_vaddr);
     sos_vaddr |= (uaddr & PAGE_MASK_4K);
 
@@ -276,7 +273,6 @@ void syscall_stat(seL4_CPtr reply_cap) {
     pin_frame_entry(uaddr, MAX_PATH_LEN);
     err = get_safe_path(path_sos_vaddr, uaddr, sos_vaddr, MAX_PATH_LEN);
     unpin_frame_entry(uaddr, MAX_PATH_LEN);
-    if (curproc == NULL) return;
 
     if (err) {
         unpin_frame_entry(ustat_buf, sizeof(sos_stat_t));
@@ -295,7 +291,6 @@ void syscall_stat(seL4_CPtr reply_cap) {
 
     err = vnode->ops->vop_stat(vnode, ustat_buf);
     unpin_frame_entry(ustat_buf, sizeof(sos_stat_t));
-    if (curproc == NULL) return;
 
     if (err) {
         send_err(reply_cap, -1);
@@ -345,9 +340,6 @@ void syscall_write(seL4_CPtr reply_cap) {
         unpin_frame_entry(uaddr, ubuf_size);
         entry->offset = uio.offset;
     }
-
-
-    if (curproc == NULL) return;
 
     if (err) {
         send_err(reply_cap, -1);
@@ -401,7 +393,6 @@ void syscall_read(seL4_CPtr reply_cap) {
     vnode->data = NULL;
     free(data);
 
-    if (curproc == NULL) return;
 
     if (err) {
         send_err(reply_cap, -1);
@@ -434,7 +425,6 @@ void syscall_open(seL4_CPtr reply_cap) {
     seL4_Word sos_vaddr;
     int err = sos_map_page(uaddr, &sos_vaddr, curproc);
 
-    if (curproc == NULL) return 0;
     sos_vaddr = PAGE_ALIGN_4K(sos_vaddr);
     sos_vaddr |= (uaddr & PAGE_MASK_4K);
 
@@ -442,7 +432,6 @@ void syscall_open(seL4_CPtr reply_cap) {
     err = get_safe_path(path_sos_vaddr, uaddr, sos_vaddr, MAX_PATH_LEN);
     unpin_frame_entry(uaddr, MAX_PATH_LEN);
 
-    if (curproc == NULL) return;
 
     if (err) {
         pthread_spin_unlock(&of_lock);
@@ -463,7 +452,6 @@ void syscall_open(seL4_CPtr reply_cap) {
     struct vnode *ret_vnode;
 
     err = vfs_open((char *) path_sos_vaddr, sos_access_mode, &ret_vnode);
-    if (curproc == NULL) return 0;
 
     if (err) {
         seL4_SetMR(0, -1);
@@ -540,7 +528,6 @@ void syscall_process_create(seL4_CPtr reply_cap, seL4_Word badge) {
     seL4_Word sos_vaddr;
     int err = sos_map_page(path_uaddr, &sos_vaddr, curproc);
 
-    if (curproc == NULL) return 0;
     sos_vaddr = PAGE_ALIGN_4K(sos_vaddr);
     sos_vaddr |= (path_uaddr & PAGE_MASK_4K);
 
@@ -548,8 +535,6 @@ void syscall_process_create(seL4_CPtr reply_cap, seL4_Word badge) {
     err = get_safe_path(path_sos_vaddr, path_uaddr, sos_vaddr, MAX_PATH_LEN);
     unpin_frame_entry(path_uaddr, MAX_PATH_LEN);
     /* TODO something needs to be done with this err */
-
-    if (curproc == NULL) return;
 
     int new_pid = process_new(path_sos_vaddr, _sos_ipc_ep_cap, badge);
     if (new_pid < 0) {
@@ -614,7 +599,6 @@ void syscall_process_wait(seL4_CPtr reply_cap) {
     int pid = seL4_GetMR(1);
     if (process_status(pid) != NULL) {
         curproc->wait = pid;
-        curproc->coroutine_id = curr_coroutine_id;
         yield();
     }
     send_reply(reply_cap);
@@ -648,7 +632,6 @@ void syscall_process_status(seL4_CPtr reply_cap) {
         seL4_Word sos_vaddr;
         int err = sos_map_page(&uaddr[procs], &sos_vaddr, curproc);
 
-        if (curproc == NULL) return 0;
         /* Add offset */
         sos_vaddr = PAGE_ALIGN_4K(sos_vaddr);
         seL4_Word cast_uaddr = (seL4_Word) (&uaddr[procs]);
@@ -658,7 +641,6 @@ void syscall_process_status(seL4_CPtr reply_cap) {
             seL4_Word sos_vaddr_next;
             int err = sos_map_page(PAGE_ALIGN_4K(cast_uaddr + sizeof(sos_process_t)), &sos_vaddr_next, curproc);
 
-            if (curproc == NULL) return 0;
             sos_vaddr_next = PAGE_ALIGN_4K(sos_vaddr);
 
             seL4_Word first_half = (PAGE_ALIGN_4K(cast_uaddr + sizeof(sos_process_t)) - (seL4_Word) cast_uaddr);

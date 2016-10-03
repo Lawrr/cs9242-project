@@ -73,7 +73,6 @@ int console_write(struct vnode *vnode, struct uio *uio) {
             return 1;
         }
         
-        if (curproc == NULL) return 0;
         sos_vaddr = PAGE_ALIGN_4K(sos_vaddr);
         /* Add offset */
         sos_vaddr |= (uaddr & PAGE_MASK_4K);
