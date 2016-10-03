@@ -19,12 +19,19 @@ extern int curr_coroutine_id;
 static struct serial *serial_handle;
 static struct vnode *console_vnode;
 static struct uio *console_uio;
-static struct PCB *read_proc;
-static int my_coroutine_id;
+static pid_t read_pid;
+static unsigned int read_stime;
+static int read_coroutine_id;
 
 static void console_serial_handler(struct serial *serial, char c) {
     /* Return if we do not currently need to read */
     if (console_uio == NULL || console_uio->remaining == 0) return;
+
+    /* Check if proc was deleted */
+    struct PCB *pcb = process_status(read_pid);
+    if (pcb == NULL || pcb->stime != read_stime) {
+        return;
+    }
 
     seL4_Word *vnode_data = (seL4_Word *) (console_vnode->data);
 
@@ -46,7 +53,7 @@ static void console_serial_handler(struct serial *serial, char c) {
 
     /* Check end */
     if (console_uio->remaining == 0 || c == '\n') {
-        set_resume(my_coroutine_id);
+        set_resume(read_coroutine_id);
     }
 }
 
@@ -89,7 +96,9 @@ int console_write(struct vnode *vnode, struct uio *uio) {
 }
 
 int console_read(struct vnode *vnode, struct uio *uio) {
-    read_proc = curproc;
+    read_pid = curproc->pid;
+    read_stime = curproc->stime;
+    read_coroutine_id = curr_coroutine_id;
 
     seL4_Word uaddr = uio->uaddr;
     seL4_Word ubuf_size = uio->size;
@@ -99,7 +108,6 @@ int console_read(struct vnode *vnode, struct uio *uio) {
     seL4_Word curr_uaddr = uaddr;
     seL4_Word curr_size = ubuf_size;
 
-    my_coroutine_id = curr_coroutine_id;
     while (curr_size > 0) {
         seL4_Word uaddr_next = PAGE_ALIGN_4K(curr_uaddr) + PAGE_SIZE_4K;
         seL4_Word size;
@@ -110,7 +118,7 @@ int console_read(struct vnode *vnode, struct uio *uio) {
         }
 
         seL4_CPtr sos_vaddr;
-        int err = sos_map_page(curr_uaddr, &sos_vaddr, read_proc);
+        int err = sos_map_page(curr_uaddr, &sos_vaddr, curproc);
 
         curr_size -= size;
         curr_uaddr = uaddr_next;

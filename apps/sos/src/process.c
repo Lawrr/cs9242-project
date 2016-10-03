@@ -194,5 +194,6 @@ int process_destroy(pid_t pid) {
 }
 
 struct PCB *process_status(pid_t pid) {
+    if (pid < 0 || pid >= MAX_PROCESSES) return NULL;
     return PCB_table[pid];
 }

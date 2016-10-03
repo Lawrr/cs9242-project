@@ -264,7 +264,13 @@ static int vnode_getdirent(struct vnode *vnode, struct uio *uio) {
     do {
         set_routine_arg(curr_coroutine_id, 0, uio);
         set_routine_arg(curr_coroutine_id, 1, curproc);
-        nfs_readdir(&mnt_point, cookies, vnode_readdir_cb, curr_coroutine_id);
+
+        seL4_Word *token = malloc(sizeof(seL4_Word) * 3);
+        token[0] = curr_coroutine_id;
+        token[1] = curproc->pid;
+        token[2] = curproc->stime;
+
+        nfs_readdir(&mnt_point, cookies, vnode_readdir_cb, token);
         yield();
 
         int err = arg[0];
@@ -280,13 +286,23 @@ static int vnode_getdirent(struct vnode *vnode, struct uio *uio) {
     return 0;
 }
 
-static void vnode_readdir_cb(uintptr_t token, enum nfs_stat status,
-        int num_files, char *file_names[],
-        nfscookie_t nfscookie) {
+static void vnode_readdir_cb(uintptr_t token_ptr, enum nfs_stat status, int num_files, char *file_names[], nfscookie_t nfscookie) {
+    seL4_Word *token = (seL4_Word *) token_ptr;
+    seL4_Word coroutine_id = token[0];
+    seL4_Word pid = token[1];
+    seL4_Word stime = token[2];
+    struct PCB *pcb = process_status(pid);
+
+    /* Check if proc was deleted */
+    if (pcb == NULL || pcb->stime != stime) {
+        free(token);
+        return;
+    }
+
     arg[0] = (seL4_Word) status;
     arg[1] = nfscookie;
 
-    struct uio *uio = get_routine_arg((int) token, 0);
+    struct uio *uio = get_routine_arg((int) coroutine_id, 0);
 
     if (uio->offset == 0 && num_files == 0) {
         /* Valid next pos NULL */
@@ -303,7 +319,7 @@ static void vnode_readdir_cb(uintptr_t token, enum nfs_stat status,
         seL4_Word uaddr_end = uio->uaddr + len;
 
         seL4_Word sos_vaddr;
-        struct PCB *pcb = get_routine_arg((int) token, 1);
+        struct PCB *pcb = get_routine_arg((int) coroutine_id, 1);
 
         int err = sos_map_page(uaddr, &sos_vaddr, pcb);
         sos_vaddr = PAGE_ALIGN_4K(sos_vaddr);
@@ -335,7 +351,9 @@ static void vnode_readdir_cb(uintptr_t token, enum nfs_stat status,
         uio->offset -= num_files;
     }
 
-    set_resume(token);
+    set_resume(coroutine_id);
+
+    free(token);
 }
 
 
@@ -345,7 +363,12 @@ static void vnode_readdir_cb(uintptr_t token, enum nfs_stat status,
  * =======================================================
  */
 static int vnode_stat(struct vnode *vnode, sos_stat_t *stat) {
-    nfs_lookup(&mnt_point, vnode->path, (nfs_lookup_cb_t) vnode_stat_cb, curr_coroutine_id);
+    seL4_Word *token = malloc(sizeof(seL4_Word) * 3);
+    token[0] = curr_coroutine_id;
+    token[1] = curproc->pid;
+    token[2] = curproc->stime;
+
+    nfs_lookup(&mnt_point, vnode->path, (nfs_lookup_cb_t) vnode_stat_cb, token);
     yield();
 
     int err = (int) arg[0];
@@ -399,7 +422,19 @@ static int vnode_stat(struct vnode *vnode, sos_stat_t *stat) {
     return ret;
 }
 
-static void vnode_stat_cb(uintptr_t token, nfs_stat_t status, fhandle_t *fh, fattr_t *fattr) {
+static void vnode_stat_cb(uintptr_t token_ptr, nfs_stat_t status, fhandle_t *fh, fattr_t *fattr) {
+    seL4_Word *token = (seL4_Word *) token_ptr;
+    seL4_Word coroutine_id = token[0];
+    seL4_Word pid = token[1];
+    seL4_Word stime = token[2];
+    struct PCB *pcb = process_status(pid);
+
+    /* Check if proc was deleted */
+    if (pcb == NULL || pcb->stime != stime) {
+        free(token);
+        return;
+    }
+
     arg[0] = (seL4_Word) status;
     arg[1] = (seL4_Word) malloc(sizeof(fattr_t));
 
@@ -408,7 +443,9 @@ static void vnode_stat_cb(uintptr_t token, nfs_stat_t status, fhandle_t *fh, fat
     /* 0 has special meaning for setjmp returns, so map 0 to -1 */
     if (status == 0) status = -1;
 
-    set_resume(token);
+    set_resume(coroutine_id);
+
+    free(token);
 }
 
 
@@ -432,14 +469,31 @@ static int file_create(struct vnode *vnode) {
         .mtime = curr_time
     };
 
-    nfs_create(&mnt_point, vnode->path, &sattr, (nfs_create_cb_t) vnode_create_cb, curr_coroutine_id);
+    seL4_Word *token = malloc(sizeof(seL4_Word) * 3);
+    token[0] = curr_coroutine_id;
+    token[1] = curproc->pid;
+    token[2] = curproc->stime;
+
+    nfs_create(&mnt_point, vnode->path, &sattr, (nfs_create_cb_t) vnode_create_cb, token);
 
     set_routine_arg(curr_coroutine_id, 0, 1);
 
     yield();
 }
 
-static void vnode_create_cb(uintptr_t token, nfs_stat_t status, fhandle_t *fh, fattr_t *fattr) {
+static void vnode_create_cb(uintptr_t token_ptr, nfs_stat_t status, fhandle_t *fh, fattr_t *fattr) {
+    seL4_Word *token = (seL4_Word *) token_ptr;
+    seL4_Word coroutine_id = token[0];
+    seL4_Word pid = token[1];
+    seL4_Word stime = token[2];
+    struct PCB *pcb = process_status(pid);
+
+    /* Check if proc was deleted */
+    if (pcb == NULL || pcb->stime != stime) {
+        free(token);
+        return;
+    }
+
     arg[0] = (seL4_Word) status;
     arg[1] = (seL4_Word) malloc(sizeof(fhandle_t));
     arg[2] = (seL4_Word) malloc(sizeof(fattr_t));
@@ -449,7 +503,9 @@ static void vnode_create_cb(uintptr_t token, nfs_stat_t status, fhandle_t *fh, f
 
     set_routine_arg(curr_coroutine_id, 0, 0);
 
-    set_resume(token);
+    set_resume(coroutine_id);
+
+    free(token);
 }
 
 
@@ -461,7 +517,12 @@ static void vnode_create_cb(uintptr_t token, nfs_stat_t status, fhandle_t *fh, f
 static int vnode_open(struct vnode *vnode, fmode_t mode) {
     if (vnode->fh != NULL) return 0;
 
-    nfs_lookup(&mnt_point, vnode->path, (nfs_lookup_cb_t) vnode_open_cb, curr_coroutine_id);
+    seL4_Word *token = malloc(sizeof(seL4_Word) * 3);
+    token[0] = curr_coroutine_id;
+    token[1] = curproc->pid;
+    token[2] = curproc->stime;
+
+    nfs_lookup(&mnt_point, vnode->path, (nfs_lookup_cb_t) vnode_open_cb, token);
     set_routine_arg(curr_coroutine_id, 0, 1);
     yield();
     int err = (int) arg[0];
@@ -491,7 +552,19 @@ static int vnode_open(struct vnode *vnode, fmode_t mode) {
     return 0;
 }
 
-static void vnode_open_cb(uintptr_t token, nfs_stat_t status, fhandle_t *fh, fattr_t *fattr) {
+static void vnode_open_cb(uintptr_t token_ptr, nfs_stat_t status, fhandle_t *fh, fattr_t *fattr) {
+    seL4_Word *token = (seL4_Word *) token_ptr;
+    seL4_Word coroutine_id = token[0];
+    seL4_Word pid = token[1];
+    seL4_Word stime = token[2];
+    struct PCB *pcb = process_status(pid);
+
+    /* Check if proc was deleted */
+    if (pcb == NULL || pcb->stime != stime) {
+        free(token);
+        return;
+    }
+
     arg[0] = (seL4_Word) status;
     arg[1] = (seL4_Word) malloc(sizeof(fhandle_t));
     arg[2] = (seL4_Word) malloc(sizeof(fattr_t));
@@ -503,7 +576,9 @@ static void vnode_open_cb(uintptr_t token, nfs_stat_t status, fhandle_t *fh, fat
 
     set_routine_arg(curr_coroutine_id, 0, 0);
 
-    set_resume(token);
+    set_resume(coroutine_id);
+
+    free(token);
 }
 
 
@@ -557,7 +632,12 @@ static int vnode_read(struct vnode *vnode, struct uio *uio) {
             sos_vaddr = uio->vaddr;
         }
 
-        err = nfs_read(vnode->fh, uio->offset, size, (nfs_read_cb_t) vnode_read_cb, curr_coroutine_id);
+        seL4_Word *token = malloc(sizeof(seL4_Word) * 3);
+        token[0] = curr_coroutine_id;
+        token[1] = curproc->pid;
+        token[2] = curproc->stime;
+
+        err = nfs_read(vnode->fh, uio->offset, size, (nfs_read_cb_t) vnode_read_cb, token);
         conditional_panic(err, "failed read at send phrase");
 
         set_routine_arg(curr_coroutine_id, 0, 1);
@@ -580,20 +660,34 @@ static int vnode_read(struct vnode *vnode, struct uio *uio) {
     return 0;
 }
 
-static void vnode_read_cb(uintptr_t token, nfs_stat_t status, fattr_t *fattr, int count, void *data) {
+static void vnode_read_cb(uintptr_t token_ptr, nfs_stat_t status, fattr_t *fattr, int count, void *data) {
     conditional_panic(status, "failed read in end phrase");
 
-    seL4_Word sos_vaddr = get_routine_arg(token, 1);
+    seL4_Word *token = (seL4_Word *) token_ptr;
+    seL4_Word coroutine_id = token[0];
+    seL4_Word pid = token[1];
+    seL4_Word stime = token[2];
+    struct PCB *pcb = process_status(pid);
+
+    /* Check if proc was deleted */
+    if (pcb == NULL || pcb->stime != stime) {
+        free(token);
+        return;
+    }
+
+    seL4_Word sos_vaddr = get_routine_arg(coroutine_id, 1);
 
     if (status == NFS_OK) {
         memcpy((void *) sos_vaddr, data, count);
     }
 
-    arg[0] = (seL4_Word)count;
+    arg[0] = (seL4_Word) count;
 
     set_routine_arg(curr_coroutine_id, 0, 0);
 
-    set_resume(token);
+    set_resume(coroutine_id);
+
+    free(token);
 }
 
 
@@ -657,9 +751,11 @@ static int vnode_write(struct vnode *vnode, struct uio *uio) {
 
         int req_id = 0;
         while (size > 0) {
-            seL4_Word *token = malloc(sizeof(seL4_Word) * 2);
+            seL4_Word *token = malloc(sizeof(seL4_Word) * 4);
             token[0] = curr_coroutine_id;
             token[1] = req_id;
+            token[2] = curproc->pid;
+            token[3] = curproc->stime;
 
             int offset = MAX_WRITE_SIZE * req_id;
 
@@ -707,19 +803,30 @@ static int vnode_write(struct vnode *vnode, struct uio *uio) {
     return 0;
 }
 
-static void vnode_write_cb(uintptr_t token, enum nfs_stat status, fattr_t *fattr, int count) {
+static void vnode_write_cb(uintptr_t token_ptr, enum nfs_stat status, fattr_t *fattr, int count) {
     conditional_panic(status, "nfs_write fail in end phase");
 
-    seL4_Word *al = (seL4_Word *) token;
+    seL4_Word *token = (seL4_Word *) token_ptr;
+    seL4_Word coroutine_id = token[0];
+    seL4_Word req_id = token[1];
+    seL4_Word pid = token[2];
+    seL4_Word stime = token[3];
+    struct PCB *pcb = process_status(pid);
 
-    seL4_Word req_mask = get_routine_arg(al[0], 0) & (~(1 << al[1]));
-    set_routine_arg(al[0], 0, req_mask);
-    seL4_Word cumulative_count = count + get_routine_arg(al[0], 1);
-
-    set_routine_arg(al[0], 1, cumulative_count);
-    if (req_mask == 0) {
-        set_resume(al[0]);
+    /* Check if proc was deleted */
+    if (pcb == NULL || pcb->stime != stime) {
+        free(token);
+        return;
     }
 
-    free(al);
+    seL4_Word req_mask = get_routine_arg(coroutine_id, 0) & (~(1 << req_id));
+    set_routine_arg(coroutine_id, 0, req_mask);
+    seL4_Word cumulative_count = count + get_routine_arg(coroutine_id, 1);
+
+    set_routine_arg(coroutine_id, 1, cumulative_count);
+    if (req_mask == 0) {
+        set_resume(token[0]);
+    }
+
+    free(token);
 }
