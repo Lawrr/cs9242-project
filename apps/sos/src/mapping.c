@@ -230,7 +230,7 @@ sos_map_page(seL4_Word vaddr_unaligned, seL4_Word *sos_vaddr_ret, struct PCB *pc
 
     seL4_CPtr cap = get_cap(new_frame_vaddr);
     struct app_cap *app_cap;
-    err = get_app_cap(new_frame_vaddr, curproc->addrspace, &app_cap);
+    err = get_app_cap(new_frame_vaddr, pcb->addrspace, &app_cap);
     seL4_CPtr copied_cap;
     if (app_cap->cap == CSPACE_NULL) {
         copied_cap = cspace_copy_cap(cur_cspace,
@@ -241,13 +241,13 @@ sos_map_page(seL4_Word vaddr_unaligned, seL4_Word *sos_vaddr_ret, struct PCB *pc
         /* Book keeping the copied caps */
         insert_app_cap(PAGE_ALIGN_4K(new_frame_vaddr),
                 copied_cap,
-                curproc->addrspace,
+                pcb->addrspace,
                 vaddr);
     } else {
         copied_cap = app_cap->cap;
 
         /* Set new app cap data for this frame */
-        app_cap->addrspace = curproc->addrspace;
+        app_cap->addrspace = pcb->addrspace;
         app_cap->uaddr = vaddr_unaligned;
     }
 

@@ -17,7 +17,7 @@
 #include <sys/panic.h>
 
 
-#define LIMIT_FRAMES
+/* #define LIMIT_FRAMES */
 
 #ifdef LIMIT_FRAMES
 int frames_to_alloc = 0;
@@ -236,12 +236,12 @@ int32_t swap_out() {
     int err = swap_vnode->ops->vop_write(swap_vnode, &uio);
     conditional_panic(err, "Could not write\n");
 
-    err = sos_unmap_page(frame_vaddr, curproc->addrspace);
+    struct app_addrspace *as = frame_table[victim].app_caps.addrspace;
+    err = sos_unmap_page(frame_vaddr, as);
     conditional_panic(err, "Could not unmap\n");
 
     int index1 = root_index(uaddr);
     int index2 = leaf_index(uaddr);
-    struct app_addrspace *as = frame_table[victim].app_caps.addrspace;
 
     /* Mark it swapped */
     as->page_table[index1][index2].sos_vaddr |= PTE_SWAP;
