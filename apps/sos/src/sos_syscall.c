@@ -175,11 +175,20 @@ void syscall_brk(seL4_CPtr reply_cap) {
     send_reply(reply_cap);
 }
 
-static void uwakeup(uint32_t id, void *reply_cap) {
+static void uwakeup(uint32_t id, void *data) {
     /* Wake up and reply back to application */
+    seL4_CPtr reply_cap = ((seL4_Word *) data)[0];
+    pid_t pid = ((seL4_Word *) data)[1];
+
+    curproc = process_status(pid);
+    if (curproc == NULL) {
+        free(data);
+        return 0;
+    }
 
     seL4_SetMR(0, 0);
     send_reply(reply_cap);
+    free(data);
 }
 
 void syscall_usleep(seL4_CPtr reply_cap) {
@@ -191,7 +200,10 @@ void syscall_usleep(seL4_CPtr reply_cap) {
         send_reply(reply_cap);
         return;
     } else {
-        register_timer(msec * 1000, &uwakeup, (void *) reply_cap);
+        seL4_Word *data = malloc(sizeof(seL4_Word) * 2);
+        data[0] = reply_cap;
+        data[1] = curproc->pid;
+        register_timer(msec * 1000, &uwakeup, (void *) data);
     }
 }
 

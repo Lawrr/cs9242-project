@@ -23,8 +23,11 @@
 #include <sos.h>
 
 int main(void) {
-    printf("\n[%d] Hello World!\n", sos_my_id());
-    sleep(10);
-    printf("\n[%d] Done\n", sos_my_id());
+    for (int i = 0; i < 100; i++) {
+        printf("\n[%d] Hello World!\n", sos_my_id());
+        sleep(1);
+    }
+    /* sleep(10); */
+    /* printf("\n[%d] Done\n", sos_my_id()); */
     return 0;
 }

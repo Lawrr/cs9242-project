@@ -477,6 +477,7 @@ static int vnode_open(struct vnode *vnode, fmode_t mode) {
     } else if (err == NFSERR_NOENT) {
         /* Create new file */
         file_create(vnode);
+        if (curproc == NULL) return 0;
 
         err = (int) arg[0];
 
