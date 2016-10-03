@@ -53,7 +53,7 @@ extern seL4_ARM_PageDirectory dest_as;
 extern jmp_buf syscall_loop_entry;
 extern seL4_CPtr _sos_ipc_ep_cap;
 extern struct PCB *curproc;
-
+seL4_Word is_first_proc;
 /*
  * Convert ELF permissions into seL4 permissions.
  */
@@ -139,7 +139,7 @@ zero-filling a newly allocated frame.
     /* We work a page at a time in the destination vspace. */
     pos = 0;
 
-    seL4_Word is_first_proc = (syscall_loop_entry == NULL);
+   
 
     while(pos < segment_size) {
         seL4_Word sos_vaddr;
@@ -209,6 +209,7 @@ int elf_load(seL4_ARM_PageDirectory dest_pd, struct PCB *pcb, char *elf_file) {
         return seL4_InvalidArgument;
     }
 
+    is_first_proc = (syscall_loop_entry == NULL);
     num_headers = elf_getNumProgramHeaders(elf_file);
     for (i = 0; i < num_headers; i++) {
         char *source_addr;
