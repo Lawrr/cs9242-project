@@ -8,7 +8,7 @@
 # @TAG(NICTA_BSD)
 #
 
-#components-$(CONFIG_APP_SOSH) += sosh
-apps-$(CONFIG_APP_SOSH) += sosh
+components-$(CONFIG_APP_SOSH) += sosh
+#apps-$(CONFIG_APP_SOSH) += sosh
 sosh: $(libc) libsel4 libsos
 
