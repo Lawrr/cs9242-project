@@ -176,10 +176,10 @@ int process_new_other(char *app_name, seL4_CPtr fault_ep, int parent_pid) {
         .uaddr = NULL,
         .vaddr = elf_base,
         .size = PAGE_SIZE_4K,
-        .remaining = PAGE_SIE_4K;,
+        .remaining = PAGE_SIZE_4K,
         .offset = 0
     };
-    err = vn->vop_read(vn,uio);
+    err = vn->ops->vop_read(vn,&uio);
     conditional_panic(err,"fail to load excutable file header from nfs");
     
     //elf_base = cpio_get_file(_cpio_archive, app_name, &elf_size);
@@ -224,7 +224,6 @@ int process_new_other(char *app_name, seL4_CPtr fault_ep, int parent_pid) {
     proc->coroutine_id = -1;
     proc->parent = parent_pid;
 
-    int err;
 
     seL4_CPtr user_ep_cap;
 

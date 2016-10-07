@@ -27,7 +27,7 @@
 #include <sys/debug.h>
 #include <sys/panic.h>
 #include "process.h"
-
+#include <utils/page.h>
 /* Minimum of two values. */
 #define MIN(a, b) (((a)<(b))?(a):(b))
 
@@ -253,11 +253,11 @@ zero-filling a newly allocated frame.
                 .uaddr = NULL,
                 .vaddr = PAGE_ALIGN_4K(sos_vaddr),
                 .size = file_size - pos,
-                .remaining = file_size -pos;
+                .remaining = file_size -pos,
                 .offset = src
             };
-            int err = vn->vop_read(vn,&uio);
-            conditional_panic("fail to read page while loading excutable");
+            int err = vn->ops->vop_read(vn,&uio);
+            conditional_panic(err,"fail to read page while loading excutable");
         }
         sos_cap = get_cap(sos_vaddr);
 
@@ -314,7 +314,7 @@ int elf_load_other(seL4_ARM_PageDirectory dest_pd, struct PCB *pcb, char *elf_fi
         }
 
         /* Load segment */
-        err = load_segment_into_vspace(dest_pd,
+        err = load_segment_into_vspace_other(dest_pd,
                                        dest_as,
                                        source_addr,
                                        segment_size,
@@ -375,7 +375,7 @@ int elf_load(seL4_ARM_PageDirectory dest_pd, struct PCB *pcb, char *elf_file) {
         }
 
         /* Load segment */
-        err = load_segment_into_vspace_other(dest_pd,
+        err = load_segment_into_vspace(dest_pd,
                                        dest_as,
                                        source_addr,
                                        segment_size,
