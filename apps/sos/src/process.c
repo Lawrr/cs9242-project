@@ -166,7 +166,7 @@ int process_new(char *app_name, seL4_CPtr fault_ep, int parent_pid) {
 
 int process_new_other(char *app_name, seL4_CPtr fault_ep, int parent_pid) {
     /* These required for loading program sections */
-    char elf_base[PAGE_SIZE_4K];
+    char *elf_base = malloc(PAGE_SIZE_4K);
     unsigned long elf_size;
     struct vnode *vn;
     int err = vfs_open(app_name,FM_READ,&vn);
@@ -316,7 +316,8 @@ int process_new_other(char *app_name, seL4_CPtr fault_ep, int parent_pid) {
     context.pc = elf_getEntryPoint(elf_base);
     context.sp = PROCESS_STACK_TOP;
     seL4_TCB_WriteRegisters(proc->tcb_cap, 1, 0, 2, &context);
-
+    free(elf_base);
+    vfs_close(vn,FM_READ); 
     return id;
 }
 
