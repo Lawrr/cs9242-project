@@ -14,7 +14,10 @@
 #include <sel4/sel4.h>
 #include "addrspace.h"
 #include "process.h"
+#include "vnode.h"
 
 int elf_load(seL4_ARM_PageDirectory dest_pd, struct PCB *pcb, char *elf_file);
+int elf_load(seL4_ARM_PageDirectory dest_pd, struct PCB *pcb, char *elf_file, struct vnode *vn);
+
 
 #endif /* _LIBOS_ELF_H_ */

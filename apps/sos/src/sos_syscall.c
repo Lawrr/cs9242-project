@@ -515,7 +515,7 @@ void syscall_process_create(seL4_CPtr reply_cap, seL4_Word badge) {
     unpin_frame_entry(path_uaddr, MAX_PATH_LEN);
     /* TODO something needs to be done with this err */
 
-    int new_pid = process_new(path_sos_vaddr, _sos_ipc_ep_cap, badge);
+    int new_pid = process_new_other(path_sos_vaddr, _sos_ipc_ep_cap, badge);
     if (new_pid < 0) {
         send_err(reply_cap, -1);
         return;
