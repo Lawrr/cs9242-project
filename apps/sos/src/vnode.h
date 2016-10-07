@@ -3,6 +3,7 @@
 
 #include <cspace/cspace.h>
 #include <nfs/nfs.h>
+#include "process.h"
 #include <sos.h>
 
 #define MAX_DEV_NUM 32
@@ -28,6 +29,7 @@ struct uio {
     int size;
     int remaining;
     int offset;
+    struct PCB *pcb;
 };
 
 struct vnode_ops {

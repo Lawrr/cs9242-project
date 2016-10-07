@@ -141,7 +141,7 @@ zero-filling a newly allocated frame.
     /* We work a page at a time in the destination vspace. */
     pos = 0;
 
-   
+   printf("####%d file_size%d",segment_size,file_size);
 
     while(pos < segment_size) {
         seL4_Word sos_vaddr;
@@ -166,6 +166,7 @@ zero-filling a newly allocated frame.
                     if (pos < file_size) {
                         memcpy((void*) (sos_vaddr | ((dst << LOWER_BITS_SHIFT) >> LOWER_BITS_SHIFT)),
                                 (void*)src, MIN(nbytes, file_size - pos));
+                        printf("src%d size%d\n",src,MIN(nbytes,file_size-pos));
                     }
                     sos_cap = get_cap(sos_vaddr);
 
@@ -237,7 +238,6 @@ zero-filling a newly allocated frame.
     pos = 0;
 
 
-
     while(pos < segment_size) {
         seL4_Word sos_vaddr;
         seL4_CPtr sos_cap, tty_cap;
@@ -251,11 +251,14 @@ zero-filling a newly allocated frame.
         if (pos < file_size) {
             struct uio uio = {
                 .uaddr = NULL,
-                .vaddr = PAGE_ALIGN_4K(sos_vaddr),
+                .vaddr = (sos_vaddr | ((dst << LOWER_BITS_SHIFT) >> LOWER_BITS_SHIFT)),
                 .size = MIN(nbytes, file_size - pos),
                 .remaining = MIN(nbytes, file_size - pos),
-                .offset = src
+                .offset = src,
+                .pcb = pcb
             };
+
+            printf("src%d size%d\n",src,MIN(nbytes,file_size-pos));
             int err = vn->ops->vop_read(vn,&uio);
             conditional_panic(err,"fail to read page while loading excutable");
         }

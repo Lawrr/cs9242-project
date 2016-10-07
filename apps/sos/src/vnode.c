@@ -597,6 +597,7 @@ static int vnode_read(struct vnode *vnode, struct uio *uio) {
     seL4_Word buf_size = uio->size;
     char *uaddr = NULL;
 
+    struct PCB * proc = (uio->pcb == NULL)? curproc:uio->pcb;
     if (uio->uaddr != NULL) {
         uaddr = uio->uaddr;
     }
@@ -624,7 +625,7 @@ static int vnode_read(struct vnode *vnode, struct uio *uio) {
         /* Set sos_vaddr */
         if (uio->uaddr != NULL) {
             /* uaddr */
-            err = sos_map_page((seL4_Word) uaddr, &sos_vaddr, curproc);
+            err = sos_map_page((seL4_Word) uaddr, &sos_vaddr, proc);
             if (err && err != ERR_ALREADY_MAPPED) {
                 return 1;
             }
@@ -639,8 +640,9 @@ static int vnode_read(struct vnode *vnode, struct uio *uio) {
         seL4_Word *token = malloc(sizeof(seL4_Word) * 3);
         conditional_panic(token == NULL, "Out of memory\n");
         token[0] = curr_coroutine_id;
-        token[1] = curproc->pid;
-        token[2] = curproc->stime;
+        token[1] = proc->pid;
+        token[2] = proc->stime;
+        printf("pid%d\n",proc->pid);
 
         err = nfs_read(vnode->fh, uio->offset, size, (nfs_read_cb_t) vnode_read_cb, token);
         conditional_panic(err, "failed read at send phrase");
