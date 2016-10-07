@@ -236,7 +236,7 @@ zero-filling a newly allocated frame.
     /* We work a page at a time in the destination vspace. */
     pos = 0;
 
-   
+
 
     while(pos < segment_size) {
         seL4_Word sos_vaddr;
@@ -246,55 +246,28 @@ zero-filling a newly allocated frame.
 
         /* Map the frame into address space */
 
-        if (is_first_proc) {
-            int reenter = setjmp(syscall_loop_entry);
-            if (!reenter) {
-                start_coroutine(sos_map_page, dst, &sos_vaddr, pcb);
-            } else {
-                seL4_Word req_mask = get_routine_arg(0, 0);
-                if (req_mask) {
-                    mapping_loop(_sos_ipc_ep_cap);
-                    resume();
-                } else {
-                    /* Now copy our data into the destination vspace. */
-                    nbytes = PAGESIZE - (dst & PAGEMASK);
-                    if (pos < file_size) {
-                        memcpy((void*) (sos_vaddr | ((dst << LOWER_BITS_SHIFT) >> LOWER_BITS_SHIFT)),
-                                (void*)src, MIN(nbytes, file_size - pos));
-                    }
-                    sos_cap = get_cap(sos_vaddr);
-
-                    /* Not observable to I-cache yet so flush the frame */
-                    seL4_ARM_Page_Unify_Instruction(sos_cap, 0, PAGESIZE);
-
-                    pos += nbytes;
-                    dst += nbytes;
-                    src += nbytes;
-                }
-            }
-        } else {
-            sos_map_page(dst, &sos_vaddr, pcb);
-            nbytes = PAGESIZE - (dst & PAGEMASK);
-            if (pos < file_size) {
-                struct uio uio = {
-                    .uaddr = NULL,
-                    .vaddr = PAGE_ALIGN_4K(sos_vaddr),
-                    .size = file_size - pos,
-                    .remaining = file_size -pos;
-                    .offset = src
-                };
-                int err = vn->vop_read(vn,&uio);
-                conditional_panic("fail to read page while loading excutable");
-            }
-            sos_cap = get_cap(sos_vaddr);
-
-            /* Not observable to I-cache yet so flush the frame */
-            seL4_ARM_Page_Unify_Instruction(sos_cap, 0, PAGESIZE);
-
-            pos += nbytes;
-            dst += nbytes;
-            src += nbytes;
+        sos_map_page(dst, &sos_vaddr, pcb);
+        nbytes = PAGESIZE - (dst & PAGEMASK);
+        if (pos < file_size) {
+            struct uio uio = {
+                .uaddr = NULL,
+                .vaddr = PAGE_ALIGN_4K(sos_vaddr),
+                .size = file_size - pos,
+                .remaining = file_size -pos;
+                .offset = src
+            };
+            int err = vn->vop_read(vn,&uio);
+            conditional_panic("fail to read page while loading excutable");
         }
+        sos_cap = get_cap(sos_vaddr);
+
+        /* Not observable to I-cache yet so flush the frame */
+        seL4_ARM_Page_Unify_Instruction(sos_cap, 0, PAGESIZE);
+
+        pos += nbytes;
+        dst += nbytes;
+        src += nbytes;
+
     }
     return 0;
 }
