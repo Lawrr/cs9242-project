@@ -33,13 +33,11 @@ static void console_serial_handler(struct serial *serial, char c) {
         return;
     }
 
-    seL4_Word *vnode_data = (seL4_Word *) (console_vnode->data);
-
     /* Take uaddr and turn it into sos_vaddr */
     int index1 = root_index((seL4_Word) console_uio->uaddr);
     int index2 = leaf_index((seL4_Word) console_uio->uaddr);
 
-    struct page_table_entry **page_table = (struct page_table **) vnode_data[0];
+    struct page_table_entry **page_table = pcb->addrspace->page_table;
 
     /* Align and add offset */
     char *sos_vaddr = PAGE_ALIGN_4K(page_table[index1][index2].sos_vaddr);
