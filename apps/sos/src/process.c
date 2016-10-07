@@ -293,7 +293,7 @@ int process_new_other(char *app_name, seL4_CPtr fault_ep, int parent_pid) {
     dprintf(1, "\nStarting \"%s\"...\n", app_name);
 
     /* load the elf image */
-    err = elf_load(proc->vroot, proc, elf_base,vn);
+    err = elf_load_other(proc->vroot, proc, elf_base,vn);
     conditional_panic(err, "Failed to load elf image");
 
     /* Heap region */

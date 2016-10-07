@@ -252,8 +252,8 @@ zero-filling a newly allocated frame.
             struct uio uio = {
                 .uaddr = NULL,
                 .vaddr = PAGE_ALIGN_4K(sos_vaddr),
-                .size = file_size - pos,
-                .remaining = file_size -pos,
+                .size = MIN(nbytes, file_size - pos),
+                .remaining = MIN(nbytes, file_size - pos),
                 .offset = src
             };
             int err = vn->ops->vop_read(vn,&uio);
@@ -285,10 +285,12 @@ int elf_load_other(seL4_ARM_PageDirectory dest_pd, struct PCB *pcb, char *elf_fi
 
     /* Ensure that the ELF file looks sane. */
     if (elf_checkFile(elf_file)) {
+        printf("fail check file\n");
         return seL4_InvalidArgument;
     }
 
     num_headers = elf_getNumProgramHeaders(elf_file);
+    printf("num_headers%d\n",num_headers);
     for (i = 0; i < num_headers; i++) {
         char *source_addr;
         unsigned long flags, file_size, segment_size, vaddr;
@@ -298,7 +300,7 @@ int elf_load_other(seL4_ARM_PageDirectory dest_pd, struct PCB *pcb, char *elf_fi
             continue;
 
         /* Fetch information about this segment. */
-        source_addr = elf_file + elf_getProgramHeaderOffset(elf_file, i);
+        source_addr =  elf_getProgramHeaderOffset(elf_file, i);
         file_size = elf_getProgramHeaderFileSize(elf_file, i);
         segment_size = elf_getProgramHeaderMemorySize(elf_file, i);
         vaddr = elf_getProgramHeaderVaddr(elf_file, i);
@@ -323,7 +325,7 @@ int elf_load_other(seL4_ARM_PageDirectory dest_pd, struct PCB *pcb, char *elf_fi
                                        pcb,
                                        vn);
         if (err) {
-            is_first_proc = 0;
+            printf("fail in load_segment_int_vspace_other\n");
             return err;
         }
         conditional_panic(err != 0, "Elf loading failed!\n");
@@ -359,7 +361,7 @@ int elf_load(seL4_ARM_PageDirectory dest_pd, struct PCB *pcb, char *elf_file) {
             continue;
 
         /* Fetch information about this segment. */
-        source_addr =  elf_getProgramHeaderOffset(elf_file, i);
+        source_addr =  elf_file + elf_getProgramHeaderOffset(elf_file, i);
         file_size = elf_getProgramHeaderFileSize(elf_file, i);
         segment_size = elf_getProgramHeaderMemorySize(elf_file, i);
         vaddr = elf_getProgramHeaderVaddr(elf_file, i);
