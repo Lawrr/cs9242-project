@@ -94,6 +94,7 @@ static int create_actual_process(char *app_name, seL4_CPtr fault_ep, int parent_
     proc->app_name = malloc(strlen(app_name));
     strcpy(proc->app_name, app_name);
     proc->stime = time_stamp() / 1000;
+    proc->self_destruct = 0;
     proc->pid = id;
     proc->wait = PROCESS_WAIT_NONE;
     proc->coroutine_id = -1;
@@ -196,11 +197,31 @@ int process_destroy(pid_t pid) {
     struct PCB *pcb = process_status(pid);
     if (pcb == NULL) return -1;
 
-    PCB_table[pid] = NULL;
-    PCB_end_time[pid] = time_stamp() / 1000;
-
     /* Suspend the pcb we are destroying */
     seL4_TCB_Suspend(pcb->tcb_cap);
+
+    pid_t parent_pid = pcb->parent;
+    struct PCB *parent_pcb = process_status(parent_pid);
+
+    /* Set the parent to -1 of the proc's children we are destroying */
+    for (int i = 0; i < MAX_PROCESSES; i++) {
+        struct PCB *curr_pcb = process_status(i);
+        if (curr_pcb == NULL) continue;
+        if (curr_pcb->parent == pid) {
+            curr_pcb->parent = -1;
+        }
+    }
+
+    /* Resume parent if they are waiting */
+    if (parent_pcb != NULL) {
+        if (parent_pcb->wait == PROCESS_WAIT_ANY || parent_pcb->wait == pid) {
+            parent_pcb->wait = pid;
+            set_resume(parent_pcb->coroutine_id);
+        }
+    }
+
+    PCB_table[pid] = NULL;
+    PCB_end_time[pid] = time_stamp() / 1000;
 
     /* Addrspace */
     as_destroy(pcb->addrspace);
@@ -219,6 +240,7 @@ int process_destroy(pid_t pid) {
     /* PCB */
     if (pcb->coroutine_id != -1) {
         set_cleanup_coroutine(pcb->coroutine_id);
+        cleanup_coroutine();
     }
     free(pcb->app_name);
     free(pcb);

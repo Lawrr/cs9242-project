@@ -109,12 +109,20 @@ static int validate_max_ofd(seL4_CPtr reply_cap, int ofd_count) {
     return 0;
 }
 
-static int validate_pid(seL4_CPtr reply_cap, pid_t child_pid) {
-    if (process_status(child_pid) == NULL) {
+static int validate_pid(seL4_CPtr reply_cap, pid_t pid) {
+    if (process_status(pid) == NULL) {
         send_err(reply_cap, -1);
         return 1;
     }
+    return 0;
+}
 
+static int validate_self_destruct(seL4_CPtr reply_cap, pid_t pid) {
+    struct PCB *pcb = process_status(pid);
+    if (pcb == NULL || pcb->self_destruct) {
+        send_err(reply_cap, -1);
+        return 1;
+    }
     return 0;
 }
 
@@ -184,9 +192,10 @@ static void uwakeup(uint32_t id, void *data) {
     /* Wake up and reply back to application */
     seL4_CPtr reply_cap = ((seL4_Word *) data)[0];
     pid_t pid = ((seL4_Word *) data)[1];
+    seL4_Word stime = ((seL4_Word *) data)[2];
 
     curproc = process_status(pid);
-    if (curproc == NULL) {
+    if (curproc == NULL || curproc->stime != stime) {
         free(data);
         return 0;
     }
@@ -205,9 +214,10 @@ void syscall_usleep(seL4_CPtr reply_cap) {
         send_reply(reply_cap);
         return;
     } else {
-        seL4_Word *data = malloc(sizeof(seL4_Word) * 2);
+        seL4_Word *data = malloc(sizeof(seL4_Word) * 3);
         data[0] = reply_cap;
         data[1] = curproc->pid;
+        data[2] = curproc->stime;
         register_timer(msec * 1000, &uwakeup, (void *) data);
     }
 }
@@ -539,37 +549,19 @@ void syscall_process_create(seL4_CPtr reply_cap, seL4_Word badge) {
 }
 
 void syscall_process_delete(seL4_CPtr reply_cap, seL4_Word badge) {
-    pid_t child_pid = seL4_GetMR(1);
+    pid_t pid = seL4_GetMR(1);
 
-    if (validate_pid(reply_cap, child_pid)) return;
+    if (validate_pid(reply_cap, pid)) return;
+    if (validate_self_destruct(reply_cap, pid)) return;
 
-    pid_t parent_pid = process_status(child_pid)->parent;
-    struct PCB *parent_pcb = process_status(parent_pid);
-    struct PCB *child_pcb = process_status(child_pid);
+    /* Mark process to self destruct */
+    struct PCB *pcb = process_status(pid);
+    pcb->self_destruct = 1;
 
-    /* Set the parent to -1 of the proc's children we are destroying */
-    for (int i = 0; i < MAX_PROCESSES; i++) {
-        struct PCB *curr_pcb = process_status(i);
-        if (curr_pcb == NULL) continue;
-        if (curr_pcb->parent == child_pid) {
-            curr_pcb->parent = -1;
-        }
-    }
+    // TODO check whether it is in process create/destroy and self destruct OR destroy immediately
 
-    /* Resume parent if they are waiting */
-    if (parent_pcb != NULL) {
-        if (parent_pcb->wait == PROCESS_WAIT_ANY || parent_pcb->wait == child_pid) {
-            parent_pcb->wait = child_pid;
-            set_resume(parent_pcb->coroutine_id);
-        }
-    }
-
-    process_destroy(child_pid);
-
-    if (child_pid != badge) {
-        seL4_SetMR(0, 0);
-        send_reply(reply_cap);
-    }
+    seL4_SetMR(0, 0);
+    send_reply(reply_cap);
 
     return;
 }
@@ -584,6 +576,7 @@ void syscall_process_wait(seL4_CPtr reply_cap, seL4_Word badge) {
     pid_t pid = seL4_GetMR(1);
 
     if (validate_pid(reply_cap, pid)) return;
+    if (validate_self_destruct(reply_cap, pid)) return;
 
     struct PCB *child = process_status(pid);
 
@@ -618,8 +611,8 @@ void syscall_process_status(seL4_CPtr reply_cap) {
         /* Find a valid process */
         do {
             pcb = process_status(pid++);
-        } while (pcb == NULL && pid < MAX_PROCESSES);
-        if (pcb == NULL) break;
+        } while ((pcb == NULL || pcb->self_destruct) && pid < MAX_PROCESSES);
+        if (pcb == NULL || pcb->self_destruct) break;
 
         /* Set buffer data */
         sos_process_t buffer;

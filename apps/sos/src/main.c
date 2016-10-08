@@ -22,6 +22,7 @@
 #include <serial/serial.h>
 #include <clock/clock.h>
 #include <utils/page.h>
+#include <autoconf.h>
 
 #include "addrspace.h"
 #include "frametable.h"
@@ -36,7 +37,6 @@
 #include "process.h"
 #include "vnode.h"
 #include "console.h"
-#include <autoconf.h>
 #include "coroutine.h"
 
 #define verbose 5
@@ -243,9 +243,8 @@ void syscall_loop(seL4_CPtr ep) {
         setjmp(syscall_loop_entry); 
         cleanup_coroutine();
         resume();
-        
+
         message = seL4_Wait(ep, &badge);
-        /* printf("sysloop - %d\n", badge); */
         label = seL4_MessageInfo_get_label(message);
         if (badge & IRQ_EP_BADGE) {
             /* Interrupt */
@@ -259,15 +258,24 @@ void syscall_loop(seL4_CPtr ep) {
         } else if (label == seL4_VMFault) {
             /* Page fault */
             curproc = process_status(badge);
+
             start_coroutine(&vm_fault_handler, badge,
-                            seL4_MessageInfo_get_length(message) - 1, NULL);
+                            seL4_MessageInfo_get_length(message) - 1,
+                            NULL);
 
         } else if (label == seL4_NoFault) {
             /* System call */
             curproc = process_status(badge);
             
             start_coroutine(&handle_syscall, badge,
-                            seL4_MessageInfo_get_length(message) - 1, NULL);
+                            seL4_MessageInfo_get_length(message) - 1,
+                            NULL);
+
+            /* Self destruct after a create/delete syscall */
+            if (curproc->self_destruct) {
+                process_destroy(curproc->pid);
+            }
+
         } else {
             printf("Rootserver got an unknown message\n");
         }
