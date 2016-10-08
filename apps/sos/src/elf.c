@@ -277,13 +277,12 @@ static int elf_load_segment_into_vspace(seL4_ARM_PageDirectory dest_pd,
         int err;
 
         /* Map the frame into address space */
-
         sos_map_page(dst, &sos_vaddr, pcb);
         nbytes = PAGESIZE - (dst & PAGEMASK);
         if (pos < file_size) {
             struct uio uio = {
-                .uaddr = NULL,
-                .vaddr = (sos_vaddr | ((dst << LOWER_BITS_SHIFT) >> LOWER_BITS_SHIFT)),
+                .uaddr = dst,
+                .vaddr = NULL,
                 .size = MIN(nbytes, file_size - pos),
                 .remaining = MIN(nbytes, file_size - pos),
                 .offset = src,
