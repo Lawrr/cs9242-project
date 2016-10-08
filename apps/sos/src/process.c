@@ -166,10 +166,16 @@ int process_new_cpio(char *app_name, seL4_CPtr fault_ep, int parent_pid) {
 int process_new(char *app_name, seL4_CPtr fault_ep, int parent_pid) {
     /* These required for loading program sections */
     char *elf_base = malloc(PAGE_SIZE_4K);
+    if (elf_base == NULL) {
+        return -1;
+    }
     unsigned long elf_size;
     struct vnode *vnode;
     int err = vfs_open(app_name, FM_READ, &vnode);
-    if (err) return -1;
+    if (err) {
+        free(elf_base);
+        return -1;
+    }
 
     struct uio uio = {
         .uaddr = NULL,
@@ -287,7 +293,10 @@ int process_new(char *app_name, seL4_CPtr fault_ep, int parent_pid) {
 
     /* load the elf image */
     err = elf_load(proc->vroot, proc, elf_base, vnode);
-    conditional_panic(err, "Failed to load elf image");
+    if (err) {
+        free(elf_base);
+        return -1;
+    }
 
     /* Heap region */
     err = as_define_region(proc->addrspace,

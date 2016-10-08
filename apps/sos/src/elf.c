@@ -226,7 +226,6 @@ int cpio_elf_load(seL4_ARM_PageDirectory dest_pd, struct PCB *pcb, char *elf_fil
         if (err) {
             return err;
         }
-        conditional_panic(err != 0, "Elf loading failed!\n");
     }
 
     return 0;
@@ -357,7 +356,6 @@ int elf_load(seL4_ARM_PageDirectory dest_pd, struct PCB *pcb, char *elf_file, st
         if (err) {
             return err;
         }
-        conditional_panic(err != 0, "Elf loading failed!\n");
     }
 
     return 0;
