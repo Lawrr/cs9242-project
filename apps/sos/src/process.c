@@ -193,10 +193,14 @@ static int create_actual_process(char *app_name, seL4_CPtr fault_ep, int parent_
 }
 
 int process_destroy(pid_t pid) {
-    if (pid < 0 || pid >= MAX_PROCESSES) return -1;
-
-    struct PCB *pcb = PCB_table[pid];
+    struct PCB *pcb = process_status(pid);
     if (pcb == NULL) return -1;
+
+    PCB_table[pid] = NULL;
+    PCB_end_time[pid] = time_stamp() / 1000;
+
+    /* Suspend the pcb we are destroying */
+    seL4_TCB_Suspend(pcb->tcb_cap);
 
     /* Addrspace */
     as_destroy(pcb->addrspace);
@@ -218,9 +222,6 @@ int process_destroy(pid_t pid) {
     }
     free(pcb->app_name);
     free(pcb);
-
-    PCB_table[pid] = NULL;
-    PCB_end_time[pid] = time_stamp() / 1000;
 
     return 0;
 }
