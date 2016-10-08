@@ -94,7 +94,7 @@ static int create_actual_process(char *app_name, seL4_CPtr fault_ep, int parent_
     proc->app_name = malloc(strlen(app_name));
     strcpy(proc->app_name, app_name);
     proc->stime = time_stamp() / 1000;
-    proc->self_destruct = 0;
+    proc->status = PROCESS_STATUS_NOT_BUSY;
     proc->pid = id;
     proc->wait = PROCESS_WAIT_NONE;
     proc->coroutine_id = -1;

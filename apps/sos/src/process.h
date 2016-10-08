@@ -17,6 +17,10 @@
 #define PROCESS_WAIT_NONE -2
 #define PROCESS_WAIT_ANY -1
 
+#define PROCESS_STATUS_NOT_BUSY 0
+#define PROCESS_STATUS_BUSY 1
+#define PROCESS_STATUS_SELF_DESTRUCT 2
+
 struct PCB {
     seL4_Word tcb_addr;
     seL4_TCB tcb_cap;
@@ -32,7 +36,7 @@ struct PCB {
     char *app_name;
     unsigned int stime;
 
-    int self_destruct;
+    int status;
     int pid;
     int wait;
     int coroutine_id;

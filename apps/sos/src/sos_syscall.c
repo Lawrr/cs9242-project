@@ -119,7 +119,7 @@ static int validate_pid(seL4_CPtr reply_cap, pid_t pid) {
 
 static int validate_self_destruct(seL4_CPtr reply_cap, pid_t pid) {
     struct PCB *pcb = process_status(pid);
-    if (pcb == NULL || pcb->self_destruct) {
+    if (pcb == NULL || pcb->status == PROCESS_STATUS_SELF_DESTRUCT) {
         send_err(reply_cap, -1);
         return 1;
     }
@@ -522,6 +522,8 @@ void syscall_process_create(seL4_CPtr reply_cap, seL4_Word badge) {
 
     if (validate_uaddr(reply_cap, path_uaddr, 0)) return;
 
+    curproc->status = PROCESS_STATUS_BUSY;
+
     char path_sos_vaddr[MAX_PATH_LEN];
     /* Make sure address is mapped */
     seL4_Word sos_vaddr;
@@ -536,12 +538,12 @@ void syscall_process_create(seL4_CPtr reply_cap, seL4_Word badge) {
     /* TODO something needs to be done with this err */
 
     int new_pid = process_new(path_sos_vaddr, _sos_ipc_ep_cap, badge);
-    if (new_pid < 0) {
-        send_err(reply_cap, -1);
-        return;
+
+    if (curproc->status == PROCESS_STATUS_BUSY) {
+        curproc->status = PROCESS_STATUS_NOT_BUSY;
     }
 
-    struct PCB *pcb = process_status(new_pid);
+    /* If error, sends -1 pid */
     seL4_SetMR(0, new_pid);
     send_reply(reply_cap);
 
@@ -556,12 +558,23 @@ void syscall_process_delete(seL4_CPtr reply_cap, seL4_Word badge) {
 
     /* Mark process to self destruct */
     struct PCB *pcb = process_status(pid);
-    pcb->self_destruct = 1;
 
-    // TODO check whether it is in process create/destroy and self destruct OR destroy immediately
+    if (pcb->status == PROCESS_STATUS_BUSY) {
+        pcb->status = PROCESS_STATUS_SELF_DESTRUCT;
+    } else {
+        curproc->status = PROCESS_STATUS_BUSY;
 
-    seL4_SetMR(0, 0);
-    send_reply(reply_cap);
+        process_destroy(pid);
+
+        if (curproc->status == PROCESS_STATUS_BUSY) {
+            curproc->status = PROCESS_STATUS_NOT_BUSY;
+        }
+    }
+
+    if (pid != badge) {
+        seL4_SetMR(0, 0);
+        send_reply(reply_cap);
+    }
 
     return;
 }
@@ -611,8 +624,8 @@ void syscall_process_status(seL4_CPtr reply_cap) {
         /* Find a valid process */
         do {
             pcb = process_status(pid++);
-        } while ((pcb == NULL || pcb->self_destruct) && pid < MAX_PROCESSES);
-        if (pcb == NULL || pcb->self_destruct) break;
+        } while ((pcb == NULL || pcb->status == PROCESS_STATUS_SELF_DESTRUCT) && pid < MAX_PROCESSES);
+        if (pcb == NULL || pcb->status == PROCESS_STATUS_SELF_DESTRUCT) break;
 
         /* Set buffer data */
         sos_process_t buffer;

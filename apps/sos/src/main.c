@@ -272,7 +272,7 @@ void syscall_loop(seL4_CPtr ep) {
                             NULL);
 
             /* Self destruct after a create/delete syscall */
-            if (curproc->self_destruct) {
+            if (curproc->status == PROCESS_STATUS_SELF_DESTRUCT) {
                 process_destroy(curproc->pid);
             }
 
