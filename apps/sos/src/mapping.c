@@ -274,8 +274,34 @@ sos_map_page(seL4_Word vaddr_unaligned, seL4_Word *sos_vaddr_ret, struct PCB *pc
         swap_in(vaddr, PAGE_ALIGN_4K(new_frame_vaddr));
     }
 
+    if (curr_region->segment_size != 0 && !(pte.sos_vaddr & PTE_LOADED)){
+        if (vaddr - curr_region->baseaddr < curr_region->segment_size){
+           seL4_Word size = MIN(curr_region->segment_size-vaddr+curr_region->baseaddr,PAGE_SIZE_4K); 
+           seL4_Word offset = vaddr - curr_region->baseaddr + curr_region->offset;
+           struct uio uio = {
+               .uaddr = NULL,
+               .vaddr = PAGE_ALIGN_4K(new_frame_vaddr),
+               .size = size,
+               .remaining = size,
+               .offset = offset,
+               .pcb = curproc
+           };
+
+            printf("size %d offset%d\n",size,offset);
+
+           int err = pcb->executable_file->ops->vop_read(pcb->executable_file,&uio);
+           conditional_panic(err,"Fail first load");
+           pte.sos_vaddr |= PTE_LOADED;
+           (*page_table_vaddr)[index1][index2] = pte;
+        }
+        
+    }
+    
+    
     *sos_vaddr_ret = new_frame_vaddr;
     pcb->addrspace->page_count += 1;
+    
+    
     return 0;
 }
 

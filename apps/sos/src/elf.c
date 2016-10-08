@@ -210,12 +210,13 @@ int cpio_elf_load(seL4_ARM_PageDirectory dest_pd, struct PCB *pcb, char *elf_fil
         dprintf(1, " * Loading segment %08x-->%08x\n", (int)vaddr, (int)(vaddr + segment_size));
 
         /* Define region */
-        err = as_define_region(dest_as, vaddr, segment_size, get_sel4_rights_from_elf(flags) & seL4_AllRights);
+        err = as_define_region(dest_as, vaddr, segment_size, get_sel4_rights_from_elf(flags) & seL4_AllRights,0,0);
         if (err) {
             return err;
         }
 
-        /* Load segment */
+        
+        /*Load segment*/
         err = cpio_elf_load_segment_into_vspace(dest_pd,
                 dest_as,
                 source_addr,
@@ -338,12 +339,14 @@ int elf_load(seL4_ARM_PageDirectory dest_pd, struct PCB *pcb, char *elf_file, st
         dprintf(1, " * Loading segment %08x-->%08x\n", (int)vaddr, (int)(vaddr + segment_size));
 
         /* Define region */
-        err = as_define_region(dest_as, vaddr, segment_size, get_sel4_rights_from_elf(flags) & seL4_AllRights);
+        err = as_define_region(dest_as, vaddr, segment_size, get_sel4_rights_from_elf(flags) & seL4_AllRights,
+                              source_addr,file_size);
         if (err) {
             return err;
         }
 
-        /* Load segment */
+        /*
+         Load segment 
         err = elf_load_segment_into_vspace(dest_pd,
                 dest_as,
                 source_addr,
@@ -354,7 +357,7 @@ int elf_load(seL4_ARM_PageDirectory dest_pd, struct PCB *pcb, char *elf_file, st
                 vnode);
         if (err) {
             return err;
-        }
+        }*/
     }
 
     return 0;

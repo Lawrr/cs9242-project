@@ -62,7 +62,7 @@ int process_new(char *app_name, seL4_CPtr fault_ep, int parent_pid) {
 
     int id = create_actual_process(app_name, fault_ep, parent_pid, elf_base, vnode);
     free(elf_base);
-    vfs_close(vnode, FM_READ);
+    //vfs_close(vnode, FM_READ);
 
     return id;
 }
@@ -100,6 +100,7 @@ static int create_actual_process(char *app_name, seL4_CPtr fault_ep, int parent_
     proc->coroutine_id = -1;
     proc->parent = parent_pid;
     proc->addrspace = as_new();
+    proc->executable_file = elf_vnode;
 
     /* These required for setting up the TCB */
     seL4_UserContext context;
@@ -123,7 +124,7 @@ static int create_actual_process(char *app_name, seL4_CPtr fault_ep, int parent_
     err = as_define_region(proc->addrspace,
             PROCESS_IPC_BUFFER,
             (1 << seL4_PageBits),
-            seL4_AllRights);
+            seL4_AllRights,0,0);
     conditional_panic(err, "Could not define IPC buffer region");
 
     /* Create an IPC buffer */
@@ -174,14 +175,14 @@ static int create_actual_process(char *app_name, seL4_CPtr fault_ep, int parent_
     err = as_define_region(proc->addrspace,
             PROCESS_HEAP_START,
             0,
-            seL4_AllRights);
+            seL4_AllRights,0,0);
     conditional_panic(err, "Could not define heap region");
 
     /* Stack region */
     err = as_define_region(proc->addrspace,
             PROCESS_STACK_BOT,
             PROCESS_STACK_TOP - PROCESS_STACK_BOT,
-            seL4_AllRights);
+            seL4_AllRights,0,0);
     conditional_panic(err, "Could not define stack region");
 
     /* Start the new process */
