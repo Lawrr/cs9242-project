@@ -221,18 +221,21 @@ static void vm_fault_handler(seL4_Word badge, int num_args) {
     printf("In vm_fault_handler for uaddr: %p, instr: %p\n", map_vaddr, seL4_GetMR(0));
 
     err = sos_map_page(map_vaddr, &sos_vaddr, curproc);
-    if (err) printf("ERR: %d\n", err);
-    conditional_panic(err, "Could not map page\n");
 
-    if (!isInstruction) {
-        unpin_frame_entry(PAGE_ALIGN_4K(instruction_vaddr), PAGE_SIZE_4K);
+    if (err) {
+        printf("Vm fault error: %d - Destroying process %d\n", err, curproc->pid);
+        process_destroy(curproc->pid);
+    } else {
+        if (!isInstruction) {
+            unpin_frame_entry(PAGE_ALIGN_4K(instruction_vaddr), PAGE_SIZE_4K);
+        }
+
+        seL4_MessageInfo_t reply = seL4_MessageInfo_new(0, 0, 0, 0);
+        seL4_Send(reply_cap, reply);
+
+        /* Free the saved reply cap */
+        cspace_free_slot(cur_cspace, reply_cap); 
     }
-
-    seL4_MessageInfo_t reply = seL4_MessageInfo_new(0, 0, 0, 0);
-    seL4_Send(reply_cap, reply);
-
-    /* Free the saved reply cap */
-    cspace_free_slot(cur_cspace, reply_cap); 
 }
 
 void syscall_loop(seL4_CPtr ep) {
