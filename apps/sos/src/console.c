@@ -29,9 +29,7 @@ static void console_serial_handler(struct serial *serial, char c) {
 
     /* Check if proc was deleted */
     struct PCB *pcb = process_status(read_pid);
-    if (pcb->self_destruct) {
-        console_uio = NULL;
-        set_resume(read_coroutine_id);
+    if (pcb == NULL || pcb->stime != read_stime) {
         return;
     }
 
