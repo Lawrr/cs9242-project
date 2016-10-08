@@ -33,7 +33,8 @@ int get_swap_index() {
                 .uaddr = NULL,
                 .size = PAGE_SIZE_4K,
                 .offset = freelist_page->index * PAGE_SIZE_4K,
-                .remaining = PAGE_SIZE_4K
+                .remaining = PAGE_SIZE_4K,
+                .pcb = NULL
             };
 
             /* Read in 1 page (1024) of freelist indices */

@@ -258,7 +258,6 @@ zero-filling a newly allocated frame.
                 .pcb = pcb
             };
 
-            printf("src%d size%d\n",src,MIN(nbytes,file_size-pos));
             int err = vn->ops->vop_read(vn,&uio);
             conditional_panic(err,"fail to read page while loading excutable");
         }

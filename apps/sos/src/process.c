@@ -177,7 +177,8 @@ int process_new_other(char *app_name, seL4_CPtr fault_ep, int parent_pid) {
         .vaddr = elf_base,
         .size = PAGE_SIZE_4K,
         .remaining = PAGE_SIZE_4K,
-        .offset = 0
+        .offset = 0,
+        .pcb = NULL
     };
     err = vn->ops->vop_read(vn,&uio);
     conditional_panic(err,"fail to load excutable file header from nfs");

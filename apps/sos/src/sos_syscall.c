@@ -367,7 +367,8 @@ void syscall_read(seL4_CPtr reply_cap) {
         .vaddr = NULL,
         .size = ubuf_size,
         .remaining = ubuf_size,
-        .offset = entry->offset
+        .offset = entry->offset,
+        .pcb = NULL
     };
 
     int err;
