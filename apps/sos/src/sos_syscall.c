@@ -368,7 +368,7 @@ void syscall_read(seL4_CPtr reply_cap) {
         .size = ubuf_size,
         .remaining = ubuf_size,
         .offset = entry->offset,
-        .pcb = NULL
+        .pcb = curproc
     };
 
     int err;

@@ -6,6 +6,7 @@
 
 #define FREELIST_SIZE 2048
 
+extern struct PCB *curproc;
 extern struct vnode *swap_vnode;
 
 static struct freelist_page {
@@ -34,7 +35,7 @@ int get_swap_index() {
                 .size = PAGE_SIZE_4K,
                 .offset = freelist_page->index * PAGE_SIZE_4K,
                 .remaining = PAGE_SIZE_4K,
-                .pcb = NULL
+                .pcb = curproc
             };
 
             /* Read in 1 page (1024) of freelist indices */

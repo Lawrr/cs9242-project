@@ -268,7 +268,7 @@ int32_t swap_in(seL4_Word uaddr, seL4_Word sos_vaddr) {
         .size = PAGE_SIZE_4K,
         .offset = swap_index * PAGE_SIZE_4K,
         .remaining = PAGE_SIZE_4K,
-        .pcb = NULL
+        .pcb = curproc
     };
 
     int err = swap_vnode->ops->vop_read(swap_vnode, &uio);

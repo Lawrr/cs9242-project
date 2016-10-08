@@ -52,7 +52,7 @@ int process_new(char *app_name, seL4_CPtr fault_ep, int parent_pid) {
         .size = PAGE_SIZE_4K,
         .remaining = PAGE_SIZE_4K,
         .offset = 0,
-        .pcb = NULL
+        .pcb = curproc
     };
     err = vnode->ops->vop_read(vnode, &uio);
     if (err) {

@@ -596,9 +596,9 @@ static int vnode_read(struct vnode *vnode, struct uio *uio) {
     int err;
     seL4_Word sos_vaddr;
     seL4_Word buf_size = uio->size;
+    struct PCB *proc = uio->pcb;
     char *uaddr = NULL;
 
-    struct PCB * proc = (uio->pcb == NULL)? curproc:uio->pcb;
     if (uio->uaddr != NULL) {
         uaddr = uio->uaddr;
     }
