@@ -32,6 +32,7 @@ struct PCB {
     char *app_name;
     unsigned int stime;
 
+    int self_destruct;
     int pid;
     int wait;
     int coroutine_id;
