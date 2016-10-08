@@ -274,23 +274,32 @@ sos_map_page(seL4_Word vaddr_unaligned, seL4_Word *sos_vaddr_ret, struct PCB *pc
         swap_in(vaddr, PAGE_ALIGN_4K(new_frame_vaddr));
     }
 
+    printf("##########loaded base:%x,end:%x,segment_size:%d true:%d \n",
+            curr_region->baseaddr,
+            curr_region->baseaddr+curr_region->size,
+            curr_region->segment_size,
+            !(pte.sos_vaddr & PTE_LOADED));
     if (curr_region->segment_size != 0 && !(pte.sos_vaddr & PTE_LOADED)){
-        if (vaddr - curr_region->baseaddr < curr_region->segment_size){
-           seL4_Word size = MIN(curr_region->segment_size-vaddr+curr_region->baseaddr,PAGE_SIZE_4K); 
-           seL4_Word offset = vaddr - curr_region->baseaddr + curr_region->offset;
+        if (vaddr_unaligned - curr_region->baseaddr < curr_region->segment_size){
+           seL4_Word end_vaddr = vaddr + 0x1000;
+           seL4_Word size = MIN(curr_region->segment_size-vaddr_unaligned+curr_region->baseaddr,end_vaddr-vaddr_unaligned); 
+           seL4_Word offset = vaddr_unaligned - curr_region->baseaddr + curr_region->offset;
            struct uio uio = {
                .uaddr = NULL,
-               .vaddr = PAGE_ALIGN_4K(new_frame_vaddr),
+               .vaddr = PAGE_ALIGN_4K(new_frame_vaddr)|(PAGE_MASK_4K & vaddr_unaligned),
                .size = size,
                .remaining = size,
                .offset = offset,
                .pcb = curproc
            };
 
-            printf("size %d offset%d\n",size,offset);
+            printf("size %x offset%x\n",size,offset);
 
            int err = pcb->executable_file->ops->vop_read(pcb->executable_file,&uio);
-           conditional_panic(err,"Fail first load");
+           
+           seL4_ARM_Page_Unify_Instruction(cap, 0, PAGE_SIZE_4K);
+           
+           conditional_panic(err|uio.remaining,"Fail first load");
            pte.sos_vaddr |= PTE_LOADED;
            (*page_table_vaddr)[index1][index2] = pte;
         }

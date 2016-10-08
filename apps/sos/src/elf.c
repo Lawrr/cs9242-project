@@ -158,6 +158,7 @@ static int cpio_elf_load_segment_into_vspace(seL4_ARM_PageDirectory dest_pd,
             } else {
                 /* Now copy our data into the destination vspace. */
                 nbytes = PAGESIZE - (dst & PAGEMASK);
+                
                 if (pos < file_size) {
                     memcpy((void*) (sos_vaddr | ((dst << LOWER_BITS_SHIFT) >> LOWER_BITS_SHIFT)),
                             (void*)src, MIN(nbytes, file_size - pos));
@@ -335,6 +336,7 @@ int elf_load(seL4_ARM_PageDirectory dest_pd, struct PCB *pcb, char *elf_file, st
         vaddr = elf_getProgramHeaderVaddr(elf_file, i);
         flags = elf_getProgramHeaderFlags(elf_file, i);
 
+
         /* Copy it across into the vspace. */
         dprintf(1, " * Loading segment %08x-->%08x\n", (int)vaddr, (int)(vaddr + segment_size));
 
@@ -345,8 +347,8 @@ int elf_load(seL4_ARM_PageDirectory dest_pd, struct PCB *pcb, char *elf_file, st
             return err;
         }
 
-        /*
-         Load segment 
+        
+        /* Load segment 
         err = elf_load_segment_into_vspace(dest_pd,
                 dest_as,
                 source_addr,

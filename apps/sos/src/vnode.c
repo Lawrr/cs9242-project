@@ -650,9 +650,7 @@ static int vnode_read(struct vnode *vnode, struct uio *uio) {
         set_routine_arg(curr_coroutine_id, 0, 1);
         set_routine_arg(curr_coroutine_id, 1, sos_vaddr);
 
-        printf("before yield\n");
         yield();
-        printf("After yield\n");
         seL4_Word count = arg[0];
 
         buf_size -= count;
@@ -672,7 +670,6 @@ static int vnode_read(struct vnode *vnode, struct uio *uio) {
 static void vnode_read_cb(uintptr_t token_ptr, nfs_stat_t status, fattr_t *fattr, int count, void *data) {
     conditional_panic(status, "failed read in end phrase");
 
-    printf("here\n");
     seL4_Word *token = (seL4_Word *) token_ptr;
     seL4_Word coroutine_id = token[0];
     seL4_Word pid = token[1];
