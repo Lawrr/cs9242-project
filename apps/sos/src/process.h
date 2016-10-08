@@ -40,8 +40,8 @@ struct PCB {
     struct app_addrspace *addrspace;
 };
 
+int process_new_cpio(char* app_name, seL4_CPtr fault_ep, int parent_pid);
 int process_new(char* app_name, seL4_CPtr fault_ep, int parent_pid);
-int process_new_other(char* app_name, seL4_CPtr fault_ep, int parent_pid);
 int process_destroy(pid_t pid);
 
 struct PCB *process_status(pid_t pid);

@@ -441,7 +441,7 @@ int main(void) {
     coroutine_init();
 
     /* Start the user application */
-    int proc_id = process_new(TTY_NAME, _sos_ipc_ep_cap, -1);
+    int proc_id = process_new_cpio(TTY_NAME, _sos_ipc_ep_cap, -1);
     conditional_panic(proc_id == -1, "Could not start first process\n");
 
     /* Initialise open file table */

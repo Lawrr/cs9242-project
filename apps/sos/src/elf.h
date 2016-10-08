@@ -16,8 +16,8 @@
 #include "process.h"
 #include "vnode.h"
 
-int elf_load(seL4_ARM_PageDirectory dest_pd, struct PCB *pcb, char *elf_file);
-int elf_load_other(seL4_ARM_PageDirectory dest_pd, struct PCB *pcb, char *elf_file, struct vnode *vn);
+int cpio_elf_load(seL4_ARM_PageDirectory dest_pd, struct PCB *pcb, char *elf_file);
 
+int elf_load(seL4_ARM_PageDirectory dest_pd, struct PCB *pcb, char *elf_file, struct vnode *vnode);
 
 #endif /* _LIBOS_ELF_H_ */

@@ -1,14 +1,15 @@
+#include <limits.h>
 #include <cspace/cspace.h>
 #include <cpio/cpio.h>
-#include <limits.h>
+#include <utils/page.h>
+#include <clock/clock.h>
 
 #include "vmem_layout.h"
 #include "file.h"
 #include "process.h"
 #include "addrspace.h"
-#include <utils/page.h>
-#include <clock/clock.h>
 #include "vnode.h"
+
 #define verbose 5
 #include <assert.h>
 #include <sys/panic.h>
@@ -22,7 +23,7 @@ struct PCB *curproc;
 static struct PCB *PCB_table[MAX_PROCESSES];
 static unsigned int PCB_end_time[MAX_PROCESSES];
 
-int process_new(char *app_name, seL4_CPtr fault_ep, int parent_pid) {
+int process_new_cpio(char *app_name, seL4_CPtr fault_ep, int parent_pid) {
     /* These required for loading program sections */
     char *elf_base;
     unsigned long elf_size;
@@ -133,12 +134,10 @@ int process_new(char *app_name, seL4_CPtr fault_ep, int parent_pid) {
             proc->ipc_buffer_cap);
     conditional_panic(err, "Unable to configure new TCB");
 
-
-    /* parse the cpio image */
     dprintf(1, "\nStarting \"%s\"...\n", app_name);
 
     /* load the elf image */
-    err = elf_load(proc->vroot, proc, elf_base);
+    err = cpio_elf_load(proc->vroot, proc, elf_base);
     conditional_panic(err, "Failed to load elf image");
 
     /* Heap region */
@@ -164,12 +163,12 @@ int process_new(char *app_name, seL4_CPtr fault_ep, int parent_pid) {
     return id;
 }
 
-int process_new_other(char *app_name, seL4_CPtr fault_ep, int parent_pid) {
+int process_new(char *app_name, seL4_CPtr fault_ep, int parent_pid) {
     /* These required for loading program sections */
     char *elf_base = malloc(PAGE_SIZE_4K);
     unsigned long elf_size;
-    struct vnode *vn;
-    int err = vfs_open(app_name,FM_READ,&vn);
+    struct vnode *vnode;
+    int err = vfs_open(app_name, FM_READ, &vnode);
     if (err) return -1;
 
     struct uio uio = {
@@ -180,13 +179,8 @@ int process_new_other(char *app_name, seL4_CPtr fault_ep, int parent_pid) {
         .offset = 0,
         .pcb = NULL
     };
-    err = vn->ops->vop_read(vn,&uio);
-    conditional_panic(err,"fail to load excutable file header from nfs");
-    
-    //elf_base = cpio_get_file(_cpio_archive, app_name, &elf_size);
-    //if (elf_base == NULL) {
-      //  return -1;
-    //}
+    err = vnode->ops->vop_read(vnode, &uio);
+    conditional_panic(err, "fail to load excutable file header from nfs");
 
     int id = -1;
     unsigned int end_time = UINT_MAX;
@@ -289,12 +283,10 @@ int process_new_other(char *app_name, seL4_CPtr fault_ep, int parent_pid) {
             proc->ipc_buffer_cap);
     conditional_panic(err, "Unable to configure new TCB");
 
-
-    /* parse the cpio image */
     dprintf(1, "\nStarting \"%s\"...\n", app_name);
 
     /* load the elf image */
-    err = elf_load_other(proc->vroot, proc, elf_base,vn);
+    err = elf_load(proc->vroot, proc, elf_base, vnode);
     conditional_panic(err, "Failed to load elf image");
 
     /* Heap region */
@@ -317,13 +309,9 @@ int process_new_other(char *app_name, seL4_CPtr fault_ep, int parent_pid) {
     context.sp = PROCESS_STACK_TOP;
     seL4_TCB_WriteRegisters(proc->tcb_cap, 1, 0, 2, &context);
     free(elf_base);
-    vfs_close(vn,FM_READ); 
+    vfs_close(vnode, FM_READ);
     return id;
 }
-
-
-
-
 
 int process_destroy(pid_t pid) {
     if (pid < 0 || pid >= MAX_PROCESSES) return -1;

@@ -1,15 +1,16 @@
 #include <string.h>
+#include <utils/page.h>
+#include <nfs/nfs.h>
+#include <clock/clock.h>
+
 #include "vnode.h"
 #include "hashtable.h"
 #include "process.h"
 #include "coroutine.h"
-#include <string.h>
+#include "mapping.h"
+
 #include <sys/panic.h>
 #include <sys/stat.h>
-#include <mapping.h>
-#include <utils/page.h>
-#include <nfs/nfs.h>
-#include <clock/clock.h>
 
 #define VNODE_TABLE_SLOTS 64
 #define NUM_ARG 4
@@ -642,7 +643,6 @@ static int vnode_read(struct vnode *vnode, struct uio *uio) {
         token[0] = curr_coroutine_id;
         token[1] = proc->pid;
         token[2] = proc->stime;
-        printf("pid%d\n",proc->pid);
 
         err = nfs_read(vnode->fh, uio->offset, size, (nfs_read_cb_t) vnode_read_cb, token);
         conditional_panic(err, "failed read at send phrase");
