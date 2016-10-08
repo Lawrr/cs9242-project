@@ -42,7 +42,7 @@ struct vnode_ops {
 };
 
 struct dev {
-    char* name;
+    char *name;
     struct vnode_ops *ops;
 };
 

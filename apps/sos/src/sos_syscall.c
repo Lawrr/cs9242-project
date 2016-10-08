@@ -109,6 +109,15 @@ static int validate_max_ofd(seL4_CPtr reply_cap, int ofd_count) {
     return 0;
 }
 
+static int validate_pid(seL4_CPtr reply_cap, pid_t child_pid) {
+    if (process_status(child_pid) == NULL) {
+        send_err(reply_cap, -1);
+        return 1;
+    }
+
+    return 0;
+}
+
 static int get_safe_path(char *dst, seL4_Word uaddr,
         seL4_Word sos_vaddr, uint32_t max_len) {
     /* Get safe path */
@@ -530,15 +539,11 @@ void syscall_process_create(seL4_CPtr reply_cap, seL4_Word badge) {
 }
 
 void syscall_process_delete(seL4_CPtr reply_cap, seL4_Word badge) {
-    seL4_Word child_pid = seL4_GetMR(1);
+    pid_t child_pid = seL4_GetMR(1);
 
-    /* Validate pid */
-    if (process_status(child_pid) == NULL) {
-        send_err(reply_cap, -1);
-        return;
-    }
+    if (validate_pid(reply_cap, child_pid)) return;
 
-    int parent_pid = process_status(child_pid)->parent;
+    pid_t parent_pid = process_status(child_pid)->parent;
     struct PCB *parent_pcb = process_status(parent_pid);
     struct PCB *child_pcb = process_status(child_pid);
 
@@ -576,7 +581,10 @@ void syscall_process_id(seL4_CPtr reply_cap, seL4_Word badge) {
 }
 
 void syscall_process_wait(seL4_CPtr reply_cap, seL4_Word badge) {
-    int pid = seL4_GetMR(1);
+    pid_t pid = seL4_GetMR(1);
+
+    if (validate_pid(reply_cap, pid)) return;
+
     struct PCB *child = process_status(pid);
 
     if (pid == PROCESS_WAIT_ANY || child != NULL) {
