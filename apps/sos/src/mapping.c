@@ -280,13 +280,12 @@ sos_map_page(seL4_Word vaddr_unaligned, seL4_Word *sos_vaddr_ret, struct PCB *pc
             curr_region->segment_size,
             !(pte.sos_vaddr & PTE_LOADED));
     if (curr_region->segment_size != 0 && !(pte.sos_vaddr & PTE_LOADED)){
-        if (vaddr_unaligned - curr_region->baseaddr < curr_region->segment_size){
-           seL4_Word end_vaddr = vaddr + 0x1000;
-           seL4_Word size = MIN(curr_region->segment_size-vaddr_unaligned+curr_region->baseaddr,end_vaddr-vaddr_unaligned); 
-           seL4_Word offset = vaddr_unaligned - curr_region->baseaddr + curr_region->offset;
+        if (vaddr - curr_region->baseaddr < curr_region->segment_size){
+           seL4_Word size = MIN(curr_region->segment_size-vaddr+curr_region->baseaddr,PAGE_SIZE_4K); 
+           seL4_Word offset = vaddr - curr_region->baseaddr + curr_region->offset;
            struct uio uio = {
                .uaddr = NULL,
-               .vaddr = PAGE_ALIGN_4K(new_frame_vaddr)|(PAGE_MASK_4K & vaddr_unaligned),
+               .vaddr = PAGE_ALIGN_4K(new_frame_vaddr),
                .size = size,
                .remaining = size,
                .offset = offset,
