@@ -23,8 +23,9 @@ struct PCB *curproc;
 static struct PCB *PCB_table[MAX_PROCESSES];
 static unsigned int PCB_end_time[MAX_PROCESSES];
 
+static int create_actual_process(char *app_name, seL4_CPtr fault_ep, int parent_pid, char *elf_base, struct vnode *elf_vnode);
+
 int process_new_cpio(char *app_name, seL4_CPtr fault_ep, int parent_pid) {
-    /* These required for loading program sections */
     char *elf_base;
     unsigned long elf_size;
     elf_base = cpio_get_file(_cpio_archive, app_name, &elf_size);
@@ -32,150 +33,18 @@ int process_new_cpio(char *app_name, seL4_CPtr fault_ep, int parent_pid) {
         return -1;
     }
 
-    int id = -1;
-    unsigned int end_time = UINT_MAX;
-
-    for (int i = 0; i < MAX_PROCESSES; i++) {
-        if (PCB_table[i] != NULL) continue;
-        if (PCB_end_time[i] < end_time) {
-            id = i;
-            end_time = PCB_end_time[i];
-        }
-    }
-
-    if (id != -1) {
-        conditional_panic(id == -1, "Max processes\n");
-        /* return -1; */
-    }
-
-    struct PCB *proc = malloc(sizeof(struct PCB));
-    if (proc == NULL) {
-        conditional_panic(proc == NULL, "Out of memory for PCB\n");
-        /* return -1; */
-    }
-
-    /* Set first proc as curproc */
-    if (curproc == NULL) {
-        curproc = proc;
-    }
-
-    /* Set proc */
-    PCB_table[id] = proc;
-    proc->app_name = malloc(strlen(app_name));
-    strcpy(proc->app_name, app_name);
-    proc->stime = time_stamp() / 1000;
-    proc->pid = id;
-    proc->wait = PROCESS_WAIT_NONE;
-    proc->coroutine_id = -1;
-    proc->parent = parent_pid;
-
-    int err;
-
-    seL4_CPtr user_ep_cap;
-
-    /* These required for setting up the TCB */
-    seL4_UserContext context;
-
-    proc->addrspace = as_new();
-
-    /* Create a VSpace */
-    proc->vroot_addr = ut_alloc(seL4_PageDirBits);
-    conditional_panic(!proc->vroot_addr,
-            "No memory for new Page Directory");
-    err = cspace_ut_retype_addr(proc->vroot_addr,
-            seL4_ARM_PageDirectoryObject,
-            seL4_PageDirBits,
-            cur_cspace,
-            &proc->vroot);
-    conditional_panic(err, "Failed to allocate page directory cap for client");
-
-    /* Create a simple 1 level CSpace */
-    proc->croot = cspace_create(1);
-    assert(proc->croot != NULL);
-
-    /* IPC buffer region */
-    err = as_define_region(proc->addrspace,
-            PROCESS_IPC_BUFFER,
-            (1 << seL4_PageBits),
-            seL4_AllRights);
-    conditional_panic(err, "Could not define IPC buffer region");
-
-    /* Create an IPC buffer */
-    err = sos_map_page(PROCESS_IPC_BUFFER,
-            &proc->ipc_buffer_addr, proc);
-    proc->ipc_buffer_cap = get_cap(proc->ipc_buffer_addr);
-    conditional_panic(err, "No memory for ipc buffer\n");
-
-    /* Copy the fault endpoint to the user app to enable IPC */
-    user_ep_cap = cspace_mint_cap(proc->croot,
-            cur_cspace,
-            fault_ep,
-            seL4_AllRights,
-            seL4_CapData_Badge_new(id));
-
-    /* should be the first slot in the space, hack I know */
-    assert(user_ep_cap == 1);
-    assert(user_ep_cap == USER_EP_CAP);
-
-    /* Create a new TCB object */
-    proc->tcb_addr = ut_alloc(seL4_TCBBits);
-    conditional_panic(!proc->tcb_addr, "No memory for new TCB");
-    err = cspace_ut_retype_addr(proc->tcb_addr,
-            seL4_TCBObject,
-            seL4_TCBBits,
-            cur_cspace,
-            &proc->tcb_cap);
-    conditional_panic(err, "Failed to create TCB");
-
-    /* Configure the TCB */
-    err = seL4_TCB_Configure(proc->tcb_cap, user_ep_cap, APP_PRIORITY,
-            proc->croot->root_cnode, seL4_NilData,
-            proc->vroot, seL4_NilData, PROCESS_IPC_BUFFER,
-            proc->ipc_buffer_cap);
-    conditional_panic(err, "Unable to configure new TCB");
-
-    dprintf(1, "\nStarting \"%s\"...\n", app_name);
-
-    /* load the elf image */
-    err = cpio_elf_load(proc->vroot, proc, elf_base);
-    conditional_panic(err, "Failed to load elf image");
-
-    /* Heap region */
-    err = as_define_region(proc->addrspace,
-            PROCESS_HEAP_START,
-            0,
-            seL4_AllRights);
-    conditional_panic(err, "Could not define heap region");
-
-    /* Stack region */
-    err = as_define_region(proc->addrspace,
-            PROCESS_STACK_BOT,
-            PROCESS_STACK_TOP - PROCESS_STACK_BOT,
-            seL4_AllRights);
-    conditional_panic(err, "Could not define stack region");
-
-    /* Start the new process */
-    memset(&context, 0, sizeof(context));
-    context.pc = elf_getEntryPoint(elf_base);
-    context.sp = PROCESS_STACK_TOP;
-    seL4_TCB_WriteRegisters(proc->tcb_cap, 1, 0, 2, &context);
+    int id = create_actual_process(app_name, fault_ep, parent_pid, elf_base, NULL);
 
     return id;
 }
 
 int process_new(char *app_name, seL4_CPtr fault_ep, int parent_pid) {
-    /* These required for loading program sections */
-    char *elf_base = malloc(PAGE_SIZE_4K);
-    if (elf_base == NULL) {
-        return -1;
-    }
-    unsigned long elf_size;
     struct vnode *vnode;
     int err = vfs_open(app_name, FM_READ, &vnode);
-    if (err) {
-        free(elf_base);
-        return -1;
-    }
+    if (err) return -1;
+
+    char *elf_base = malloc(PAGE_SIZE_4K);
+    if (elf_base == NULL) return -1;
 
     struct uio uio = {
         .uaddr = NULL,
@@ -186,8 +55,19 @@ int process_new(char *app_name, seL4_CPtr fault_ep, int parent_pid) {
         .pcb = NULL
     };
     err = vnode->ops->vop_read(vnode, &uio);
-    conditional_panic(err, "fail to load excutable file header from nfs");
+    if (err) {
+        free(elf_base);
+        return -1;
+    }
 
+    int id = create_actual_process(app_name, fault_ep, parent_pid, elf_base, vnode);
+    free(elf_base);
+    vfs_close(vnode, FM_READ);
+
+    return id;
+}
+
+static int create_actual_process(char *app_name, seL4_CPtr fault_ep, int parent_pid, char *elf_base, struct vnode *elf_vnode) {
     int id = -1;
     unsigned int end_time = UINT_MAX;
 
@@ -198,17 +78,11 @@ int process_new(char *app_name, seL4_CPtr fault_ep, int parent_pid) {
             end_time = PCB_end_time[i];
         }
     }
-
-    if (id != -1) {
-        conditional_panic(id == -1, "Max processes\n");
-        /* return -1; */
-    }
+    /* Max processes reached */
+    if (id == -1) return -1;
 
     struct PCB *proc = malloc(sizeof(struct PCB));
-    if (proc == NULL) {
-        conditional_panic(proc == NULL, "Out of memory for PCB\n");
-        /* return -1; */
-    }
+    if (proc == NULL) return -1;
 
     /* Set first proc as curproc */
     if (curproc == NULL) {
@@ -224,20 +98,16 @@ int process_new(char *app_name, seL4_CPtr fault_ep, int parent_pid) {
     proc->wait = PROCESS_WAIT_NONE;
     proc->coroutine_id = -1;
     proc->parent = parent_pid;
-
-
-    seL4_CPtr user_ep_cap;
+    proc->addrspace = as_new();
 
     /* These required for setting up the TCB */
     seL4_UserContext context;
-
-    proc->addrspace = as_new();
 
     /* Create a VSpace */
     proc->vroot_addr = ut_alloc(seL4_PageDirBits);
     conditional_panic(!proc->vroot_addr,
             "No memory for new Page Directory");
-    err = cspace_ut_retype_addr(proc->vroot_addr,
+    int err = cspace_ut_retype_addr(proc->vroot_addr,
             seL4_ARM_PageDirectoryObject,
             seL4_PageDirBits,
             cur_cspace,
@@ -262,7 +132,7 @@ int process_new(char *app_name, seL4_CPtr fault_ep, int parent_pid) {
     conditional_panic(err, "No memory for ipc buffer\n");
 
     /* Copy the fault endpoint to the user app to enable IPC */
-    user_ep_cap = cspace_mint_cap(proc->croot,
+    seL4_CPtr user_ep_cap = cspace_mint_cap(proc->croot,
             cur_cspace,
             fault_ep,
             seL4_AllRights,
@@ -292,11 +162,12 @@ int process_new(char *app_name, seL4_CPtr fault_ep, int parent_pid) {
     dprintf(1, "\nStarting \"%s\"...\n", app_name);
 
     /* load the elf image */
-    err = elf_load(proc->vroot, proc, elf_base, vnode);
-    if (err) {
-        free(elf_base);
-        return -1;
+    if (elf_vnode == NULL) {
+        err = cpio_elf_load(proc->vroot, proc, elf_base);
+    } else {
+        err = elf_load(proc->vroot, proc, elf_base, elf_vnode);
     }
+    if (err) return -1;
 
     /* Heap region */
     err = as_define_region(proc->addrspace,
@@ -317,8 +188,7 @@ int process_new(char *app_name, seL4_CPtr fault_ep, int parent_pid) {
     context.pc = elf_getEntryPoint(elf_base);
     context.sp = PROCESS_STACK_TOP;
     seL4_TCB_WriteRegisters(proc->tcb_cap, 1, 0, 2, &context);
-    free(elf_base);
-    vfs_close(vnode, FM_READ);
+
     return id;
 }
 
