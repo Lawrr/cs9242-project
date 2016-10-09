@@ -109,7 +109,7 @@ int start_coroutine(void (*task)(seL4_Word badge, int num_args),
     /* Find free slot */
     int task_id = start_index;
     while (free_list[task_id] == 0) {
-        task_id++;
+        task_id = (task_id + 1) % NUM_COROUTINES;
     }
     free_list[task_id] = 0;
     curr_coroutine_id = task_id;
