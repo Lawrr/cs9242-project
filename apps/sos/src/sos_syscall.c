@@ -244,8 +244,7 @@ void syscall_getdirent(seL4_CPtr reply_cap) {
         .vaddr = NULL,
         .size = nbyte,
         .remaining = nbyte,
-        .offset = pos,
-        .pcb = NULL
+        .offset = pos
     };
     struct vnode *vnode;
     int err = vfs_get("", &vnode);

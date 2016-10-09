@@ -53,9 +53,7 @@ struct app_addrspace *as_new() {
 int as_define_region(struct app_addrspace *as,
         seL4_Word baseaddr,
         seL4_Word size,
-        seL4_Word permissions,
-        seL4_Word offset,
-        seL4_Word segment_size) {
+        seL4_Word permissions) {
     struct region *new_region = malloc(sizeof(struct region));
     if (new_region == NULL) {
         return -1;
@@ -67,8 +65,6 @@ int as_define_region(struct app_addrspace *as,
     new_region->baseaddr = baseaddr;
     new_region->size = size;
     new_region->permissions = permissions;
-    new_region->segment_size = segment_size;
-    new_region->offset = offset;
 
     /* Add to addrspace region list */
     if (as->regions == NULL) {

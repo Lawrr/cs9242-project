@@ -3,7 +3,7 @@
 
 #define PTE_VALID (1 << 3)
 #define PTE_SWAP (1 << 4)
-#define PTE_LOADED (1 << 5)
+
 struct app_addrspace {
     seL4_Word fd_count;
     seL4_Word page_count;
@@ -17,8 +17,6 @@ struct region {
     seL4_Word baseaddr;
     seL4_Word size;
     seL4_Word permissions;
-    seL4_Word offset;
-    seL4_Word segment_size;
     struct region *next;
 };
 
@@ -31,8 +29,7 @@ struct swap_table_entry {
 };
 
 /*
- *VFN|UNUSED|L|S|V|P|
- *L:Loaded bit
+ *VFN|UNUSED|S|V|P|
  *S:Swap bit
  *V:Valid bit
  *P:Permission 3bits same as elf_permission
@@ -49,9 +46,7 @@ struct app_addrspace *as_new();
 int as_define_region(struct app_addrspace *as,
         seL4_Word vroot,
         seL4_Word size,
-        seL4_Word permissions,
-        seL4_Word offset,
-        seL4_Word segment_size);
+        seL4_Word permissions);
 
 struct region *get_region(seL4_Word uaddr);
 

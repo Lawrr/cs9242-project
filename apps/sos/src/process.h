@@ -3,7 +3,7 @@
 
 #include <cspace/cspace.h>
 #include <sos.h>
-#include "vnode.h"
+
 #define TTY_NAME             CONFIG_SOS_STARTUP_APP
 #define APP_PRIORITY         (0)
 /* #define TTY_EP_BADGE         (101) */
@@ -42,7 +42,6 @@ struct PCB {
     int coroutine_id;
     int parent;	
 
-    struct vnode* executable_file;
     struct app_addrspace *addrspace;
 };
 
