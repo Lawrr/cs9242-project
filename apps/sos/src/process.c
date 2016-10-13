@@ -233,7 +233,7 @@ int process_destroy(pid_t pid) {
     PCB_end_time[pid] = time_stamp() / 1000;
 
     /* Addrspace */
-    as_destroy(pcb->addrspace);
+    as_destroy(pcb);
 
     /* TCB */
     cspace_delete_cap(cur_cspace, pcb->tcb_cap);

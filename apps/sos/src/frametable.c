@@ -236,8 +236,9 @@ int32_t swap_out() {
     int err = swap_vnode->ops->vop_write(swap_vnode, &uio);
     conditional_panic(err, "Could not write\n");
 
-    struct app_addrspace *as = frame_table[victim].app_caps.pcb->addrspace;
-    err = sos_unmap_page(frame_vaddr, as);
+    struct PCB *pcb = frame_table[victim].app_caps.pcb;
+    struct app_addrspace* as = pcb->addrspace;
+    err = sos_unmap_page(frame_vaddr, pcb);
     conditional_panic(err, "Could not unmap\n");
 
     int index1 = root_index(uaddr);
@@ -444,17 +445,21 @@ int32_t get_app_cap(seL4_Word vaddr,
      curr_cap = curr_cap->next;
      }
      */
+    int err = -1;
     while (curr_cap != NULL){
-        if (curr_cap->pcb->addrspace == as){
+        if (curr_cap->pcb != NULL)
+        if (curr_cap->pcb != NULL && curr_cap->pcb->addrspace == as){
+            err = 0;
             break;
         }
         curr_cap = curr_cap->next;
     }
 
-
-    if (curr_cap == NULL) {
-        return -1;
+    if (err) {
+        //app_cap exist
+        return err;
     } else {
+        //app)cap deosn't exist
         *cap_ret = curr_cap;
         return 0;
     }

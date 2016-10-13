@@ -113,14 +113,21 @@ map_device(void *paddr, int size) {
     return (void*)vstart;
 }
 
-int sos_unmap_page(seL4_Word vaddr, struct app_addrspace *as) {
+int sos_unmap_page(seL4_Word vaddr, struct PCB* pcb) {
     struct app_cap *cap;
+    if (pcb == NULL) return -1;
+
+    struct app_addrspace * as = pcb->addrspace;
+    if (as == NULL) return  -1;
 
     int err = get_app_cap(PAGE_ALIGN_4K(vaddr), as, &cap);
-    if (err != 0) return err;
+    if (err) return err;
 
     err = seL4_ARM_Page_Unmap(cap->cap);
-    if (err != 0) return err;
+    if (err) return err;
+
+    err = cspace_delete_cap(cur_cspace,cap->cap);
+    
 
     return err;
 }
@@ -229,10 +236,11 @@ sos_map_page(seL4_Word vaddr_unaligned, seL4_Word *sos_vaddr_ret, struct PCB *pc
     }
 
     seL4_CPtr cap = get_cap(new_frame_vaddr);
-    struct app_cap *app_cap;
-    err = get_app_cap(new_frame_vaddr, pcb->addrspace, &app_cap);
+    //struct app_cap *app_cap;
+    //err = get_app_cap(new_frame_vaddr, pcb->addrspace, &app_cap);
     seL4_CPtr copied_cap;
-    if (app_cap->cap == CSPACE_NULL) {
+    
+    //if (app_cap == NULL || app_cap->cap == CSPACE_NULL) {
         copied_cap = cspace_copy_cap(cur_cspace,
                 cur_cspace,
                 cap,
@@ -241,21 +249,22 @@ sos_map_page(seL4_Word vaddr_unaligned, seL4_Word *sos_vaddr_ret, struct PCB *pc
         /* Book keeping the copied caps */
         insert_app_cap(PAGE_ALIGN_4K(new_frame_vaddr),
                 copied_cap,
-                pcb->addrspace,
+                pcb,
                 vaddr);
-    } else {
-        copied_cap = app_cap->cap;
+    //} else {
+    //    copied_cap = app_cap->cap;
 
         /* Set new app cap data for this frame */
-        app_cap->pcb = pcb;
-        app_cap->uaddr = vaddr_unaligned;
-    }
+    //    app_cap->pcb = pcb;
+    //    app_cap->uaddr = vaddr_unaligned;
+    //}
 
     err = map_page(copied_cap,
             pd,
             vaddr,
             curr_region->permissions,
-            seL4_ARM_Default_VMAttributes);
+            seL4_ARM_Default_VMAttributes); 
+    
     if (err) {
         /* cspace_delete_cap(cur_cspace, copied_cap); */
         frame_free(new_frame_vaddr);

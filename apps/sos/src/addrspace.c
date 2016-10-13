@@ -118,7 +118,9 @@ struct region *get_region(seL4_Word uaddr) {
     return NULL;
 }
 
-int as_destroy(struct app_addrspace *as) {
+int as_destroy(struct PCB *pcb) {
+    if (pcb == NULL) return  -1;
+    struct app_addrspace * as = pcb->addrspace;
     if (as == NULL) return -1;
 
     int err;
@@ -135,7 +137,7 @@ int as_destroy(struct app_addrspace *as) {
                     free_swap_index(as->swap_table[i][j].swap_index);
                 } else {
                     seL4_Word sos_vaddr = PAGE_ALIGN_4K(as->page_table[i][j].sos_vaddr);
-                    err = sos_unmap_page(sos_vaddr, as);
+                    err = sos_unmap_page(sos_vaddr, pcb);
                     conditional_panic(err, "Could not unmap\n");
 
                     frame_free(sos_vaddr);

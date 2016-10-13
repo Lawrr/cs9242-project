@@ -46,7 +46,7 @@ void* map_device(void* paddr, int size);
 
 int sos_map_page(seL4_Word uaddr, seL4_Word *sos_vaddr_ret,struct PCB *pcb);
 
-int sos_unmap_page(seL4_Word vaddr, struct app_addrspace *as);
+int sos_unmap_page(seL4_Word vaddr, struct PCB * pcb);
 
 int sos_share_page(seL4_Word uaddr,seL4_Word size,seL4_Word writable);
 extern inline seL4_Word uaddr_to_sos_vaddr(seL4_Word uaddr);

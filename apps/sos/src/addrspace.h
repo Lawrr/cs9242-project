@@ -4,6 +4,7 @@
 #define PTE_VALID (1 << 3)
 #define PTE_SWAP (1 << 4)
 #define PTE_SHARE (1 << 5)
+#include "process.h"
 struct app_addrspace {
     seL4_Word fd_count;
     seL4_Word page_count;
@@ -51,6 +52,6 @@ int as_define_region(struct app_addrspace *as,
 
 struct region *get_region(seL4_Word uaddr);
 
-int as_destroy(struct app_addrspace *as);
+int as_destroy(struct PCB *pcb);
 
 #endif /* _ADDRSPACE_H_ */
