@@ -20,6 +20,9 @@ extern seL4_Word curr_free_ofd;
 extern seL4_CPtr _sos_ipc_ep_cap;
 extern seL4_Word curr_coroutine_id;
 
+
+
+
 /* Checks that user pointer range is a valid in userspace */
 static int legal_uaddr(seL4_Word base, uint32_t size) {
     /* Check valid region */
@@ -661,4 +664,12 @@ void syscall_process_status(seL4_CPtr reply_cap) {
 
     seL4_SetMR(0, procs);
     send_reply(reply_cap);
+}
+
+int syscall_vm_share(seL4_CPtr reply_cap){
+    seL4_Word uaddr = seL4_GetMR(1);
+    seL4_Word size = seL4_GetMR(2);
+    seL4_Word writable = seL4_GetMR(3);
+    int err = sos_share_page(uaddr,size,writable); 
+    return err;
 }

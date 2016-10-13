@@ -41,7 +41,7 @@ static void reset_frame_mask(uint32_t index);
 
 static seL4_Word get_free_frame();
 
-static struct app_cap *app_cap_new(seL4_CPtr cap, struct app_addrspace *addrspace, seL4_Word uaddr);
+static struct app_cap *app_cap_new(seL4_CPtr cap, struct PCB *pcb, seL4_Word uaddr);
 
 /* Static struct declarations */
 
@@ -236,7 +236,7 @@ int32_t swap_out() {
     int err = swap_vnode->ops->vop_write(swap_vnode, &uio);
     conditional_panic(err, "Could not write\n");
 
-    struct app_addrspace *as = frame_table[victim].app_caps.addrspace;
+    struct app_addrspace *as = frame_table[victim].app_caps.pcb->addrspace;
     err = sos_unmap_page(frame_vaddr, as);
     conditional_panic(err, "Could not unmap\n");
 
@@ -378,7 +378,7 @@ seL4_CPtr get_cap(seL4_Word vaddr) {
     return frame_table[index].cap;
 }
 
-static struct app_cap *app_cap_new(seL4_CPtr cap, struct app_addrspace *addrspace, seL4_Word uaddr) {
+static struct app_cap *app_cap_new(seL4_CPtr cap, struct PCB *pcb, seL4_Word uaddr) {
     struct app_cap *new_app_cap = malloc(sizeof(struct app_cap));
     if (new_app_cap == NULL) {
         return NULL;
@@ -386,14 +386,14 @@ static struct app_cap *app_cap_new(seL4_CPtr cap, struct app_addrspace *addrspac
 
     /* Initialise variables */
     new_app_cap->next = NULL;
-    new_app_cap->addrspace = addrspace;
+    new_app_cap->pcb = pcb;
     new_app_cap->uaddr = uaddr;
     new_app_cap->cap = cap;
 
     return new_app_cap;
 }
 
-int32_t insert_app_cap(seL4_Word vaddr, seL4_CPtr cap, struct app_addrspace *addrspace, seL4_Word uaddr) {
+int32_t insert_app_cap(seL4_Word vaddr, seL4_CPtr cap, struct PCB *pcb, seL4_Word uaddr) {
     uint32_t index = frame_vaddr_to_index(vaddr);
 
     /* Check that the frame exists */
@@ -406,7 +406,7 @@ int32_t insert_app_cap(seL4_Word vaddr, seL4_CPtr cap, struct app_addrspace *add
         /* First app cap */
         copied_cap = &frame_table[index].app_caps;
         copied_cap->next = NULL;
-        copied_cap->addrspace = addrspace;
+        copied_cap->pcb  = pcb;
         copied_cap->uaddr = uaddr;
         copied_cap->cap = cap;
     } else {
@@ -430,7 +430,6 @@ int32_t insert_app_cap(seL4_Word vaddr, seL4_CPtr cap, struct app_addrspace *add
 int32_t get_app_cap(seL4_Word vaddr,
                     struct app_addrspace *as,
                     struct app_cap **cap_ret) {
-    struct page_table_entry **page_table = as->page_table;
 
     uint32_t index = frame_vaddr_to_index(vaddr);
     if (frame_table[index].cap == seL4_CapNull) {
@@ -445,6 +444,14 @@ int32_t get_app_cap(seL4_Word vaddr,
      curr_cap = curr_cap->next;
      }
      */
+    while (curr_cap != NULL){
+        if (curr_cap->pcb->addrspace == as){
+            break;
+        }
+        curr_cap = curr_cap->next;
+    }
+
+
     if (curr_cap == NULL) {
         return -1;
     } else {
@@ -452,6 +459,27 @@ int32_t get_app_cap(seL4_Word vaddr,
         return 0;
     }
 }
+
+int32_t get_app_cap_list(seL4_Word vaddr,struct app_cap **cap_ret) {
+
+
+    uint32_t index = frame_vaddr_to_index(vaddr);
+    
+    //Doesn't have a frame yet
+    if (frame_table[index].cap == seL4_CapNull) {
+        return -1;
+    }
+
+    struct app_cap *curr_cap = &frame_table[index].app_caps;
+  
+    if (curr_cap == NULL) {
+        return -1;
+    } else {
+        *cap_ret = curr_cap;
+        return 0;
+    }
+}
+
 
 /* Set reference bit as well as make it unswappable */ 
 void pin_frame_entry(seL4_Word uaddr, seL4_Word size) {

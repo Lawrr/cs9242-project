@@ -28,7 +28,7 @@
 extern const seL4_BootInfo *_boot_info;
 extern struct PCB *curproc;
 extern uint32_t curr_swap_offset;
-
+static struct page_table_entry ** share_page_table=NULL;
 /**
  * Maps a page table into the root servers page directory
  * @param vaddr The virtual address of the mapping
@@ -219,7 +219,7 @@ sos_map_page(seL4_Word vaddr_unaligned, seL4_Word *sos_vaddr_ret, struct PCB *pc
 
     /* Call the internal kernel page mapping */
     seL4_Word new_frame_vaddr;
-    if (vaddr >= PROCESS_IPC_BUFFER) {
+    if (vaddr >= PROCESS_IPC_BUFFER || pcb->croot == 0) {
         err = unswappable_alloc(&new_frame_vaddr);
     } else {
         err = frame_alloc(&new_frame_vaddr);
@@ -247,7 +247,7 @@ sos_map_page(seL4_Word vaddr_unaligned, seL4_Word *sos_vaddr_ret, struct PCB *pc
         copied_cap = app_cap->cap;
 
         /* Set new app cap data for this frame */
-        app_cap->addrspace = pcb->addrspace;
+        app_cap->pcb = pcb;
         app_cap->uaddr = vaddr_unaligned;
     }
 
@@ -289,4 +289,145 @@ inline seL4_Word uaddr_to_sos_vaddr(seL4_Word uaddr) {
     } else {
         return 0;
     }
+}
+
+
+int sos_share_page(seL4_Word uaddr,seL4_Word size,seL4_Word writable) {
+
+    seL4_Word all_writable = 1;
+    struct app_addrspace * as = curproc->addrspace;
+    
+    seL4_Word curr_uaddr = uaddr;
+    seL4_Word curr_size = size;
+
+    //Checking if all the pages specified are writable
+    while (writable && curr_size > 0){
+        struct region *curr_region = as->regions;
+        while (curr_region != NULL) {
+            if (uaddr >= curr_region->baseaddr &&
+                uaddr < curr_region->baseaddr + curr_region->size) {
+                break;
+            }
+            curr_region = curr_region->next;
+        }   
+
+        
+        curr_uaddr = curr_region->baseaddr + curr_region->size;
+        curr_size -= curr_region->size;
+        if (!(curr_region->permissions & seL4_CanWrite)){
+           all_writable = 0;
+           break;     
+        }
+    }
+    
+    //Not all the pages specified are writable
+    if (!all_writable){
+        return -1;
+    }
+
+    int err = 0;
+    for (int page = 0; page < size; page+=size){
+        int index1 = root_index(uaddr+page);
+        int index2 = leaf_index(uaddr+page);
+        
+        /* No share_page table yet */
+        if (share_page_table == NULL) {
+            /* First level */
+            err = unswappable_alloc((seL4_Word *) share_page_table);
+            if (err) return ERR_NO_MEMORY;
+
+            /* Second level */
+            err = unswappable_alloc((seL4_Word *) &(share_page_table[index1]));
+
+            if (err) {
+                frame_free(share_page_table);
+                return ERR_NO_MEMORY;
+            }            
+
+        } else if (share_page_table[index1] == NULL) {
+            /* Second level */
+            err = unswappable_alloc((seL4_Word *) &(share_page_table[index1]));
+            if (err) return ERR_NO_MEMORY;
+
+        }
+
+        //make a fake pcb to make the best use of sos_map_page
+        char virtual_PCB[sizeof(struct PCB)];
+        struct PCB *pcb = (struct PCB*)virtual_PCB; 
+        
+        //same as above
+        char virtual_addrspace[sizeof(struct app_addrspace)];
+        struct app_addrspace *viras = (struct app_addrspace*)virtual_addrspace;
+        
+        //croot = 0 indicate unswppable alloc
+        pcb->croot = 0;
+        pcb->vroot = curproc->vroot;
+        pcb->addrspace = viras;
+        pcb->addrspace->page_table = share_page_table;
+        pcb->addrspace->regions = curproc->addrspace->regions;
+       
+        struct region *curr_region = as->regions;
+        while (curr_region != NULL) {
+            if (uaddr+page >= curr_region->baseaddr &&
+                uaddr+page < curr_region->baseaddr + curr_region->size) {
+                break;
+            }
+            curr_region = curr_region->next;
+        }
+
+
+        seL4_Word sos_vaddr;
+        int err = sos_map_page(uaddr+page,&sos_vaddr,&pcb);
+        if (err == ERR_ALREADY_MAPPED){
+            //share the page
+            seL4_CPtr cap = get_cap(sos_vaddr);
+            struct copied_cap *copied_cap;
+            copied_cap = cspace_copy_cap(cur_cspace,
+                cur_cspace,
+                cap,
+                seL4_AllRights);
+
+            /* Book keeping the copied caps */
+            err = insert_app_cap(PAGE_ALIGN_4K(sos_vaddr),
+                           copied_cap,
+                           curproc->addrspace,
+                           uaddr+page);
+            conditional_panic(err,"fail in inserting app cap for share page");
+            
+            err = map_page(copied_cap,
+                           curproc->vroot,
+                           uaddr+page,
+                           curr_region->permissions,
+                           seL4_ARM_Default_VMAttributes);
+            conditional_panic(err,"fail in mapping share page");
+        
+            /*TODO If it's shared we need to look up the real sos_vaddr in share_page_table*/
+            as->page_table[index1][index2].sos_vaddr |= (PTE_VALID|PTE_SHARE); 
+        
+        }   else{
+            conditional_panic(-1,"fail to map share page");
+        }
+
+        if (share_page_table[index1][index2].sos_vaddr & seL4_CanWrite){
+            if (!writable){
+                share_page_table[index1][index2].sos_vaddr &= (~seL4_CanWrite);
+                //TODO remap each page without seL4_CanWrite                
+                struct app_cap * cap_list;
+                int err = get_app_cap_list(sos_vaddr,&cap_list);
+                conditional_panic(err,"fail in getting app cap list");
+                
+                while (cap_list != NULL){
+                    err = map_page(cap_list->cap,
+                                   cap_list->pcb->vroot,
+                                   uaddr+page,
+                                   seL4_CanRead,
+                                   seL4_ARM_Default_VMAttributes);   
+                    cap_list = cap_list->next;
+                }
+                            
+            
+            }
+        }
+    } 
+    return 0;    
 }

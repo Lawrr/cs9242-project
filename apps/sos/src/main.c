@@ -185,6 +185,9 @@ void handle_syscall(seL4_Word badge, int num_args) {
         case SOS_PROCESS_STATUS_SYSCALL:
             syscall_process_status(reply_cap);
             break;
+        case SOS_VM_SHARE_SYSCALL:
+            syscall_vm_share(reply_cap);
+            break;
 
         default:
             printf("Unknown syscall %d\n", syscall_number);

@@ -15,7 +15,7 @@
 #define SOS_PROCESS_ID_SYSCALL 11
 #define SOS_PROCESS_WAIT_SYSCALL 12
 #define SOS_PROCESS_STATUS_SYSCALL 13
-
+#define SOS_VM_SHARE_SYSCALL 14
 #include <cspace/cspace.h>
 
 void syscall_brk(seL4_CPtr reply_cap);

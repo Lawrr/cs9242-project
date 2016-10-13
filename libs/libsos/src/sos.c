@@ -271,5 +271,17 @@ size_t sos_read(void *vData, size_t count) {
     return 0;
 }
 
+int sos_share_vm(void *adr, size_t size, int writable){
+    int numRegs = 4;
+    seL4_MessageInfo_t tag = seL4_MessageInfo_new(seL4_NoFault, 0, 0, numRegs);
+    seL4_SetTag(tag);
+    seL4_SetMR(0, 14);
+    seL4_SetMR(1, adr);
+    seL4_SetMR(2, size);
+    seL4_SetMR(3, writable);
+    seL4_Call(SOS_IPC_EP_CAP, tag);
 
+    /* Return error code */
+    return seL4_GetMR(0); 
+}
 
