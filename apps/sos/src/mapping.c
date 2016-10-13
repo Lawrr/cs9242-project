@@ -126,9 +126,8 @@ int sos_unmap_page(seL4_Word vaddr, struct PCB* pcb) {
     err = seL4_ARM_Page_Unmap(cap->cap);
     if (err) return err;
 
-    err = cspace_delete_cap(cur_cspace,cap->cap);
+    err = delete_app_cap(PAGE_ALIGN_4K(vaddr), as);
     
-
     return err;
 }
 

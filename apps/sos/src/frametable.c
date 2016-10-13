@@ -411,22 +411,72 @@ int32_t insert_app_cap(seL4_Word vaddr, seL4_CPtr cap, struct PCB *pcb, seL4_Wor
         copied_cap->uaddr = uaddr;
         copied_cap->cap = cap;
     } else {
-        conditional_panic(1, "Does not currently support shared pages\n");
+        //conditional_panic(1, "Does not currently support shared pages\n");
         /* /1 *Create new app cap *1/ */
-        /* copied_cap = app_cap_new(cap, addrspace, uaddr); */
-        /* if (copied_cap == NULL) return -1; */
+        copied_cap = app_cap_new(cap, pcb, uaddr);
+        if (copied_cap == NULL) return -1; 
 
         /* /1 *Insert into list of app caps for the frame *1/ */
         /* //TODO just insert to head */
-        /* struct app_cap *curr_cap = copied_cap; */
-        /* while (curr_cap->next != NULL) { */
-        /* curr_cap = curr_cap->next; */
-        /* } */
-        /* curr_cap->next = copied_cap; */
+        struct app_cap *curr_cap = copied_cap; 
+        while (curr_cap->next != NULL) { 
+            curr_cap = curr_cap->next; 
+        }
+        curr_cap->next = copied_cap; 
     }
 
     return 0;
 }
+
+int32_t delete_app_cap(seL4_Word vaddr,
+                    struct app_addrspace *as) {
+
+    uint32_t index = frame_vaddr_to_index(vaddr);
+    if (frame_table[index].cap == seL4_CapNull) {
+        return -1;
+    }
+
+    struct app_cap *curr_cap = &frame_table[index].app_caps;
+    struct app_cap *prev_cap;
+    /*Doesn't support shared pages right now
+     * while (curr_cap != NULL) {
+     if ((curr_cap->pte.sos_vaddr & PAGE_TABLE_MASK) == page_table) breaki;
+     printf("%x----%x\n", curr_cap->pte.sos_vaddr, page_table);
+     curr_cap = curr_cap->next;
+     }
+     */
+    int err = -1;
+    while (curr_cap != NULL){
+        if (curr_cap->pcb != NULL)
+        if (curr_cap->pcb != NULL && curr_cap->pcb->addrspace == as){
+            err = 0;
+            break;
+        }
+        prev_cap = curr_cap;
+        curr_cap = curr_cap->next;
+    }
+
+
+    err = cspace_delete_cap(cur_cspace,curr_cap->cap);
+    if (err) return err;
+    
+    if (curr_cap == &frame_table[index].app_caps){
+        curr_cap->pcb = NULL;
+        curr_cap->uaddr = 0;
+        curr_cap->cap = seL4_CapNull;
+    }   else{
+        prev_cap->next = curr_cap->next;
+        free(curr_cap);
+    }
+
+    
+    return err; 
+}
+
+
+
+
+
 
 int32_t get_app_cap(seL4_Word vaddr,
                     struct app_addrspace *as,
