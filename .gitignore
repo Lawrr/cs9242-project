@@ -11,3 +11,4 @@ null.s
 images/*
 *.diff
 *.swp
+*.swo

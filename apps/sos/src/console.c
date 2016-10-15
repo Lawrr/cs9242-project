@@ -10,61 +10,59 @@
 #include "console.h"
 #include "coroutine.h"
 #include "process.h"
-
 #include <sys/debug.h>
 #include <sys/panic.h>
 
-extern struct PCB tty_test_process;
+extern struct PCB *curproc;
+extern int curr_coroutine_id;
 
 static struct serial *serial_handle;
 static struct vnode *console_vnode;
-static struct uio console_uio;
+static struct uio *console_uio;
+static pid_t read_pid;
+static unsigned int read_stime;
+static int read_coroutine_id;
 
 static void console_serial_handler(struct serial *serial, char c) {
     /* Return if we do not currently need to read */
-    if (console_uio.addr == NULL || console_uio.remaining == 0) return;
+    if (console_uio == NULL || console_uio->remaining == 0) return;
 
-    seL4_Word *vnode_data = (seL4_Word *) (console_vnode->data);
+    /* Check if proc was deleted */
+    struct PCB *pcb = process_status(read_pid);
+    if (pcb == NULL || pcb->stime != read_stime) {
+        return;
+    }
 
     /* Take uaddr and turn it into sos_vaddr */
-    seL4_Word index1 = ((seL4_Word) console_uio.addr >> 22);
-    seL4_Word index2 = ((seL4_Word) console_uio.addr << 10) >> 22;
-    struct page_table_entry **page_table = (struct page_table **) vnode_data[1];
+    int index1 = root_index((seL4_Word) console_uio->uaddr);
+    int index2 = leaf_index((seL4_Word) console_uio->uaddr);
 
+    struct page_table_entry **page_table = pcb->addrspace->page_table;
+
+    /* Align and add offset */
     char *sos_vaddr = PAGE_ALIGN_4K(page_table[index1][index2].sos_vaddr);
-    /* Add offset */
-    sos_vaddr = ((seL4_Word) sos_vaddr) | ((seL4_Word) console_uio.addr & PAGE_MASK_4K);
+    sos_vaddr = ((seL4_Word) sos_vaddr) | ((seL4_Word) console_uio->uaddr & PAGE_MASK_4K);
 
     /* Write into buffer */
     *sos_vaddr = c;
-    console_uio.addr++;
-    console_uio.remaining--;
+    console_uio->uaddr++;
+    console_uio->remaining--;
+    console_uio->offset++;
 
     /* Check end */
-    if (console_uio.remaining == 0 || c == '\n') {
-        seL4_CPtr reply_cap = (seL4_CPtr) vnode_data[0];
-        free(console_vnode->data);
-
-        /* Reply */
-        if (reply_cap != CSPACE_NULL) {
-            seL4_MessageInfo_t reply = seL4_MessageInfo_new(0, 0, 0, 1);
-            seL4_SetMR(0, console_uio.size - console_uio.remaining);
-            seL4_Send(reply_cap, reply);
-            cspace_free_slot(cur_cspace, reply_cap);
-        }
-
-        console_uio.addr = NULL;
-        console_uio.remaining = 0;
+    if (console_uio->remaining == 0 || c == '\n') {
+        set_resume(read_coroutine_id);
     }
 }
 
 int console_write(struct vnode *vnode, struct uio *uio) {
-    seL4_Word uaddr = uio->addr;
+    seL4_Word uaddr = uio->uaddr;
     seL4_Word ubuf_size = uio->size;
     seL4_Word end_uaddr = uaddr + ubuf_size;
 
+
     while (ubuf_size > 0) {
-        seL4_Word uaddr_next = PAGE_ALIGN_4K(uaddr) + 0x1000;
+        seL4_Word uaddr_next = PAGE_ALIGN_4K(uaddr) + PAGE_SIZE_4K;
         seL4_Word size;
         if (end_uaddr >= uaddr_next) {
             size = uaddr_next-uaddr;
@@ -74,16 +72,12 @@ int console_write(struct vnode *vnode, struct uio *uio) {
 
         /* Though we can assume the buffer is mapped because it is a write operation,
          * we still use sos_map_page to find the mapping address if it is already mapped */
-        seL4_CPtr app_cap;
-        seL4_CPtr sos_vaddr;
-        int err = sos_map_page(uaddr,
-                tty_test_process.vroot,
-                tty_test_process.addrspace,
-                &sos_vaddr,
-                &app_cap);
+        seL4_Word sos_vaddr;
+        int err = sos_map_page(uaddr, &sos_vaddr, curproc);
         if (err && err != ERR_ALREADY_MAPPED) {
             return 1;
         }
+        
         sos_vaddr = PAGE_ALIGN_4K(sos_vaddr);
         /* Add offset */
         sos_vaddr |= (uaddr & PAGE_MASK_4K);
@@ -100,7 +94,11 @@ int console_write(struct vnode *vnode, struct uio *uio) {
 }
 
 int console_read(struct vnode *vnode, struct uio *uio) {
-    seL4_Word uaddr = uio->addr;
+    read_pid = curproc->pid;
+    read_stime = curproc->stime;
+    read_coroutine_id = curr_coroutine_id;
+
+    seL4_Word uaddr = uio->uaddr;
     seL4_Word ubuf_size = uio->size;
 
     /* Make sure address is mapped */
@@ -109,7 +107,7 @@ int console_read(struct vnode *vnode, struct uio *uio) {
     seL4_Word curr_size = ubuf_size;
 
     while (curr_size > 0) {
-        seL4_Word uaddr_next = PAGE_ALIGN_4K(curr_uaddr) + 0x1000;
+        seL4_Word uaddr_next = PAGE_ALIGN_4K(curr_uaddr) + PAGE_SIZE_4K;
         seL4_Word size;
         if (end_uaddr >= uaddr_next) {
             size = uaddr_next-curr_uaddr;
@@ -117,20 +115,20 @@ int console_read(struct vnode *vnode, struct uio *uio) {
             size = curr_size;
         }
 
-        seL4_CPtr app_cap;
         seL4_CPtr sos_vaddr;
-        int err = sos_map_page(curr_uaddr,
-                               tty_test_process.vroot,
-                               tty_test_process.addrspace,
-                               &sos_vaddr,
-                               &app_cap);
+        int err = sos_map_page(curr_uaddr, &sos_vaddr, curproc);
 
         curr_size -= size;
         curr_uaddr = uaddr_next;
     }
 
     console_vnode = vnode;
-    console_uio = *uio;
+    console_uio = uio;
+
+    yield();
+ 
+    console_vnode = NULL;
+    console_uio = NULL;
 
     return 0;
 }
@@ -158,6 +156,8 @@ void console_init(struct vnode **ret_vnode) {
     console_ops->vop_close = &console_close;
     console_ops->vop_read = &console_read;
     console_ops->vop_write = &console_write;
+    console_ops->vop_stat = NULL;
+    console_ops->vop_getdirent = NULL;
 
     int err = dev_add("console", console_ops);
     conditional_panic(err, "Could not add console serial device");

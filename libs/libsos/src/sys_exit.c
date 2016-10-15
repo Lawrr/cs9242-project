@@ -56,7 +56,8 @@ sys_exit_group(va_list ap)
 long
 sys_tgkill(va_list ap)
 {
-    sel4_abort();
+    /* sel4_abort(); */
+    sos_process_delete(sos_my_id());
     return 0;
 }
 

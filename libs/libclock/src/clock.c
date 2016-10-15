@@ -249,6 +249,7 @@ uint32_t register_timer(uint64_t delay, timer_callback_t callback, void *data) {
     }
 
     struct timer_handler *new_handler = timer_handler_new(callback, data, delay);
+    
     if (new_handler == NULL) {
         return 0;
     }
@@ -320,11 +321,11 @@ int timer_interrupt(void) {
         /* Set new timer interrupt for timers with long delays */
         if (microseconds_to_frequency(handler->delay) > DEFAULT_INTERRUPT_TICK) {
             set_epit1_interrupt(handler->expire_time - time_stamp());
-        }
-
-        while (handler != NULL && handler->expire_time - INTERRUPT_THRESHOLD <= time_stamp()) {
+        }	
+	
+	while (handler != NULL && ((handler->expire_time - INTERRUPT_THRESHOLD) <= time_stamp())) {
             remove_head();
-            handler->callback(handler->id, handler->data);
+	    handler->callback(handler->id, handler->data);
             free(handler);
             handler = handler_head;
         }

@@ -10,6 +10,11 @@
 #define SOS_TIME_STAMP_SYSCALL 6
 #define SOS_GETDIRENT_SYSCALL 7
 #define SOS_STAT_SYSCALL 8
+#define SOS_PROCESS_CREATE_SYSCALL 9
+#define SOS_PROCESS_DELETE_SYSCALL 10
+#define SOS_PROCESS_ID_SYSCALL 11
+#define SOS_PROCESS_WAIT_SYSCALL 12
+#define SOS_PROCESS_STATUS_SYSCALL 13
 
 #include <cspace/cspace.h>
 
@@ -31,4 +36,13 @@ void syscall_getdirent(seL4_CPtr reply_cap);
 
 void syscall_stat(seL4_CPtr reply_cap);
 
+void syscall_process_create(seL4_CPtr reply_cap, seL4_Word badge);
+
+void syscall_process_delete(seL4_CPtr reply_cap, seL4_Word badge);
+
+void syscall_process_id(seL4_CPtr reply_cap, seL4_Word badge);
+
+void syscall_process_wait(seL4_CPtr reply_cap, seL4_Word badge);
+
+void syscall_process_status(seL4_CPtr reply_cap);
 #endif

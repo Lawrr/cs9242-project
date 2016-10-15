@@ -28,10 +28,10 @@ static int list_insert(struct hashtable_entry *entry_head,
     return 0;
 }
 
-static struct hashtable_entry *list_get(struct hashtable_entry *entry_head,
-                                        char *key) {
+static struct hashtable_entry *list_get(struct hashtable_entry *entry_head, char *key) {
     struct hashtable_entry *curr_entry = entry_head;
     while (curr_entry != NULL && curr_entry->key != NULL) {
+
         if (!strcmp(curr_entry->key, key)) {
             return curr_entry;
         }
@@ -41,8 +41,7 @@ static struct hashtable_entry *list_get(struct hashtable_entry *entry_head,
     return NULL;
 }
 
-static int *list_remove(struct hashtable_entry *entry_head,
-                                        char *key) {
+static int list_remove(struct hashtable_entry *entry_head, char *key) {
     struct hashtable_entry *prev = NULL;
     struct hashtable_entry *curr = entry_head;
     while (curr != NULL && curr->key != NULL) {
@@ -96,8 +95,8 @@ struct hashtable *hashtable_new(uint32_t slots) {
 /* Assumes entry to insert is not already in the hashtable */
 int hashtable_insert(struct hashtable *ht, char *key, void *value) {
     uint32_t index = hash(key, ht->slots);
-
     struct hashtable_entry *entry = malloc(sizeof(struct hashtable_entry));
+    if (entry == NULL) return 1;
     entry->key = key;
     entry->value = value;
     entry->next = NULL;

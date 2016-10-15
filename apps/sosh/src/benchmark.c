@@ -31,7 +31,7 @@
 /* number of times to run the benchmarks and collect data -
  * for testing purposes you can set this to 1, but for reported
  * results it should be 10 */
-#define ITERATIONS 10
+#define ITERATIONS 1
 
 /* total number of iterations for the benchmark loop */
 #define N_RESULTS (WARMUPS + ITERATIONS)
@@ -189,8 +189,8 @@ static int run_benchmark(char *name, benchmark_fn_t fn, uint32_t overhead,
                 if (fn == sos_sys_read) {
                     assert(buf[j * sz + CLZ(sz)] == (char) CLZ(sz));
                 }
-            }
 #endif
+            }
             READ_CCNT(end);
             results[i] = end - start;
         }
