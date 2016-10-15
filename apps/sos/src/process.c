@@ -27,9 +27,18 @@ extern struct oft_entry of_table[MAX_OPEN_FILE];
 struct PCB *curproc;
 
 static struct PCB *PCB_table[MAX_PROCESSES];
-static unsigned int PCB_end_time[MAX_PROCESSES];
-
+static int PCB_free_table[MAX_PROCESSES];
+static next_free_pid = 0;
+static last_free_pid = MAX_PROCESSES-1;
 static int create_actual_process(char *app_name, seL4_CPtr fault_ep, int parent_pid, char *elf_base, struct vnode *elf_vnode);
+
+void process_management_init(){
+    for (int i = 0; i < MAX_PROCESSES; i++){
+        PCB_free_table[i] = i+1;
+    }
+    PCB_free_table[MAX_PROCESSES-1] = -1;
+}
+
 
 /* Create a process from the cpio archive */
 int process_new_cpio(char *app_name, seL4_CPtr fault_ep, int parent_pid) {
@@ -85,15 +94,12 @@ static int create_actual_process(char *app_name, seL4_CPtr fault_ep, int parent_
     int id = -1;
     unsigned int end_time = UINT_MAX;
 
-    for (int i = 0; i < MAX_PROCESSES; i++) {
-        if (PCB_table[i] != NULL) continue;
-        if (PCB_end_time[i] < end_time) {
-            id = i;
-            end_time = PCB_end_time[i];
-        }
-    }
+    
     /* Max processes reached */
-    if (id == -1) return -1;
+    if (next_free_pid == -1) return -1;
+    id = next_free_pid;
+    next_free_pid = PCB_free_table[next_free_pid];
+
 
     struct PCB *proc = malloc(sizeof(struct PCB));
     if (proc == NULL) return -1;
@@ -249,7 +255,9 @@ int process_destroy(pid_t pid) {
     }
 
     PCB_table[pid] = NULL;
-    PCB_end_time[pid] = time_stamp() / 1000;
+    PCB_free_table[last_free_pid] = pid;
+    PCB_free_table[pid] = -1;
+    last_free_pid = pid;
 
     /* Addrspace */
     as_destroy(pcb->addrspace);

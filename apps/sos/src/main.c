@@ -447,6 +447,9 @@ int main(void) {
     /* Initialise coroutines */
     coroutine_init();
 
+    /* Initialise PCB_free_table*/
+    process_management_init();
+    
     /* Start the user application */
     int proc_id = process_new_cpio(TTY_NAME, _sos_ipc_ep_cap, -1);
     conditional_panic(proc_id == -1, "Could not start first process\n");

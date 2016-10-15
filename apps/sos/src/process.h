@@ -48,7 +48,7 @@ struct PCB {
 int process_new_cpio(char* app_name, seL4_CPtr fault_ep, int parent_pid);
 int process_new(char* app_name, seL4_CPtr fault_ep, int parent_pid);
 int process_destroy(pid_t pid);
-
+void process_management_init();
 struct PCB *process_status(pid_t pid);
 
 #endif
