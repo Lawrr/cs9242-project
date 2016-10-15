@@ -41,11 +41,11 @@ struct app_addrspace *as_new() {
     // as->fd_table[0].ofd = 0; /* STDIN */
 
     // TODO is it possible STDOUT is not 0?? (maybe no more references)
-    as->fd_table[1].ofd = STDOUT; /* STDOUT */
-    as->fd_table[2].ofd = STDOUT; /* STDERR */
+    as->fd_table[1].ofd = STDOUT_OFD; /* STDOUT */
+    as->fd_table[2].ofd = STDOUT_OFD; /* STDERR */
 
     /*open file table increase ref count*/
-    of_table[STDOUT].ref_count += 2;
+    of_table[STDOUT_OFD].ref_count += 2;
 
     return as;
 }

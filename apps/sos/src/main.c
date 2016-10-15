@@ -110,8 +110,8 @@ static void of_table_init() {
     //of_table[STDIN].vnode = console_vnode;
     //of_table[STDIN].file_info.st_fmode = FM_READ;
 
-    of_table[STDOUT].vnode = console_vnode;
-    of_table[STDOUT].file_info.st_fmode = FM_WRITE;
+    of_table[STDOUT_OFD].vnode = console_vnode;
+    of_table[STDOUT_OFD].file_info.st_fmode = FM_WRITE;
     ofd_count++;
     curr_free_ofd++;
 }
