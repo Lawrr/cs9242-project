@@ -1,3 +1,3 @@
-all: documentation.tex
-	latex documentation.tex
-	pdflatex documentation.tex
+all: docs.tex
+	latex docs.tex
+	pdflatex docs.tex
