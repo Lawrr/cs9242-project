@@ -129,15 +129,6 @@ int sos_unmap_page(seL4_Word vaddr, struct app_addrspace *as) {
 }
 
 int
-get_uaddr(seL4_Word sos_vaddr,
-        seL4_ARM_PageDirectory pd,
-        struct app_addrspace *as,
-        seL4_Word *ret_uaddr) {
-    // TODO
-    return 0;
-}
-
-int
 sos_map_page(seL4_Word vaddr_unaligned, seL4_Word *sos_vaddr_ret, struct PCB *pcb) {
     seL4_ARM_PageDirectory pd = pcb->vroot;
     struct app_addrspace *as = pcb->addrspace;

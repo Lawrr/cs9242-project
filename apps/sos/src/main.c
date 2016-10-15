@@ -53,8 +53,6 @@
 #define IRQ_BADGE_NETWORK (1 << 0)
 #define IRQ_BADGE_TIMER (1 << 1)
 
-
-
 #define EPIT1_PADDR 0x020D0000
 #define EPIT2_PADDR 0x020D4000
 #define EPIT_REGISTERS 5
@@ -105,15 +103,10 @@ static void of_table_init() {
     console_init(&console_vnode);
 
     /* Set up of table */
-
-    /* Note: Below line is not needed. Client must explicitly open STDIN */
-    //of_table[STDIN].vnode = console_vnode;
-    //of_table[STDIN].file_info.st_fmode = FM_READ;
-
     of_table[STDOUT_OFD].vnode = console_vnode;
     of_table[STDOUT_OFD].file_info.st_fmode = FM_WRITE;
     ofd_count++;
-    curr_free_ofd++;
+    curr_free_ofd = (STDOUT_OFD + 1) % MAX_OPEN_FILE;
 }
 
 void handle_syscall(seL4_Word badge, int num_args) {
@@ -215,6 +208,8 @@ static void vm_fault_handler(seL4_Word badge, int num_args) {
         printf("Data fault - ");
         map_vaddr = seL4_GetMR(1); 
         instruction_vaddr = seL4_GetMR(0);
+
+        /* Pin the instruction fault since it will be reused right after the fault */
         pin_frame_entry(PAGE_ALIGN_4K(instruction_vaddr), PAGE_SIZE_4K);
     }
 
@@ -249,6 +244,7 @@ void syscall_loop(seL4_CPtr ep) {
 
         message = seL4_Wait(ep, &badge);
         label = seL4_MessageInfo_get_label(message);
+
         if (badge & IRQ_EP_BADGE) {
             /* Interrupt */
             if (badge & IRQ_BADGE_NETWORK) {
@@ -269,12 +265,12 @@ void syscall_loop(seL4_CPtr ep) {
         } else if (label == seL4_NoFault) {
             /* System call */
             curproc = process_status(badge);
-            
+
             start_coroutine(&handle_syscall, badge,
                             seL4_MessageInfo_get_length(message) - 1,
                             NULL);
 
-            /* Self destruct after a create/delete syscall */
+            /* Self destruct if proc was killed during a create/delete syscall */
             if (curproc->status == PROCESS_STATUS_SELF_DESTRUCT) {
                 process_destroy(curproc->pid);
             }

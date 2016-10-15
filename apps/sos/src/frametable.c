@@ -504,7 +504,7 @@ int32_t get_app_cap(seL4_Word vaddr,
 
     struct app_cap *curr_cap = &frame_table[index].app_caps;
 
-    if (curr_cap == NULL) {
+    if (curr_cap->cap == seL4_CapNull) {
         return -1;
     } else {
         *cap_ret = curr_cap;

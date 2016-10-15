@@ -533,9 +533,9 @@ void syscall_process_create(seL4_CPtr reply_cap, seL4_Word badge) {
     sos_vaddr |= (path_uaddr & PAGE_MASK_4K);
 
     pin_frame_entry(path_uaddr, MAX_PATH_LEN);
+    /* TODO something needs to be done with this err */
     err = get_safe_path(path_sos_vaddr, path_uaddr, sos_vaddr, MAX_PATH_LEN);
     unpin_frame_entry(path_uaddr, MAX_PATH_LEN);
-    /* TODO something needs to be done with this err */
 
     int new_pid = process_new(path_sos_vaddr, _sos_ipc_ep_cap, badge);
 
@@ -543,7 +543,7 @@ void syscall_process_create(seL4_CPtr reply_cap, seL4_Word badge) {
         curproc->status = PROCESS_STATUS_NOT_BUSY;
     }
 
-    /* If error, sends -1 pid */
+    /* new_pid is -1 on error */
     seL4_SetMR(0, new_pid);
     send_reply(reply_cap);
 
