@@ -17,7 +17,7 @@
 #include <sys/panic.h>
 
 
-/* #define LIMIT_FRAMES */
+#define LIMIT_FRAMES
 
 #ifdef LIMIT_FRAMES
 int frames_to_alloc = 0;
@@ -31,7 +31,7 @@ int frames_to_alloc = 0;
 #define FRAME_REFERENCE (1 << 2)
 #define FRAME_SWAPPABLE (1 << 1)
 #define FRAME_VALID (1 << 0)
-
+#define FRAME_SHARE_REF_ONE (1 << 3)
 extern struct PCB *curproc;
 
 const char *swapfile = "pagefile";
@@ -42,11 +42,12 @@ static void reset_frame_mask(uint32_t index);
 static seL4_Word get_free_frame();
 
 static struct app_cap *app_cap_new(seL4_CPtr cap, struct PCB *pcb, seL4_Word uaddr);
-
+static void dec_one_to_share_ref(seL4_Word sos_vaddr);
 /* Static struct declarations */
 
 /* val swappable | valid
- * XXXXXX| R | S | V |
+ * XXXX|SHARE REF| R | S | V |
+ * SHARE REF: 5 bits long
  * R:reference bit which used for second chance replacement
  * S:Swappable bit because some frame is allocated as coroutine stack
  * V:frame that is valid , which can be swaped if swap bit is on
@@ -367,9 +368,14 @@ int32_t frame_free(seL4_Word vaddr) {
     if (frame_table[index].cap == seL4_CapNull) return -1;
 
     /* Set free list index */
-    frame_table[index].mask = 0;
-    frame_table[index].next_index = free_index;
-    free_index = index;
+    int count = frame_table[index].mask >> 3;
+    if (count == 1){
+        frame_table[index].mask = 0;
+        frame_table[index].next_index = free_index;
+        free_index = index;
+    }   else{
+        dec_one_to_share_ref(vaddr);
+    } 
 
     return 0;
 }
@@ -592,7 +598,7 @@ void unpin_frame_entry(seL4_Word uaddr, seL4_Word size) {
 
 
 static void reset_frame_mask(uint32_t index) {
-    frame_table[index].mask = FRAME_SWAPPABLE | FRAME_VALID | FRAME_REFERENCE;
+    frame_table[index].mask = FRAME_SWAPPABLE | FRAME_VALID | FRAME_REFERENCE | FRAME_SHARE_REF_ONE;
 }
 
 inline int root_index(seL4_Word uaddr) {
@@ -617,4 +623,20 @@ inline seL4_Word frame_paddr_to_vaddr(seL4_Word paddr) {
 
 inline uint32_t frame_paddr_to_index(seL4_Word paddr) {
     return ((paddr - base_addr) >> INDEX_ADDR_OFFSET);
+}
+
+void add_one_to_share_ref(seL4_Word sos_vaddr){
+    int index = frame_vaddr_to_index(sos_vaddr);
+    int count = frame_table[index].mask >> 3;
+    int mask  = (frame_table[index].mask << 28) >> 28;
+    count++;
+    frame_table[index].mask |= count;    
+}
+
+static void dec_one_to_share_ref(seL4_Word sos_vaddr){
+    int index = frame_vaddr_to_index(sos_vaddr);
+    int count = frame_table[index].mask >> 3;
+    int mask  = (frame_table[index].mask << 28) >> 28;
+    count--;
+    frame_table[index].mask |= count;    
 }

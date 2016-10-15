@@ -14,6 +14,7 @@
 #include <sys/panic.h>
 
 extern struct PCB *curproc;
+extern struct page_table_entry **share_page_table;
 extern int curr_coroutine_id;
 
 static struct serial *serial_handle;
@@ -40,9 +41,15 @@ static void console_serial_handler(struct serial *serial, char c) {
     struct page_table_entry **page_table = pcb->addrspace->page_table;
 
     /* Align and add offset */
-    char *sos_vaddr = PAGE_ALIGN_4K(page_table[index1][index2].sos_vaddr);
-    sos_vaddr = ((seL4_Word) sos_vaddr) | ((seL4_Word) console_uio->uaddr & PAGE_MASK_4K);
-
+    char *sos_vaddr = page_table[index1][index2].sos_vaddr;
+    
+    if (page_table[index1][index2].sos_vaddr & PTE_SHARE){
+        sos_vaddr = PAGE_ALIGN_4K(share_page_table[index1][index2].sos_vaddr);
+        sos_vaddr = ((seL4_Word) sos_vaddr) | ((seL4_Word) console_uio->uaddr & PAGE_MASK_4K);
+    }   else{
+        sos_vaddr = PAGE_ALIGN_4K(page_table[index1][index2].sos_vaddr);
+        sos_vaddr = ((seL4_Word) sos_vaddr) | ((seL4_Word) console_uio->uaddr & PAGE_MASK_4K);
+    }
     /* Write into buffer */
     *sos_vaddr = c;
     console_uio->uaddr++;

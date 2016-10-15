@@ -28,7 +28,7 @@
 extern const seL4_BootInfo *_boot_info;
 extern struct PCB *curproc;
 extern uint32_t curr_swap_offset;
-static struct page_table_entry ** share_page_table=NULL;
+struct page_table_entry ** share_page_table=NULL;
 /**
  * Maps a page table into the root servers page directory
  * @param vaddr The virtual address of the mapping
@@ -411,7 +411,7 @@ int sos_share_page(seL4_Word uaddr,seL4_Word size,seL4_Word writable) {
         
             /*TODO If it's shared we need to look up the real sos_vaddr in share_page_table*/
             as->page_table[index1][index2].sos_vaddr |= (PTE_VALID|PTE_SHARE); 
-        
+            add_one_to_share_ref(as->page_table[index1][index2].sos_vaddr);
         }   else{
             conditional_panic(-1,"fail to map share page");
         }
@@ -439,3 +439,5 @@ int sos_share_page(seL4_Word uaddr,seL4_Word size,seL4_Word writable) {
     } 
     return 0;    
 }
+
+
