@@ -1,10 +1,16 @@
 #include <limits.h>
+#include <string.h>
 #include <cspace/cspace.h>
 #include <cpio/cpio.h>
 #include <utils/page.h>
 #include <clock/clock.h>
+#include <elf/elf.h>
 #include <fcntl.h>
 
+#include "ut_manager/ut.h"
+#include "frametable.h"
+#include "coroutine.h"
+#include "elf.h"
 #include "vmem_layout.h"
 #include "file.h"
 #include "process.h"
@@ -15,7 +21,7 @@
 #include <assert.h>
 #include <sys/panic.h>
 
-extern _cpio_archive[];
+extern char _cpio_archive[];
 extern struct oft_entry of_table[MAX_OPEN_FILE];
 
 struct PCB *curproc;
@@ -98,18 +104,29 @@ static int create_actual_process(char *app_name, seL4_CPtr fault_ep, int parent_
     }
 
     /* Set proc */
-    PCB_table[id] = proc;
     proc->app_name = malloc(strlen(app_name));
+    if (proc->app_name == NULL) {
+        free(proc);
+        return -1;
+    }
     strcpy(proc->app_name, app_name);
+
+    proc->addrspace = as_new();
+    if (proc->addrspace == NULL) {
+        free(proc->app_name);
+        free(proc);
+        return -1;
+    }
+
+    PCB_table[id] = proc;
     proc->stime = time_stamp() / 1000;
     proc->status = PROCESS_STATUS_NOT_BUSY;
     proc->pid = id;
     proc->wait = PROCESS_WAIT_NONE;
     proc->coroutine_id = -1;
     proc->parent = parent_pid;
-    proc->addrspace = as_new();
 
-    /* These required for setting up the TCB */
+    /* Required for setting up the TCB */
     seL4_UserContext context;
 
     /* Create a VSpace */
