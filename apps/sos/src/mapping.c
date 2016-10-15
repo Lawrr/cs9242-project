@@ -265,6 +265,11 @@ sos_map_page(seL4_Word vaddr_unaligned, seL4_Word *sos_vaddr_ret, struct PCB *pc
 
     if (pte.sos_vaddr & PTE_SWAP) {
         swap_in(vaddr, PAGE_ALIGN_4K(new_frame_vaddr));
+        struct app_cap * app_cap;
+        err = get_app_cap(new_frame_vaddr, pcb->addrspace, &app_cap);
+
+        app_cap->addrspace = pcb->addrspace;
+        app_cap->uaddr = vaddr_unaligned;
     }
 
     *sos_vaddr_ret = new_frame_vaddr;
