@@ -1,4 +1,6 @@
 *
 
 !.gitignore
-!docs/*
+!*.pdf
+!*.tex
+!Makefile
