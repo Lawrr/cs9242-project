@@ -560,6 +560,7 @@ void syscall_process_delete(seL4_CPtr reply_cap, seL4_Word badge) {
     struct PCB *pcb = process_status(pid);
 
     if (pcb->status == PROCESS_STATUS_BUSY) {
+        /* The process is in the middle of deleting/creating a process, wait for it to finish and then self destruct */
         pcb->status = PROCESS_STATUS_SELF_DESTRUCT;
     } else {
         curproc->status = PROCESS_STATUS_BUSY;

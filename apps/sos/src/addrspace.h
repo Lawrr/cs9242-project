@@ -52,4 +52,14 @@ struct region *get_region(seL4_Word uaddr);
 
 int as_destroy(struct app_addrspace *as);
 
+/* Root index to page table / swap table */
+inline int root_index(seL4_Word uaddr) {
+    return (uaddr >> 22);
+}
+
+/* Leaf index to page table / swap table */
+inline int leaf_index(seL4_Word uaddr) {
+    return ((uaddr << 10) >> 22);
+}
+
 #endif /* _ADDRSPACE_H_ */

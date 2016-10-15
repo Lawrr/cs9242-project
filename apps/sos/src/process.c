@@ -16,7 +16,6 @@
 #include <sys/panic.h>
 
 extern _cpio_archive[];
-
 extern struct oft_entry of_table[MAX_OPEN_FILE];
 
 struct PCB *curproc;
@@ -26,6 +25,7 @@ static unsigned int PCB_end_time[MAX_PROCESSES];
 
 static int create_actual_process(char *app_name, seL4_CPtr fault_ep, int parent_pid, char *elf_base, struct vnode *elf_vnode);
 
+/* Create a process from the cpio archive */
 int process_new_cpio(char *app_name, seL4_CPtr fault_ep, int parent_pid) {
     char *elf_base;
     unsigned long elf_size;
@@ -39,11 +39,13 @@ int process_new_cpio(char *app_name, seL4_CPtr fault_ep, int parent_pid) {
     return id;
 }
 
+/* Create a process from an external elf file */
 int process_new(char *app_name, seL4_CPtr fault_ep, int parent_pid) {
     struct vnode *vnode;
     int err = vfs_open(app_name, FM_READ, &vnode);
     if (err) return -1;
 
+    /* Check executable permissions */
     if ((vnode->fattr->mode & S_IXOTH) == 0) {
         vfs_close(vnode, FM_READ);
         return -1;
