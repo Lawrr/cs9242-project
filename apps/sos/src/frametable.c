@@ -18,7 +18,7 @@
 
 
 /* Emulate limited frames */
-// #define LIMIT_FRAMES
+#define LIMIT_FRAMES
 
 #ifdef LIMIT_FRAMES
 #define MAX_FRAMES 500
