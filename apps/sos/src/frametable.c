@@ -233,9 +233,13 @@ int32_t swap_out() {
     
     printf("Swap out - uaddr: %p, vaddr: %p, swap_index: %d\n", uaddr, frame_vaddr, swap_offset);
 
+    /*mark it unswappable because it is being swapped now*/
+    frame_table[victim].mask &= (~FRAME_SWAPPABLE);
+
     int err = swap_vnode->ops->vop_write(swap_vnode, &uio);
     conditional_panic(err, "Could not write\n");
 
+    frame_table[victim].mask |= FRAME_SWAPPABLE;
     struct app_addrspace *as = frame_table[victim].app_caps.addrspace;
     err = sos_unmap_page(frame_vaddr, as);
     conditional_panic(err, "Could not unmap\n");
