@@ -11,7 +11,6 @@ static uint32_t hash(char *key, uint32_t slots) {
     return hash % slots;
 }
 
-//TODO just insert into head
 static int list_insert(struct hashtable_entry *entry_head,
                        struct hashtable_entry *new_entry) {
     struct hashtable_entry *curr_entry = entry_head;
@@ -20,6 +19,11 @@ static int list_insert(struct hashtable_entry *entry_head,
         *curr_entry = *new_entry;
     } else {
         while (curr_entry->next != NULL) {
+            /* Check if already inserted */
+            if (!strcmp(curr_entry->key, new_entry->key)) {
+                return -1;
+            }
+
             curr_entry = curr_entry->next;
         }
         curr_entry->next = new_entry;
@@ -81,6 +85,7 @@ struct hashtable *hashtable_new(uint32_t slots) {
 
     ht->list = malloc(slots * sizeof(struct hashtable_entry));
     if (ht->list == NULL) {
+        free(ht);
         return NULL;
     }
     for (int i = 0; i < slots; i++) {
@@ -92,11 +97,11 @@ struct hashtable *hashtable_new(uint32_t slots) {
     return ht;
 }
 
-/* Assumes entry to insert is not already in the hashtable */
 int hashtable_insert(struct hashtable *ht, char *key, void *value) {
     uint32_t index = hash(key, ht->slots);
     struct hashtable_entry *entry = malloc(sizeof(struct hashtable_entry));
-    if (entry == NULL) return 1;
+    if (entry == NULL) return -1;
+
     entry->key = key;
     entry->value = value;
     entry->next = NULL;

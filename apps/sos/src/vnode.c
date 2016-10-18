@@ -532,6 +532,20 @@ static int vnode_open(struct vnode *vnode, fmode_t mode) {
     yield();
     int err = (int) arg[0];
 
+    /* Check permissions */
+    int valid_mode = 1;
+    int fattr_mode = ((fattr_t *) arg[2])->mode;
+    if (mode & FM_READ) {
+        if ((fattr_mode & S_IROTH) == 0) valid_mode = 0;
+    }
+    if (mode & FM_WRITE) {
+        if ((fattr_mode & S_IWOTH) == 0) valid_mode = 0;
+    }
+    if (!valid_mode) {
+        free(arg[1]);
+        free(arg[2]);
+        return -1;
+    }
 
     if (err == NFS_OK) {
         vnode->fh = (fhandle_t *) arg[1];

@@ -447,8 +447,12 @@ void syscall_open(seL4_CPtr reply_cap) {
         sos_access_mode = FM_READ | FM_WRITE;
     } else if (access_mode == O_RDONLY) {
         sos_access_mode = FM_READ;
-    } else {
+    } else if (access_mode == O_WRONLY) {
         sos_access_mode = FM_WRITE;
+    } else {
+        /* Invalid access mode */
+        send_err(reply_cap, -1);
+        return;
     }
 
     struct vnode *ret_vnode;
