@@ -200,7 +200,6 @@ static int create_actual_process(char *app_name, seL4_CPtr fault_ep, int parent_
         err = elf_load(proc->vroot, proc, elf_base, elf_vnode);
     }
     if (err) {
-        proc->parent = -1;
         process_destroy(id);
         return -1;
     }

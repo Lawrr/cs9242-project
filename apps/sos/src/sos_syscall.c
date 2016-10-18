@@ -416,8 +416,12 @@ void syscall_open(seL4_CPtr reply_cap) {
     fmode_t access_mode = seL4_GetMR(2);
 
     if (validate_max_fd(reply_cap, fd_count)) return;
-    if (validate_max_ofd(reply_cap, ofd_count)) return;
-    if (validate_uaddr(reply_cap, uaddr, 0)) return;
+    if (validate_max_ofd(reply_cap, ofd_count)) {
+        return;
+    }
+    if (validate_uaddr(reply_cap, uaddr, 0)) {
+        return;
+    }
 
     char path_sos_vaddr[MAX_PATH_LEN];
     /* Make sure address is mapped */
@@ -430,6 +434,8 @@ void syscall_open(seL4_CPtr reply_cap) {
     pin_frame_entry(uaddr, MAX_PATH_LEN);
     err = get_safe_path(path_sos_vaddr, uaddr, sos_vaddr, MAX_PATH_LEN);
     unpin_frame_entry(uaddr, MAX_PATH_LEN);
+
+
     if (err) {
         send_err(reply_cap, -1);
         return;
@@ -441,12 +447,8 @@ void syscall_open(seL4_CPtr reply_cap) {
         sos_access_mode = FM_READ | FM_WRITE;
     } else if (access_mode == O_RDONLY) {
         sos_access_mode = FM_READ;
-    } else if (access_mode == O_WRONLY) {
-        sos_access_mode = FM_WRITE;
     } else {
-        /* Invalid access mode */
-        send_err(reply_cap, -1);
-        return;
+        sos_access_mode = FM_WRITE;
     }
 
     struct vnode *ret_vnode;

@@ -10,6 +10,9 @@
 #define MAX_DEV_NAME 512
 #define MAX_PATH_LEN 512
 
+#define ERR_DEV_NAME -1
+#define ERR_MAX_DEV -2
+
 struct vnode {
     char *path;
     int read_count;
@@ -44,7 +47,6 @@ struct dev {
 };
 
 int dev_add(char *dev_name, struct vnode_ops *dev_ops);
-int dev_remove(char *dev_name);
 
 int vfs_init();
 int vfs_get(char *path, struct vnode **ret_vnode);

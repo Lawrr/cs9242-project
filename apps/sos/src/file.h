@@ -9,9 +9,6 @@
 
 #define STDOUT_OFD 0
 
-#define STDOUT_FD 1
-#define STDERR_FD 2
-
 struct oft_entry {
     sos_stat_t file_info;
     struct vnode *vnode;
