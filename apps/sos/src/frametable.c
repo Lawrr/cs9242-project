@@ -34,7 +34,8 @@ int frames_to_alloc = 0;
 #define FRAME_VALID (1 << 0)
 #define FRAME_SWAPPABLE (1 << 1)
 #define FRAME_REFERENCE (1 << 2)
-
+#define FRAME_PID_MASK (~7)
+#define PID_SHIFT 3
 extern struct PCB *curproc;
 
 /* Name of swapfile */
@@ -80,7 +81,6 @@ static int32_t free_index;
 
 static void reset_frame_mask(uint32_t index);
 static seL4_Word get_free_frame();
-static struct app_cap *app_cap_new(seL4_CPtr cap, struct app_addrspace *as, seL4_Word uaddr);
 
 static inline uint32_t frame_vaddr_to_index(seL4_Word sos_vaddr);
 static inline seL4_Word frame_index_to_vaddr(uint32_t index);
@@ -244,16 +244,27 @@ int32_t swap_out() {
     //Another problem: addrspace gets freed if it gets destroyed, which means it accesses the invalid memory...
     //solution(?): as_destroy has to change the frame table's app_cap addrspace to NULL, then after swapping out check if as == NULL
     /* Update details of old addrspace */
-    struct app_addrspace *as = frame_table[victim].app_caps.addrspace;
-    err = sos_unmap_page(frame_vaddr, as);
-    conditional_panic(err, "Could not unmap\n");
-
+    
     int index1 = root_index(uaddr);
     int index2 = leaf_index(uaddr);
 
+    struct app_addrspace *as = frame_table[victim].app_caps.pcb->addrspace;
     /* Mark it as swapped out */
     as->page_table[index1][index2].sos_vaddr |= PTE_SWAP;
+    as->page_table[index1][index2].sos_vaddr |= PTE_BEINGSWAPPED;
     as->swap_table[index1][index2].swap_index = swap_offset;
+    
+    
+    err = sos_unmap_page(frame_vaddr, as);
+    conditional_panic(err, "Could not unmap\n");
+
+    if (as->page_table[index1][index2].sos_vaddr & PTE_BEINGSWAPPED){
+        int pid = frame_table[victim].mask >> PID_SHIFT;
+        struct PCB *pcb = process_status(pid);
+        set_resume(pcb->coroutine_id);
+    }   else {
+        as->page_table[index1][index2].sos_vaddr & (~PTE_BEINGSWAPPED);
+    }
 
     frame_free(frame_vaddr); 
 	
@@ -280,6 +291,13 @@ int32_t swap_in(seL4_Word uaddr, seL4_Word sos_vaddr) {
         .remaining = PAGE_SIZE_4K,
         .pcb = curproc
     };
+
+    if (as->page_table[index1][index2].sos_vaddr & PTE_BEINGSWAPPED) {
+        frame_table[frame_index].mask &= (~FRAME_PID_MASK);
+        frame_table[frame_index].mask |= (curproc->pid << PID_SHIFT);
+        as->page_table[index1][index2].sos_vaddr &= (~PTE_BEINGSWAPPED);
+        yield(); 
+    }
 
     /* Swap in */
     int err = swap_vnode->ops->vop_read(swap_vnode, &uio);
@@ -469,7 +487,7 @@ seL4_CPtr get_cap(seL4_Word vaddr) {
 }
 
 int32_t insert_app_cap(seL4_Word vaddr, seL4_CPtr cap,
-        struct app_addrspace *as, seL4_Word uaddr) {
+        struct PCB *pcb, seL4_Word uaddr) {
 
     uint32_t index = frame_vaddr_to_index(vaddr);
 
@@ -483,7 +501,7 @@ int32_t insert_app_cap(seL4_Word vaddr, seL4_CPtr cap,
         /* First app cap */
         copied_cap = &frame_table[index].app_caps;
         copied_cap->next = NULL;
-        copied_cap->addrspace = as;
+        copied_cap->pcb = pcb;
         copied_cap->uaddr = uaddr;
         copied_cap->cap = cap;
     } else {
@@ -512,22 +530,7 @@ int32_t get_app_cap(seL4_Word vaddr,
     }
 }
 
-static struct app_cap *app_cap_new(seL4_CPtr cap,
-        struct app_addrspace *as, seL4_Word uaddr) {
 
-    struct app_cap *new_app_cap = malloc(sizeof(struct app_cap));
-    if (new_app_cap == NULL) {
-        return NULL;
-    }
-
-    /* Initialise variables */
-    new_app_cap->next = NULL;
-    new_app_cap->addrspace = as;
-    new_app_cap->uaddr = uaddr;
-    new_app_cap->cap = cap;
-
-    return new_app_cap;
-}
 
 static void reset_frame_mask(uint32_t index) {
     frame_table[index].mask = FRAME_SWAPPABLE | FRAME_VALID | FRAME_REFERENCE;
