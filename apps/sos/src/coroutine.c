@@ -18,7 +18,7 @@ static int num_tasks = 0;
 static int next_resume_id = -1;
 /* Next task to cleanup */
 static int next_cleanup_id = -1;
-
+/* Start index looking for free slot */
 static int start_index = 0;
 
 /* Coroutine slots */
@@ -44,7 +44,9 @@ void coroutine_init() {
 void yield() { 
     int stime = curproc->stime;
     int pid = curproc->pid;
+
     int id = setjmp(coroutines[curr_coroutine_id]); 
+
     if (id == 0) {
         /* First time */
         longjmp(syscall_loop_entry, 1);
@@ -100,7 +102,7 @@ void set_cleanup_coroutine(int id) {
 }
 
 int start_coroutine(void (*task)(seL4_Word badge, int num_args),
-                    seL4_Word badge, int num_args, struct PCB *pcb) {
+        seL4_Word badge, int num_args, struct PCB *pcb) {
     /* Check reached max coroutines */
     if (num_tasks == NUM_COROUTINES) return 1;
 

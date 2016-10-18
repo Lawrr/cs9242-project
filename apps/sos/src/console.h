@@ -3,6 +3,6 @@
 
 #include <process.h>
 
-void console_init(struct vnode **vnode);
+int console_init(struct vnode **ret_vnode);
 
 #endif

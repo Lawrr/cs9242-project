@@ -42,8 +42,8 @@ struct app_addrspace *as_new() {
     as->fd_count = 2;
 
     // TODO is it possible STDOUT is not 0?? (maybe no more references)
-    as->fd_table[1].ofd = STDOUT_OFD; /* STDOUT */
-    as->fd_table[2].ofd = STDOUT_OFD; /* STDERR */
+    as->fd_table[STDOUT_FD].ofd = STDOUT_OFD; /* STDOUT */
+    as->fd_table[STDERR_FD].ofd = STDOUT_OFD; /* STDERR */
 
     /*open file table increase ref count*/
     of_table[STDOUT_OFD].ref_count += 2;
@@ -79,33 +79,6 @@ int as_define_region(struct app_addrspace *as,
     return 0;
 }
 
-int as_free(struct app_addrspace *as) {
-    /* Free frames in addrspace */
-    for (int i = 0; i < PAGE_ENTRIES; i++) {
-        if (as->page_table[i] == NULL) continue;
-
-        /* Free leaf frames */
-        for (int j = 0; j < PAGE_ENTRIES; j++) {
-            if (as->page_table[i][j].sos_vaddr & PTE_VALID) {
-                frame_free(as->page_table[i][j].sos_vaddr);
-            }
-        }
-
-        /* Free root frame */
-        frame_free((seL4_Word) as->page_table[i]);
-    }
-
-    /* Free regions */
-    struct region *curr_region = as->regions;
-    while (curr_region != NULL) {
-        struct region *region_to_free = curr_region;
-        curr_region = curr_region->next;
-        free(region_to_free);
-    }
-
-    return 0;
-}
-
 struct region *get_region(seL4_Word uaddr) {
     struct region *curr_region = curproc->addrspace->regions;
     while (curr_region != NULL) {
@@ -126,7 +99,6 @@ int as_destroy(struct app_addrspace *as) {
 
     /* Free page table and swap table */
     for (int i = 0; i < PAGE_ENTRIES; i++) {
-
         if (as->page_table[i] == NULL) continue;
 
         for (int j = 0; j < PAGE_ENTRIES; j++) {
@@ -144,6 +116,7 @@ int as_destroy(struct app_addrspace *as) {
                     seL4_ARM_Page_Unify_Instruction(get_cap(sos_vaddr), 0, PAGE_SIZE_4K);
                 }
             }
+
         }
 
         /* In our design, we definitely have the swap_table page allocated if the page_table page exist */
@@ -154,11 +127,11 @@ int as_destroy(struct app_addrspace *as) {
     frame_free(PAGE_ALIGN_4K((seL4_Word) as->page_table));
 
     /* Free regions */
-    struct region * curr = as->regions;
-    while (curr != NULL) {
-        struct region *to_free = curr;
-        curr = curr->next;
-        free(to_free);
+    struct region *curr_region = as->regions;
+    while (curr_region != NULL) {
+        struct region *region_to_free = curr_region;
+        curr_region = curr_region->next;
+        free(region_to_free);
     }
 
     /* Close files */
@@ -185,4 +158,3 @@ int as_destroy(struct app_addrspace *as) {
 
     return 0;
 }
-

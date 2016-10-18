@@ -100,7 +100,8 @@ seL4_Word curr_free_ofd = 0;
 static void of_table_init() {
     /* Add console device */
     struct vnode *console_vnode;
-    console_init(&console_vnode);
+    int err = console_init(&console_vnode);
+    conditional_panic(err, "Could not initialise console\n");
 
     /* Set up of table */
     of_table[STDOUT_OFD].vnode = console_vnode;

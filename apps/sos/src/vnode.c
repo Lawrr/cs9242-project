@@ -83,7 +83,7 @@ static void dev_list_init() {
 int dev_add(char *name, struct vnode_ops *ops) {
     int len = strnlen(name, MAX_DEV_NAME);
     if (len == MAX_DEV_NAME) {
-        return ERR_DEV_NAME;
+        return -1;
     }
 
     /* Find empty device slot */
@@ -91,6 +91,8 @@ int dev_add(char *name, struct vnode_ops *ops) {
         if (dev_list[i].name == NULL) {
             /* Add new device */
             dev_list[i].name = malloc(len + 1);
+            if (dev_list[i].name == NULL) return -2;
+
             strcpy(dev_list[i].name, name);
             dev_list[i].ops = ops;
             return 0;
@@ -98,7 +100,23 @@ int dev_add(char *name, struct vnode_ops *ops) {
     }
 
     /* No free device slot */
-    return ERR_MAX_DEV;
+    return -3;
+}
+
+int dev_remove(char *dev) {
+    for (int i = 0; i < MAX_DEV_NUM; i++) {
+        if (dev_list[i].name == NULL) continue;
+
+        if (!strcmp(dev_list[i].name, dev)) {
+            /* Found device */
+            free(dev_list[i].name);
+            dev_list[i].name = NULL;
+            return 0;
+        }
+    }
+
+    /* Could not find device */
+    return -1;
 }
 
 static int is_dev(char *dev) {
@@ -529,6 +547,7 @@ static int vnode_open(struct vnode *vnode, fmode_t mode) {
 
     nfs_lookup(&mnt_point, vnode->path, (nfs_lookup_cb_t) vnode_open_cb, token);
     set_routine_arg(curr_coroutine_id, 0, 1);
+    set_routine_arg(curr_coroutine_id, 1, mode);
     yield();
     int err = (int) arg[0];
 
@@ -566,6 +585,20 @@ static void vnode_open_cb(uintptr_t token_ptr, nfs_stat_t status, fhandle_t *fh,
 
     /* Check if proc was deleted */
     if (pcb == NULL || pcb->stime != stime) {
+        free(token);
+        return;
+    }
+
+    /* Check permissions */
+    int valid_mode = 1;
+    fmode_t mode = get_routine_arg(coroutine_id, 1);
+    if (mode & FM_READ) {
+        if (((int) fattr & S_IROTH) == 0) valid_mode = 0;
+    }
+    if (mode & FM_WRITE) {
+        if (((int) fattr & S_IWOTH) == 0) valid_mode = 0;
+    }
+    if (!valid_mode) {
         free(token);
         return;
     }

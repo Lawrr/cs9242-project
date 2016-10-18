@@ -23,15 +23,52 @@ static pid_t read_pid;
 static unsigned int read_stime;
 static int read_coroutine_id;
 
+static void console_serial_handler(struct serial *serial, char c);
+
+static int console_write(struct vnode *vnode, struct uio *uio);
+static int console_read(struct vnode *vnode, struct uio *uio);
+static int console_open(struct vnode *vnode, int mode);
+static int console_close(struct vnode *vnode);
+
+int console_init(struct vnode **ret_vnode) {
+    /* Initialise serial driver */
+    serial_handle = serial_init();
+    serial_register_handler(serial_handle, console_serial_handler);
+
+    /* Set up console dev */
+    struct vnode_ops *console_ops = malloc(sizeof(struct vnode_ops));
+    if (console_ops == NULL) return -1;
+
+    console_ops->vop_open = &console_open;
+    console_ops->vop_close = &console_close;
+    console_ops->vop_read = &console_read;
+    console_ops->vop_write = &console_write;
+    console_ops->vop_stat = NULL;
+    console_ops->vop_getdirent = NULL;
+
+    int err = dev_add("console", console_ops);
+    if (err) {
+        free(console_ops);
+        return -1;
+    }
+
+    /* Set return console vnode */
+    /* FM_WRITE for STDOUT */
+    err = vfs_open("console", FM_WRITE, ret_vnode);
+    if (err) {
+        dev_remove("console");
+        free(console_ops);
+        return -1;
+    }
+}
+
 static void console_serial_handler(struct serial *serial, char c) {
     /* Return if we do not currently need to read */
     if (console_uio == NULL || console_uio->remaining == 0) return;
 
     /* Check if proc was deleted */
     struct PCB *pcb = process_status(read_pid);
-    if (pcb == NULL || pcb->stime != read_stime) {
-        return;
-    }
+    if (pcb == NULL || pcb->stime != read_stime) return;
 
     /* Take uaddr and turn it into sos_vaddr */
     int index1 = root_index((seL4_Word) console_uio->uaddr);
@@ -49,34 +86,31 @@ static void console_serial_handler(struct serial *serial, char c) {
     console_uio->remaining--;
     console_uio->offset++;
 
-    /* Check end */
+    /* Check if we're finished */
     if (console_uio->remaining == 0 || c == '\n') {
         set_resume(read_coroutine_id);
     }
 }
 
-int console_write(struct vnode *vnode, struct uio *uio) {
+static int console_write(struct vnode *vnode, struct uio *uio) {
     seL4_Word uaddr = uio->uaddr;
     seL4_Word ubuf_size = uio->size;
     seL4_Word end_uaddr = uaddr + ubuf_size;
-
 
     while (ubuf_size > 0) {
         seL4_Word uaddr_next = PAGE_ALIGN_4K(uaddr) + PAGE_SIZE_4K;
         seL4_Word size;
         if (end_uaddr >= uaddr_next) {
-            size = uaddr_next-uaddr;
+            size = uaddr_next - uaddr;
         } else {
             size = ubuf_size;
         }
 
-        /* Though we can assume the buffer is mapped because it is a write operation,
+        /* Although we can assume the buffer is mapped because it is a write operation,
          * we still use sos_map_page to find the mapping address if it is already mapped */
         seL4_Word sos_vaddr;
         int err = sos_map_page(uaddr, &sos_vaddr, curproc);
-        if (err && err != ERR_ALREADY_MAPPED) {
-            return 1;
-        }
+        if (err && err != ERR_ALREADY_MAPPED) return -1;
         
         sos_vaddr = PAGE_ALIGN_4K(sos_vaddr);
         /* Add offset */
@@ -93,7 +127,7 @@ int console_write(struct vnode *vnode, struct uio *uio) {
     return 0;
 }
 
-int console_read(struct vnode *vnode, struct uio *uio) {
+static int console_read(struct vnode *vnode, struct uio *uio) {
     read_pid = curproc->pid;
     read_stime = curproc->stime;
     read_coroutine_id = curr_coroutine_id;
@@ -133,7 +167,7 @@ int console_read(struct vnode *vnode, struct uio *uio) {
     return 0;
 }
 
-int console_open(struct vnode *vnode, int mode) {
+static int console_open(struct vnode *vnode, int mode) {
     /* Only allow one read */
     if (vnode->read_count == 1 && (mode & FM_READ) != 0) {
         return 1;
@@ -141,29 +175,6 @@ int console_open(struct vnode *vnode, int mode) {
     return 0;
 }
 
-int console_close(struct vnode *vnode) {
+static int console_close(struct vnode *vnode) {
     return 0;
-}
-
-void console_init(struct vnode **ret_vnode) {
-    /* Initialise serial driver */
-    serial_handle = serial_init();
-    serial_register_handler(serial_handle, console_serial_handler);
-
-    /* Set up console dev */
-    struct vnode_ops *console_ops = malloc(sizeof(struct vnode_ops));
-    console_ops->vop_open = &console_open;
-    console_ops->vop_close = &console_close;
-    console_ops->vop_read = &console_read;
-    console_ops->vop_write = &console_write;
-    console_ops->vop_stat = NULL;
-    console_ops->vop_getdirent = NULL;
-
-    int err = dev_add("console", console_ops);
-    conditional_panic(err, "Could not add console serial device");
-
-    /* Set return console vnode */
-    /* FM_WRITE for STDOUT */
-    err = vfs_open("console", FM_WRITE, ret_vnode);
-    conditional_panic(err, "Registered console dev not found");
 }
