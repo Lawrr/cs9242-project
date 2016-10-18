@@ -232,7 +232,7 @@ sos_map_page(seL4_Word vaddr_unaligned, seL4_Word *sos_vaddr_ret, struct PCB *pc
     /* Book keeping the copied caps */
     insert_app_cap(PAGE_ALIGN_4K(new_frame_vaddr),
             copied_cap,
-            pcb->addrspace,
+            pcb,
             vaddr);
     err = map_page(copied_cap,
             pd,
