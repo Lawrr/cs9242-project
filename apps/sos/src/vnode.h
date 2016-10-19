@@ -10,9 +10,6 @@
 #define MAX_DEV_NAME 512
 #define MAX_PATH_LEN 512
 
-#define ERR_DEV_NAME -1
-#define ERR_MAX_DEV -2
-
 struct vnode {
     char *path;
     int read_count;

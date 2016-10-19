@@ -42,8 +42,8 @@ struct app_addrspace *as_new() {
     as->fd_count = 2;
 
     // TODO is it possible STDOUT is not 0?? (maybe no more references)
-    as->fd_table[1].ofd = STDOUT_OFD; /* STDOUT */
-    as->fd_table[2].ofd = STDOUT_OFD; /* STDERR */
+    as->fd_table[STDOUT_FD].ofd = STDOUT_OFD; /* STDOUT */
+    as->fd_table[STDERR_FD].ofd = STDOUT_OFD; /* STDERR */
 
     /*open file table increase ref count*/
     of_table[STDOUT_OFD].ref_count += 2;
@@ -74,33 +74,6 @@ int as_define_region(struct app_addrspace *as,
     } else {
         new_region->next = as->regions;
         as->regions = new_region;
-    }
-
-    return 0;
-}
-
-int as_free(struct app_addrspace *as) {
-    /* Free frames in addrspace */
-    for (int i = 0; i < PAGE_ENTRIES; i++) {
-        if (as->page_table[i] == NULL) continue;
-
-        /* Free leaf frames */
-        for (int j = 0; j < PAGE_ENTRIES; j++) {
-            if (as->page_table[i][j].sos_vaddr & PTE_VALID) {
-                frame_free(as->page_table[i][j].sos_vaddr);
-            }
-        }
-
-        /* Free root frame */
-        frame_free((seL4_Word) as->page_table[i]);
-    }
-
-    /* Free regions */
-    struct region *curr_region = as->regions;
-    while (curr_region != NULL) {
-        struct region *region_to_free = curr_region;
-        curr_region = curr_region->next;
-        free(region_to_free);
     }
 
     return 0;

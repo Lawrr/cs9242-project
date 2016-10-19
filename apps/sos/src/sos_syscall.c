@@ -416,12 +416,8 @@ void syscall_open(seL4_CPtr reply_cap) {
     fmode_t access_mode = seL4_GetMR(2);
 
     if (validate_max_fd(reply_cap, fd_count)) return;
-    if (validate_max_ofd(reply_cap, ofd_count)) {
-        return;
-    }
-    if (validate_uaddr(reply_cap, uaddr, 0)) {
-        return;
-    }
+    if (validate_max_ofd(reply_cap, ofd_count)) return;
+    if (validate_uaddr(reply_cap, uaddr, 0)) return;
 
     char path_sos_vaddr[MAX_PATH_LEN];
     /* Make sure address is mapped */

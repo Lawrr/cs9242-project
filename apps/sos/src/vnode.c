@@ -83,7 +83,7 @@ static void dev_list_init() {
 int dev_add(char *name, struct vnode_ops *ops) {
     int len = strnlen(name, MAX_DEV_NAME);
     if (len == MAX_DEV_NAME) {
-        return ERR_DEV_NAME;
+        return -1;
     }
 
     /* Find empty device slot */
@@ -91,6 +91,7 @@ int dev_add(char *name, struct vnode_ops *ops) {
         if (dev_list[i].name == NULL) {
             /* Add new device */
             dev_list[i].name = malloc(len + 1);
+            if (dev_list[i].name == NULL) return -1;
             strcpy(dev_list[i].name, name);
             dev_list[i].ops = ops;
             return 0;
@@ -98,7 +99,7 @@ int dev_add(char *name, struct vnode_ops *ops) {
     }
 
     /* No free device slot */
-    return ERR_MAX_DEV;
+    return -1;
 }
 
 static int is_dev(char *dev) {
