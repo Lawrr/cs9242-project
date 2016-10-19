@@ -44,23 +44,14 @@ void coroutine_init() {
 }
 
 void yield() { 
-    int stime = curproc->stime;
     int pid = curproc->pid;
     int id = setjmp(coroutines[curr_coroutine_id]); 
     if (id == 0) {
         /* First time */
         longjmp(syscall_loop_entry, 1);
     } else {
-        struct PCB *proc = process_status(pid);
-        if (proc == NULL || proc->stime != stime) {
-            /* Process was deleted */
-            set_cleanup_coroutine(curr_coroutine_id);
-            longjmp(syscall_loop_entry, 1);
-        }
-
-        curproc = proc;
-
         /* Returning to coroutine's function */
+        curproc = process_status(pid);
         return;
     }
 
@@ -98,6 +89,8 @@ void cleanup_coroutine() {
 }
 
 void set_cleanup_coroutine(int id) {
+    /* Clean any outstanding requests then set new request */
+    if (next_cleanup_id != -1) cleanup_coroutine();
     next_cleanup_id = id;
 }
 
@@ -156,9 +149,7 @@ int start_coroutine(void (*task)(seL4_Word badge, int num_args),
     }
 
     /* Clean up any old coroutines */
-    if (next_cleanup_id != -1) cleanup_coroutine();
     set_cleanup_coroutine(task_id);
-    cleanup_coroutine();
 
     /* Return to main loop */
     longjmp(syscall_loop_entry, 1);

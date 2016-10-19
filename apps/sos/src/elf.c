@@ -53,6 +53,7 @@ extern seL4_ARM_PageDirectory dest_as;
 extern jmp_buf syscall_loop_entry;
 extern seL4_CPtr _sos_ipc_ep_cap;
 extern struct PCB *curproc;
+extern int curr_coroutine_id;
 
 /*
  * Convert ELF permissions into seL4 permissions.
@@ -90,7 +91,7 @@ static void first_process_mapping_loop(seL4_CPtr ep) {
             printf("Rootserver got an unknown message\n");
         }
 
-        seL4_Word req_mask = get_routine_arg(0, 0);
+        seL4_Word req_mask = get_routine_arg(curr_coroutine_id, 0);
         if (req_mask == 0) {
             return;
         }
@@ -147,11 +148,12 @@ static int cpio_elf_load_segment_into_vspace(seL4_ARM_PageDirectory dest_pd,
 
         /* Map the frame into address space */
         int reenter = setjmp(syscall_loop_entry);
+        cleanup_coroutine();
         if (!reenter) {
             start_coroutine(sos_map_page, dst, &sos_vaddr, pcb);
         } else {
-            /* Note: Since this is for loading the first process we assume the coroutine is always id 0 */
-            seL4_Word req_mask = get_routine_arg(0, 0);
+            /* Check the mask to see if we are done with the loop */
+            seL4_Word req_mask = get_routine_arg(curr_coroutine_id, 0);
             if (req_mask) {
                 first_process_mapping_loop(_sos_ipc_ep_cap);
                 resume();
