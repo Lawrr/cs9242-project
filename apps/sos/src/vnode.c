@@ -285,9 +285,9 @@ static int vnode_getdirent(struct vnode *vnode, struct uio *uio) {
 
         seL4_Word *token = malloc(sizeof(seL4_Word) * 3);
         conditional_panic(token == NULL, "Out of memory\n");
-        token[0] = curr_coroutine_id;
-        token[1] = curproc->pid;
-        token[2] = curproc->stime;
+        token[0] = curproc->pid;
+        token[1] = curproc->stime;
+        token[2] = curr_coroutine_id;
 
         nfs_readdir(&mnt_point, cookies, vnode_readdir_cb, token);
         yield();
@@ -307,13 +307,12 @@ static int vnode_getdirent(struct vnode *vnode, struct uio *uio) {
 
 static void vnode_readdir_cb(uintptr_t token_ptr, enum nfs_stat status, int num_files, char *file_names[], nfscookie_t nfscookie) {
     seL4_Word *token = (seL4_Word *) token_ptr;
-    seL4_Word coroutine_id = token[0];
-    seL4_Word pid = token[1];
-    seL4_Word stime = token[2];
-    struct PCB *pcb = process_status(pid);
+    seL4_Word pid = token[0];
+    seL4_Word stime = token[1];
+    seL4_Word coroutine_id = token[2];
 
     /* Check if proc was deleted */
-    if (pcb == NULL || pcb->stime != stime) {
+    if (!is_still_valid_proc(pid, stime)) {
         free(token);
         return;
     }
@@ -384,9 +383,9 @@ static void vnode_readdir_cb(uintptr_t token_ptr, enum nfs_stat status, int num_
 static int vnode_stat(struct vnode *vnode, sos_stat_t *stat) {
     seL4_Word *token = malloc(sizeof(seL4_Word) * 3);
     conditional_panic(token == NULL, "Out of memory\n");
-    token[0] = curr_coroutine_id;
-    token[1] = curproc->pid;
-    token[2] = curproc->stime;
+    token[0] = curproc->pid;
+    token[1] = curproc->stime;
+    token[2] = curr_coroutine_id;
 
     nfs_lookup(&mnt_point, vnode->path, (nfs_lookup_cb_t) vnode_stat_cb, token);
     yield();
@@ -444,13 +443,12 @@ static int vnode_stat(struct vnode *vnode, sos_stat_t *stat) {
 
 static void vnode_stat_cb(uintptr_t token_ptr, nfs_stat_t status, fhandle_t *fh, fattr_t *fattr) {
     seL4_Word *token = (seL4_Word *) token_ptr;
-    seL4_Word coroutine_id = token[0];
-    seL4_Word pid = token[1];
-    seL4_Word stime = token[2];
-    struct PCB *pcb = process_status(pid);
+    seL4_Word pid = token[0];
+    seL4_Word stime = token[1];
+    seL4_Word coroutine_id = token[2];
 
     /* Check if proc was deleted */
-    if (pcb == NULL || pcb->stime != stime) {
+    if (!is_still_valid_proc(pid, stime)) {
         free(token);
         return;
     }
@@ -459,9 +457,6 @@ static void vnode_stat_cb(uintptr_t token_ptr, nfs_stat_t status, fhandle_t *fh,
     arg[1] = (seL4_Word) malloc(sizeof(fattr_t));
 
     memcpy(arg[1], fattr, sizeof(fattr_t));
-
-    /* 0 has special meaning for setjmp returns, so map 0 to -1 */
-    if (status == 0) status = -1;
 
     set_resume(coroutine_id);
 
@@ -491,9 +486,9 @@ static int file_create(struct vnode *vnode) {
 
     seL4_Word *token = malloc(sizeof(seL4_Word) * 3);
     conditional_panic(token == NULL, "Out of memory\n");
-    token[0] = curr_coroutine_id;
-    token[1] = curproc->pid;
-    token[2] = curproc->stime;
+    token[0] = curproc->pid;
+    token[1] = curproc->stime;
+    token[2] = curr_coroutine_id;
 
     nfs_create(&mnt_point, vnode->path, &sattr, (nfs_create_cb_t) vnode_create_cb, token);
 
@@ -504,13 +499,12 @@ static int file_create(struct vnode *vnode) {
 
 static void vnode_create_cb(uintptr_t token_ptr, nfs_stat_t status, fhandle_t *fh, fattr_t *fattr) {
     seL4_Word *token = (seL4_Word *) token_ptr;
-    seL4_Word coroutine_id = token[0];
-    seL4_Word pid = token[1];
-    seL4_Word stime = token[2];
-    struct PCB *pcb = process_status(pid);
+    seL4_Word pid = token[0];
+    seL4_Word stime = token[1];
+    seL4_Word coroutine_id = token[2];
 
     /* Check if proc was deleted */
-    if (pcb == NULL || pcb->stime != stime) {
+    if (!is_still_valid_proc(pid, stime)) {
         free(token);
         return;
     }
@@ -540,9 +534,9 @@ static int vnode_open(struct vnode *vnode, fmode_t mode) {
 
     seL4_Word *token = malloc(sizeof(seL4_Word) * 3);
     conditional_panic(token == NULL, "Out of memory\n");
-    token[0] = curr_coroutine_id;
-    token[1] = curproc->pid;
-    token[2] = curproc->stime;
+    token[0] = curproc->pid;
+    token[1] = curproc->stime;
+    token[2] = curr_coroutine_id;
 
     nfs_lookup(&mnt_point, vnode->path, (nfs_lookup_cb_t) vnode_open_cb, token);
     set_routine_arg(curr_coroutine_id, 0, 1);
@@ -590,13 +584,12 @@ static int vnode_open(struct vnode *vnode, fmode_t mode) {
 
 static void vnode_open_cb(uintptr_t token_ptr, nfs_stat_t status, fhandle_t *fh, fattr_t *fattr) {
     seL4_Word *token = (seL4_Word *) token_ptr;
-    seL4_Word coroutine_id = token[0];
-    seL4_Word pid = token[1];
-    seL4_Word stime = token[2];
-    struct PCB *pcb = process_status(pid);
+    seL4_Word pid = token[0];
+    seL4_Word stime = token[1];
+    seL4_Word coroutine_id = token[2];
 
     /* Check if proc was deleted */
-    if (pcb == NULL || pcb->stime != stime) {
+    if (!is_still_valid_proc(pid, stime)) {
         free(token);
         return;
     }
@@ -671,9 +664,9 @@ static int vnode_read(struct vnode *vnode, struct uio *uio) {
 
         seL4_Word *token = malloc(sizeof(seL4_Word) * 3);
         conditional_panic(token == NULL, "Out of memory\n");
-        token[0] = curr_coroutine_id;
-        token[1] = proc->pid;
-        token[2] = proc->stime;
+        token[0] = proc->pid;
+        token[1] = proc->stime;
+        token[2] = curr_coroutine_id;
 
         err = nfs_read(vnode->fh, uio->offset, size, (nfs_read_cb_t) vnode_read_cb, token);
         conditional_panic(err, "failed read at send phrase");
@@ -702,13 +695,12 @@ static void vnode_read_cb(uintptr_t token_ptr, nfs_stat_t status, fattr_t *fattr
     conditional_panic(status, "failed read in end phrase");
 
     seL4_Word *token = (seL4_Word *) token_ptr;
-    seL4_Word coroutine_id = token[0];
-    seL4_Word pid = token[1];
-    seL4_Word stime = token[2];
-    struct PCB *pcb = process_status(pid);
+    seL4_Word pid = token[0];
+    seL4_Word stime = token[1];
+    seL4_Word coroutine_id = token[2];
 
     /* Check if proc was deleted */
-    if (pcb == NULL || pcb->stime != stime) {
+    if (!is_still_valid_proc(pid, stime)) {
         free(token);
         return;
     }
@@ -791,10 +783,10 @@ static int vnode_write(struct vnode *vnode, struct uio *uio) {
         while (size > 0) {
             seL4_Word *token = malloc(sizeof(seL4_Word) * 4);
             conditional_panic(token == NULL, "Out of memory\n");
-            token[0] = curr_coroutine_id;
-            token[1] = req_id;
-            token[2] = curproc->pid;
-            token[3] = curproc->stime;
+            token[0] = curproc->pid;
+            token[1] = curproc->stime;
+            token[2] = curr_coroutine_id;
+            token[3] = req_id;
 
             int offset = MAX_WRITE_SIZE * req_id;
 
@@ -846,14 +838,13 @@ static void vnode_write_cb(uintptr_t token_ptr, enum nfs_stat status, fattr_t *f
     conditional_panic(status, "nfs_write fail in end phase");
 
     seL4_Word *token = (seL4_Word *) token_ptr;
-    seL4_Word coroutine_id = token[0];
-    seL4_Word req_id = token[1];
-    seL4_Word pid = token[2];
-    seL4_Word stime = token[3];
-    struct PCB *pcb = process_status(pid);
+    seL4_Word pid = token[0];
+    seL4_Word stime = token[1];
+    seL4_Word coroutine_id = token[2];
+    seL4_Word req_id = token[3];
 
     /* Check if proc was deleted */
-    if (pcb == NULL || pcb->stime != stime) {
+    if (!is_still_valid_proc(pid, stime)) {
         free(token);
         return;
     }
@@ -864,7 +855,7 @@ static void vnode_write_cb(uintptr_t token_ptr, enum nfs_stat status, fattr_t *f
 
     set_routine_arg(coroutine_id, 1, cumulative_count);
     if (req_mask == 0) {
-        set_resume(token[0]);
+        set_resume(coroutine_id);
     }
 
     free(token);

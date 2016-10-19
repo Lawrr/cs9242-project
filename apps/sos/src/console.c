@@ -69,7 +69,7 @@ static void console_serial_handler(struct serial *serial, char c) {
 
     /* Check if proc was deleted */
     struct PCB *pcb = process_status(read_pid);
-    if (pcb == NULL || pcb->stime != read_stime) return;
+    if (!is_still_valid_proc(read_pid, read_stime)) return;
 
     /* Take uaddr and turn it into sos_vaddr */
     int index1 = root_index((seL4_Word) console_uio->uaddr);

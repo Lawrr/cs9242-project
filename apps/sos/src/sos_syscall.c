@@ -194,12 +194,13 @@ static void uwakeup(uint32_t id, void *data) {
     pid_t pid = ((seL4_Word *) data)[1];
     seL4_Word stime = ((seL4_Word *) data)[2];
 
-    curproc = process_status(pid);
-    if (curproc == NULL || curproc->stime != stime) {
+    /* Check if proc was deleted while sleeping */
+    if (!is_still_valid_proc(pid, stime)) {
         free(data);
         return 0;
     }
 
+    curproc = process_status(pid);
     seL4_SetMR(0, 0);
     send_reply(reply_cap);
     free(data);

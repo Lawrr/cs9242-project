@@ -263,8 +263,7 @@ int32_t swap_out() {
     /* Remark frame as swappable */
     frame_table[victim].mask |= FRAME_SWAPPABLE;
 
-    struct PCB *new_pcb = process_status(pid);
-    if (new_pcb == NULL || new_pcb->stime != stime) {
+    if (!is_still_valid_proc(pid, stime)) {
         /* Process was destroyed */
         frame_free(frame_vaddr);
         seL4_ARM_Page_Unify_Instruction(get_cap(frame_vaddr), 0, PAGE_SIZE_4K);

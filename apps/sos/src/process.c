@@ -39,6 +39,14 @@ void process_management_init(){
     PCB_free_table[MAX_PROCESSES-1] = -1;
 }
 
+/* Checks whether a process is still valid
+ * ie. hasn't been deleted or replaced by other process with same pid
+ */
+int is_still_valid_proc(pid_t pid, unsigned int stime) {
+    struct PCB *pcb = process_status(pid);
+    if (pcb == NULL || pcb->stime != stime) return 0;
+    return 1;
+}
 
 /* Create a process from the cpio archive */
 int process_new_cpio(char *app_name, seL4_CPtr fault_ep, int parent_pid) {
