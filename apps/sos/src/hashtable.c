@@ -107,6 +107,9 @@ int hashtable_insert(struct hashtable *ht, char *key, void *value) {
     entry->next = NULL;
 
     int err = list_insert(&ht->list[index], entry);
+    if (err) {
+        free(entry);
+    }
     return err;
 }
 

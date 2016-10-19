@@ -84,6 +84,7 @@ void free_swap_index(uint32_t index) {
 
         /* Update freelist data */
         struct freelist_page *new_flp = malloc(sizeof(struct freelist_page));
+        // TODO
         new_flp->index = index;
         new_flp->next = freelist_page;
         freelist_page = new_flp;
