@@ -119,7 +119,7 @@ int as_destroy(struct app_addrspace *as) {
             }
         }
 
-        /* In our design, we definitely have the swap_table page allocated if the page_table page exist */
+        /* Note: We are guarenteed to already have the swap_table page allocated if the page_table page exist */
         frame_free(PAGE_ALIGN_4K((seL4_Word) as->swap_table[i]));
         frame_free(PAGE_ALIGN_4K((seL4_Word) as->page_table[i]));
     }
@@ -158,4 +158,3 @@ int as_destroy(struct app_addrspace *as) {
 
     return 0;
 }
-

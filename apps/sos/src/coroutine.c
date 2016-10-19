@@ -97,7 +97,7 @@ void set_cleanup_coroutine(int id) {
 int start_coroutine(void (*task)(seL4_Word badge, int num_args),
         seL4_Word badge, int num_args, struct PCB *pcb) {
     /* Check reached max coroutines */
-    if (num_tasks == NUM_COROUTINES) return 1;
+    if (num_tasks == NUM_COROUTINES) return -1;
 
     num_tasks++;
 
@@ -148,7 +148,7 @@ int start_coroutine(void (*task)(seL4_Word badge, int num_args),
         task(badge_new, num_args_new);
     }
 
-    /* Clean up any old coroutines */
+    /* Set this coroutine to be cleaned */
     set_cleanup_coroutine(task_id);
 
     /* Return to main loop */
@@ -164,5 +164,3 @@ seL4_Word get_routine_arg(int id, int i) {
 void set_routine_arg(int id, int i, seL4_Word arg) {
     routine_args[id][i] = arg;
 }
-
-

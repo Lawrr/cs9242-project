@@ -45,4 +45,5 @@ void syscall_process_id(seL4_CPtr reply_cap, seL4_Word badge);
 void syscall_process_wait(seL4_CPtr reply_cap, seL4_Word badge);
 
 void syscall_process_status(seL4_CPtr reply_cap);
+
 #endif

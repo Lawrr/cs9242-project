@@ -29,12 +29,13 @@ struct PCB *curproc;
 static struct PCB *PCB_table[MAX_PROCESSES];
 static int PCB_free_table[MAX_PROCESSES];
 static next_free_pid = 0;
-static last_free_pid = MAX_PROCESSES-1;
+static last_free_pid = MAX_PROCESSES - 1;
+
 static int create_actual_process(char *app_name, seL4_CPtr fault_ep, int parent_pid, char *elf_base, struct vnode *elf_vnode);
 
 void process_management_init(){
     for (int i = 0; i < MAX_PROCESSES; i++){
-        PCB_free_table[i] = i+1;
+        PCB_free_table[i] = i + 1;
     }
     PCB_free_table[MAX_PROCESSES-1] = -1;
 }
