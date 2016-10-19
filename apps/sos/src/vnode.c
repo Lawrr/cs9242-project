@@ -102,6 +102,22 @@ int dev_add(char *name, struct vnode_ops *ops) {
     return -1;
 }
 
+int dev_remove(char *name) {
+    for (int i = 0; i < MAX_DEV_NUM; i++) {
+        if (dev_list[i].name == NULL) continue;
+
+        if (!strcmp(dev_list[i].name, name)) {
+            /* Found device */
+            free(dev_list[i].name);
+            dev_list[i].name = NULL;
+            return 0;
+        }
+    }
+
+    /* Could not find device */
+    return -1;
+}
+
 static int is_dev(char *dev) {
     for (int i = 0; i < MAX_DEV_NUM; i++) {
         if (dev_list[i].name == NULL) continue;

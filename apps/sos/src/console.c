@@ -29,7 +29,7 @@ static int console_read(struct vnode *vnode, struct uio *uio);
 static int console_open(struct vnode *vnode, int mode);
 static int console_close(struct vnode *vnode);
 
-void console_init(struct vnode **ret_vnode) {
+int console_init(struct vnode **ret_vnode) {
     /* Initialise serial driver */
     serial_handle = serial_init();
     serial_register_handler(serial_handle, console_serial_handler);
@@ -46,12 +46,21 @@ void console_init(struct vnode **ret_vnode) {
     console_ops->vop_getdirent = NULL;
 
     int err = dev_add("console", console_ops);
-    conditional_panic(err, "Could not add console serial device");
+    if (err) {
+        free(console_ops);
+        return -1;
+    }
 
     /* Set return console vnode */
     /* FM_WRITE for STDOUT */
     err = vfs_open("console", FM_WRITE, ret_vnode);
-    conditional_panic(err, "Registered console dev not found");
+    if (err) {
+        dev_remove("console");
+        free(console_ops);
+        return -1;
+    }
+
+    return 0;
 }
 
 static void console_serial_handler(struct serial *serial, char c) {

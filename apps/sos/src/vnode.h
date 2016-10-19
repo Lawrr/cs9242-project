@@ -43,7 +43,8 @@ struct dev {
     struct vnode_ops *ops;
 };
 
-int dev_add(char *dev_name, struct vnode_ops *dev_ops);
+int dev_add(char *name, struct vnode_ops *dev_ops);
+int dev_remove(char *name);
 
 int vfs_init();
 int vfs_get(char *path, struct vnode **ret_vnode);
