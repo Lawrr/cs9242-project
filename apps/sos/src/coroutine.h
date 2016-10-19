@@ -6,9 +6,11 @@
 #include <process.h>
 #include <mapping.h>
 
+/* Release the current execution and give it to other task */
 void yield();
-
+/* Resume a coroutine correspond to the next_resume_id */
 void resume();
+/* Set the value of next_resume_id */
 void set_resume(int id);
 
 void cleanup_coroutine();

@@ -18,18 +18,20 @@ static int num_tasks = 0;
 static int next_resume_id = -1;
 /* Next task to cleanup */
 static int next_cleanup_id = -1;
-
+/* Next free coroutine id to use*/
 static int start_index = 0;
 
 /* Coroutine slots */
 static jmp_buf coroutines[NUM_COROUTINES];
+
 /* List of free coroutine slots */
 static int free_list[NUM_COROUTINES];
 
 /* Slots for storing args passed to callback */
 static seL4_Word routine_args[NUM_COROUTINES][5];
+/* Routines stack */
 static char *routine_frames[NUM_COROUTINES];
-
+/* curr_coroutine_id */
 int curr_coroutine_id = 0;
 
 void coroutine_init() {
