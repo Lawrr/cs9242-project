@@ -19,4 +19,6 @@ struct oft_entry {
     int offset;
 };
 
+void of_table_init();
+
 #endif

@@ -93,23 +93,6 @@ jmp_buf syscall_loop_entry;
 seL4_CPtr _sos_ipc_ep_cap;
 seL4_CPtr _sos_interrupt_ep_cap;
 
-struct oft_entry of_table[MAX_OPEN_FILE];
-seL4_Word ofd_count = 0;
-seL4_Word curr_free_ofd = 0;
-
-static void of_table_init() {
-    /* Add console device */
-    struct vnode *console_vnode;
-    int err = console_init(&console_vnode);
-    conditional_panic(err, "Could not initialise console\n");
-
-    /* Set up of table */
-    of_table[STDOUT_OFD].vnode = console_vnode;
-    of_table[STDOUT_OFD].file_info.st_fmode = FM_WRITE;
-    ofd_count++;
-    curr_free_ofd = (STDOUT_OFD + 1) % MAX_OPEN_FILE;
-}
-
 void handle_syscall(seL4_Word badge, int num_args) {
     seL4_Word syscall_number;
     seL4_CPtr reply_cap;
