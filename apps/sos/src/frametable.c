@@ -69,7 +69,6 @@ static uint64_t base_addr; /* Start of untyped region after end of frame table *
 static int32_t low_addr; /* Low addr of memory */
 static int32_t high_addr; /* High addr of memory */
 static uint32_t num_frames; /* Frames in the frametable */
-// TODO do we need to bookkeep frametable_cap_head?
 static struct frame_table_cap *frame_table_cap_head; /* Linked list of the actual frametable's caps */
 
 /* Swapping */
@@ -223,14 +222,7 @@ int32_t swap_out() {
 
     printf("Swap out - uaddr: %p, vaddr: %p, swap_index: %d\n", uaddr, frame_vaddr, swap_offset);
 
-    //TODO as it is swapping out it gets destroyed which causes it to get unmapped (as_destroy)... which means it will get unmapped twice since the code below also unmaps it
-    //SOLUTION: move the code below to above
-    //PROBLEM: BUT if it doesnt get destroyed and instead gets accessed... then it will think its already swapped out when its still in the process of swapping out...
-    //What do...
-    //Another problem: addrspace gets freed if it gets destroyed, which means it accesses the invalid memory...
-    //solution(?): as_destroy has to change the frame table's app_cap addrspace to NULL, then after swapping out check if as == NULL
     /* Update details of old addrspace */
-    
     int index1 = root_index(uaddr);
     int index2 = leaf_index(uaddr);
 
