@@ -446,9 +446,10 @@ void pin_frame_entry(seL4_Word uaddr, seL4_Word size) {
     for (int i = 0; i < end_frame_size; i += PAGE_SIZE_4K) {
         index1 = root_index(uaddr + i);
         index2 = leaf_index(uaddr + i);
-        sos_vaddr = as->page_table[index1][index2].sos_vaddr;
 
         if (as->page_table[index1] == NULL) continue;
+
+        sos_vaddr = as->page_table[index1][index2].sos_vaddr;
         if ((sos_vaddr & PTE_SWAP) || (sos_vaddr & PTE_VALID) == 0) continue;
 
         frame_index = frame_vaddr_to_index(sos_vaddr);
@@ -475,9 +476,10 @@ void unpin_frame_entry(seL4_Word uaddr, seL4_Word size) {
     for (int i = 0; i < end_frame_size; i += PAGE_SIZE_4K) {
         index1 = root_index(uaddr + i);
         index2 = leaf_index(uaddr + i);
-        sos_vaddr = as->page_table[index1][index2].sos_vaddr;
 
         if (as->page_table[index1] == NULL) continue;
+
+        sos_vaddr = as->page_table[index1][index2].sos_vaddr;
         if ((sos_vaddr & PTE_SWAP) || (sos_vaddr & PTE_VALID) == 0) continue;
 
         frame_index = frame_vaddr_to_index(sos_vaddr);
