@@ -44,8 +44,7 @@ const char *swapfile = "pagefile";
 
 /* Static struct declarations */
 
-// TODO XXXXX <- How many bits is this?
-/* val swappable | valid
+/*
  * XXXXXX| R | S | V |
  * R:reference bit which used for second chance replacement
  * S:Swappable bit because some frame is allocated as coroutine stack
@@ -254,7 +253,30 @@ int32_t swap_out() {
     /* Swap frame out */
     int err = swap_vnode->ops->vop_write(swap_vnode, &uio);
     if (err) {
-        // TODO and below
+        as->page_table[index1][index2].sos_vaddr &= (~PTE_SWAP);
+        as->page_table[index1][index2].sos_vaddr &= (~PTE_BEINGSWAPPED);
+
+        seL4_ARM_PageDirectory pd = pcb->vroot;
+        seL4_CPtr cap = get_cap(frame_vaddr);
+        seL4_CPtr copied_cap;
+        copied_cap = cspace_copy_cap(cur_cspace,
+                cur_cspace,
+                cap,
+                seL4_AllRights);
+
+        err = map_page(copied_cap,
+                pd,
+                uaddr,
+                curr_region->permissions,
+                seL4_ARM_Default_VMAttributes);
+
+        /* Book keeping the copied caps */
+        insert_app_cap(PAGE_ALIGN_4K(frame_vaddr),
+                copied_cap,
+                pcb,
+                uaddr);
+
+        return -1;
     }
 
     /* Remark frame as swappable */
@@ -311,7 +333,7 @@ int32_t swap_in(seL4_Word uaddr, seL4_Word sos_vaddr) {
     /* Swap in */
     int err = swap_vnode->ops->vop_read(swap_vnode, &uio);
     if (err) {
-        // TODO
+        return -1;
     }
 
     printf("Swap in - uaddr: %p, vaddr: %p, swap_index: %d\n", uaddr, sos_vaddr, swap_index);
@@ -325,7 +347,7 @@ int32_t swap_in(seL4_Word uaddr, seL4_Word sos_vaddr) {
 
     seL4_ARM_Page_Unify_Instruction(get_cap(sos_vaddr), 0, PAGE_SIZE_4K);
 
-    return err;
+    return 0;
 }
 
 int32_t frame_alloc(seL4_Word *vaddr) {
