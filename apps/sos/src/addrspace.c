@@ -106,11 +106,8 @@ int as_destroy(struct app_addrspace *as) {
                     free_swap_index(as->swap_table[i][j].swap_index);
                 } else {
                     seL4_Word sos_vaddr = PAGE_ALIGN_4K(as->page_table[i][j].sos_vaddr);
-                    err = sos_unmap_page(sos_vaddr, as);
-                    conditional_panic(err, "Could not unmap\n");
-
+                    sos_unmap_page(sos_vaddr, as);
                     frame_free(sos_vaddr);
-
                     seL4_ARM_Page_Unify_Instruction(get_cap(sos_vaddr), 0, PAGE_SIZE_4K);
                 }
             }
@@ -124,7 +121,7 @@ int as_destroy(struct app_addrspace *as) {
     frame_free(PAGE_ALIGN_4K((seL4_Word) as->page_table));
 
     /* Free regions */
-    struct region * curr = as->regions;
+    struct region *curr = as->regions;
     while (curr != NULL) {
         struct region *to_free = curr;
         curr = curr->next;
