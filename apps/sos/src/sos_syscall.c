@@ -20,6 +20,102 @@ extern seL4_Word curr_free_ofd;
 extern seL4_CPtr _sos_ipc_ep_cap;
 extern seL4_Word curr_coroutine_id;
 
+static char *sys_name[14] = {
+    "Sos write",
+    "Sos read",
+    "Sos open",
+    "Sos close",
+    "Sos brk",
+    "Sos sleep",
+    "Sos timestamp",
+    "Sos getdirent",
+    "Sos stat",
+    "Sos process create",
+    "Sos process delete",
+    "Sos process id",
+    "Sos process wait",
+    "Sos process status"
+};
+
+void handle_syscall(seL4_Word badge, int num_args) {
+    seL4_Word syscall_number;
+    seL4_CPtr reply_cap;
+
+    syscall_number = seL4_GetMR(0);
+
+    printf("[App #%d] Syscall :%s  -- received from user application\n", badge, sys_name[syscall_number]);
+
+    /* Save the caller */
+    reply_cap = cspace_save_reply_cap(cur_cspace);
+    assert(reply_cap != CSPACE_NULL);
+
+    /* Process system call */
+    switch (syscall_number) {
+        case SOS_WRITE_SYSCALL:
+            syscall_write(reply_cap);
+            break;
+
+        case SOS_READ_SYSCALL:
+            syscall_read(reply_cap);
+            break;
+
+        case SOS_OPEN_SYSCALL:
+            syscall_open(reply_cap);
+            break;
+
+        case SOS_CLOSE_SYSCALL:
+            syscall_close(reply_cap);
+            break;
+
+        case SOS_BRK_SYSCALL:
+            syscall_brk(reply_cap);
+            break;
+
+        case SOS_USLEEP_SYSCALL:
+            syscall_usleep(reply_cap); 
+            break;
+
+        case SOS_TIME_STAMP_SYSCALL:
+            syscall_time_stamp(reply_cap);
+            break;
+
+        case SOS_GETDIRENT_SYSCALL:
+            syscall_getdirent(reply_cap);
+            break;
+
+        case SOS_STAT_SYSCALL:
+            syscall_stat(reply_cap);
+            break;
+
+        case SOS_PROCESS_CREATE_SYSCALL:
+            syscall_process_create(reply_cap, badge);
+            break;
+
+        case SOS_PROCESS_DELETE_SYSCALL:
+            syscall_process_delete(reply_cap, badge);
+            break;
+
+        case SOS_PROCESS_ID_SYSCALL:
+            syscall_process_id(reply_cap, badge);
+            break;
+
+        case SOS_PROCESS_WAIT_SYSCALL:
+            syscall_process_wait(reply_cap, badge);
+            break;
+
+        case SOS_PROCESS_STATUS_SYSCALL:
+            syscall_process_status(reply_cap);
+            break;
+
+        default:
+            printf("Unknown syscall %d\n", syscall_number);
+            /* we don't want to reply to an unknown syscall */
+
+            /* Free the saved reply cap */
+            cspace_free_slot(cur_cspace, reply_cap);
+    }
+}
+
 /* Checks that user pointer range is a valid in userspace */
 static int legal_uaddr(seL4_Word base, uint32_t size) {
     /* Check valid region */

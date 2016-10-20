@@ -292,7 +292,7 @@ static int elf_load_segment_into_vspace(seL4_ARM_PageDirectory dest_pd,
             };
 
             int err = vnode->ops->vop_read(vnode, &uio);
-            conditional_panic(err,"fail to read page while loading excutable");
+            if (err) return -1;
         }
         sos_cap = get_cap(sos_vaddr);
 

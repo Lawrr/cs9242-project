@@ -201,12 +201,12 @@ int vfs_close(struct vnode *vnode, int mode) {
         vnode->write_count--;
     }
 
-    vnode->ops->vop_close(vnode);
+    int err = vnode->ops->vop_close(vnode);
+    if (err) return -1;
 
     if (vnode->read_count + vnode->write_count == 0) {
         /* No more references left - Remove vnode */
-        int err = hashtable_remove(vnode_table, vnode->path);
-        conditional_panic(err, "Could not remove from hashtable\n");
+        hashtable_remove(vnode_table, vnode->path);
 
         if (vnode->fh != NULL) free(vnode->fh);
         if (vnode->fattr != NULL) free(vnode->fattr);

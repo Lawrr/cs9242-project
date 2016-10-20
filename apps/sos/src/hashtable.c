@@ -55,7 +55,7 @@ static int list_remove(struct hashtable_entry *entry_head, char *key) {
         prev = curr;
         curr = curr->next;
     }
-    if (curr == NULL) return 1;
+    if (curr == NULL) return -1;
     if (curr != NULL) {
         if (prev == NULL) {
             if (entry_head->next != NULL) {

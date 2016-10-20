@@ -18,6 +18,8 @@
 
 #include <cspace/cspace.h>
 
+void handle_syscall(seL4_Word badge, int num_args);
+
 void syscall_brk(seL4_CPtr reply_cap);
 
 void syscall_usleep(seL4_CPtr reply_cap);

@@ -32,6 +32,7 @@ static int console_close(struct vnode *vnode);
 int console_init(struct vnode **ret_vnode) {
     /* Initialise serial driver */
     serial_handle = serial_init();
+    if (serial_handle == NULL) return -1;
     serial_register_handler(serial_handle, console_serial_handler);
 
     /* Set up console dev */
@@ -153,6 +154,9 @@ static int console_read(struct vnode *vnode, struct uio *uio) {
 
         seL4_CPtr sos_vaddr;
         int err = sos_map_page(curr_uaddr, &sos_vaddr, curproc);
+        if (err && err != ERR_ALREADY_MAPPED) {
+            return -1;
+        }
 
         curr_size -= size;
         curr_uaddr = uaddr_next;
@@ -172,7 +176,7 @@ static int console_read(struct vnode *vnode, struct uio *uio) {
 static int console_open(struct vnode *vnode, int mode) {
     /* Only allow one read */
     if (vnode->read_count == 1 && (mode & FM_READ) != 0) {
-        return 1;
+        return -1;
     }
     return 0;
 }

@@ -140,7 +140,7 @@ void frame_init(seL4_Word high, seL4_Word low) {
                 seL4_PageBits,
                 cur_cspace,
                 &cap);
-        conditional_panic(err, "Failed to allocate frame table cap");
+        conditional_panic(err, "Failed to allocate initial frame table cap");
 
         /* Map to address space */
         err = map_page(cap,
@@ -148,11 +148,11 @@ void frame_init(seL4_Word high, seL4_Word low) {
                 ft_section_vaddr,
                 seL4_AllRights,
                 seL4_ARM_Default_VMAttributes);
-        conditional_panic(err, "Failed to map frame table");
+        conditional_panic(err, "Failed to map initial frame table");
 
         /* Set pointer to head of frame_table and keep track of caps */
         struct frame_table_cap *cap_holder = malloc(sizeof(struct frame_table_cap));
-        conditional_panic(cap_holder == NULL, "Not enough memory for frame cap holder\n");
+        conditional_panic(cap_holder == NULL, "Failed to allocate initial frame cap holder\n");
         cap_holder->cap = cap;
 
         if (i == 0) {
@@ -213,11 +213,14 @@ int32_t swap_out() {
     if (swap_vnode == NULL) {
         /* First time opening swapfile */
         int err = vfs_open(swapfile, FM_READ | FM_WRITE, &swap_vnode);
-        conditional_panic(err, "Could not open swap_node\n");
+        if (err) return -1;
     }
 
     /* Get swap offset */
     int swap_offset = get_swap_index();
+    if (swap_offset < 0) {
+        return -1;
+    }
 
 	seL4_Word uaddr = frame_table[victim].app_caps.uaddr;
 
@@ -236,8 +239,7 @@ int32_t swap_out() {
     as->page_table[index1][index2].sos_vaddr |= PTE_BEINGSWAPPED;
     as->swap_table[index1][index2].swap_index = swap_offset;
     
-    int err = sos_unmap_page(frame_vaddr, as);
-    conditional_panic(err, "Could not unmap\n");
+    sos_unmap_page(frame_vaddr, as);
 
     struct uio uio = {
         .vaddr = PAGE_ALIGN_4K(frame_vaddr),
@@ -250,8 +252,10 @@ int32_t swap_out() {
     unsigned int stime = pcb->stime;
 
     /* Swap frame out */
-    err = swap_vnode->ops->vop_write(swap_vnode, &uio);
-    conditional_panic(err, "Could not write\n");
+    int err = swap_vnode->ops->vop_write(swap_vnode, &uio);
+    if (err) {
+        // TODO and below
+    }
 
     /* Remark frame as swappable */
     frame_table[victim].mask |= FRAME_SWAPPABLE;
@@ -306,7 +310,9 @@ int32_t swap_in(seL4_Word uaddr, seL4_Word sos_vaddr) {
 
     /* Swap in */
     int err = swap_vnode->ops->vop_read(swap_vnode, &uio);
-    conditional_panic(err, "Could not read\n");
+    if (err) {
+        // TODO
+    }
 
     printf("Swap in - uaddr: %p, vaddr: %p, swap_index: %d\n", uaddr, sos_vaddr, swap_index);
 
@@ -345,7 +351,7 @@ int32_t frame_alloc(seL4_Word *vaddr) {
 #endif
             /* Out of memory, swap out a frame */
             err = swap_out();
-            conditional_panic(err, "Swap out failed\n");
+            if (err) return -1;
             
             /* Note: get_free_frame() will not return NULL
              *       since swap_out frees a frame
@@ -377,7 +383,7 @@ int32_t frame_alloc(seL4_Word *vaddr) {
         if (err) {
             cspace_delete_cap(cur_cspace, frame_cap);
             ut_free(frame_paddr, seL4_PageBits);
-            return -2;
+            return -1;
         }
 
         /* Update frame details */

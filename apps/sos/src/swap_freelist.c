@@ -40,7 +40,7 @@ int get_swap_index() {
 
             /* Read in 1 page (1024) of freelist indices */
             int err = swap_vnode->ops->vop_read(swap_vnode, &uio);
-            conditional_panic(err, "Could not read\n");
+            if (err) return -1;
 
             /* Update freelist data */
             struct freelist_page *next = freelist_page->next;
@@ -64,7 +64,7 @@ int get_swap_index() {
 }
 
 /* Should be called by swap in, this can handle 4GB swap file */
-void free_swap_index(uint32_t index) {
+int free_swap_index(uint32_t index) {
     if (freelist_length == FREELIST_SIZE) {
         /* Current freelist is already full */
 
@@ -78,13 +78,16 @@ void free_swap_index(uint32_t index) {
             .remaining = PAGE_SIZE_4K
         };
 
+        struct freelist_page *new_flp = malloc(sizeof(struct freelist_page));
+        if (new_flp == NULL) return -1;
+
         /* Write out 1 page (1024) of freelist indices */
         int err = swap_vnode->ops->vop_write(swap_vnode, &uio);
-        conditional_panic(err, "Could not write\n");
+        if (err) {
+            free(new_flp);
+            return -1;
+        }
 
-        /* Update freelist data */
-        struct freelist_page *new_flp = malloc(sizeof(struct freelist_page));
-        // TODO
         new_flp->index = index;
         new_flp->next = freelist_page;
         freelist_page = new_flp;
@@ -95,4 +98,6 @@ void free_swap_index(uint32_t index) {
         /* Add to freelist */
         freelist_indices[freelist_length++] = index;
     }
+
+    return 0;
 }

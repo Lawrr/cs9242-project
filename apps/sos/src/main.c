@@ -59,22 +59,6 @@
 
 #define NFS_TIMEOUT_INTERVAL 100000 /* Microseconds */
 
-char *sys_name[14] = {
-    "Sos write",
-    "Sos read",
-    "Sos open",
-    "Sos close",
-    "Sos brk",
-    "Sos sleep",
-    "Sos timestamp",
-    "Sos getdirent",
-    "Sos stat",
-    "Sos process create",
-    "Sos process delete",
-    "Sos process id",
-    "Sos process wait",
-    "Sos process status"
-};
 /* The linker will link this symbol to the start address  *
  * of an archive of attached applications.                */
 extern char _cpio_archive[];
@@ -93,89 +77,10 @@ jmp_buf syscall_loop_entry;
 seL4_CPtr _sos_ipc_ep_cap;
 seL4_CPtr _sos_interrupt_ep_cap;
 
-void handle_syscall(seL4_Word badge, int num_args) {
-    seL4_Word syscall_number;
-    seL4_CPtr reply_cap;
-
-    syscall_number = seL4_GetMR(0);
-
-    printf("[App #%d] Syscall :%s  -- received from user application\n", badge, sys_name[syscall_number]);
-
-    /* Save the caller */
-    reply_cap = cspace_save_reply_cap(cur_cspace);
-    assert(reply_cap != CSPACE_NULL);
-
-    /* Process system call */
-    switch (syscall_number) {
-        case SOS_WRITE_SYSCALL:
-            syscall_write(reply_cap);
-            break;
-
-        case SOS_READ_SYSCALL:
-            syscall_read(reply_cap);
-            break;
-
-        case SOS_OPEN_SYSCALL:
-            syscall_open(reply_cap);
-            break;
-
-        case SOS_CLOSE_SYSCALL:
-            syscall_close(reply_cap);
-            break;
-
-        case SOS_BRK_SYSCALL:
-            syscall_brk(reply_cap);
-            break;
-
-        case SOS_USLEEP_SYSCALL:
-            syscall_usleep(reply_cap); 
-            break;
-
-        case SOS_TIME_STAMP_SYSCALL:
-            syscall_time_stamp(reply_cap);
-            break;
-
-        case SOS_GETDIRENT_SYSCALL:
-            syscall_getdirent(reply_cap);
-            break;
-
-        case SOS_STAT_SYSCALL:
-            syscall_stat(reply_cap);
-            break;
-
-        case SOS_PROCESS_CREATE_SYSCALL:
-            syscall_process_create(reply_cap, badge);
-            break;
-
-        case SOS_PROCESS_DELETE_SYSCALL:
-            syscall_process_delete(reply_cap, badge);
-            break;
-
-        case SOS_PROCESS_ID_SYSCALL:
-            syscall_process_id(reply_cap, badge);
-            break;
-
-        case SOS_PROCESS_WAIT_SYSCALL:
-            syscall_process_wait(reply_cap, badge);
-            break;
-
-        case SOS_PROCESS_STATUS_SYSCALL:
-            syscall_process_status(reply_cap);
-            break;
-
-        default:
-            printf("Unknown syscall %d\n", syscall_number);
-            /* we don't want to reply to an unknown syscall */
-
-            /* Free the saved reply cap */
-            cspace_free_slot(cur_cspace, reply_cap);
-    }
-}
-
 static void vm_fault_handler(seL4_Word badge, int num_args) {
     /* Save the caller */
     seL4_CPtr reply_cap = cspace_save_reply_cap(cur_cspace);
-    assert(reply_cap != CSPACE_NULL);
+    if (reply_cap == CSPACE_NULL) return;
 
     int err;
     seL4_Word sos_vaddr, map_vaddr, instruction_vaddr;
@@ -200,7 +105,6 @@ static void vm_fault_handler(seL4_Word badge, int num_args) {
     printf("In vm_fault_handler for uaddr: %p, instr: %p\n", map_vaddr, seL4_GetMR(0));
 
     err = sos_map_page(map_vaddr, &sos_vaddr, curproc);
-
     if (err) {
         printf("Vm fault error: %d - Destroying process %d\n", err, curproc->pid);
         process_destroy(curproc->pid);
@@ -435,13 +339,13 @@ int main(void) {
 
     /* Initialise PCB_free_table*/
     process_management_init();
+
+    /* Initialise open file table */
+    of_table_init();
     
     /* Start the user application */
     int proc_id = process_new_cpio(TTY_NAME, _sos_ipc_ep_cap, -1);
     conditional_panic(proc_id == -1, "Could not start first process\n");
-
-    /* Initialise open file table */
-    of_table_init();
 
     /* Initialise the timer */
     void *epit1_vaddr = map_device(EPIT1_PADDR, EPIT_REGISTERS * sizeof(uint32_t));

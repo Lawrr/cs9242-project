@@ -17,7 +17,6 @@
 #include "addrspace.h"
 #include "vnode.h"
 
-#define verbose 5
 #include <assert.h>
 #include <sys/panic.h>
 
@@ -36,7 +35,7 @@ void process_management_init(){
     for (int i = 0; i < MAX_PROCESSES; i++){
         PCB_free_table[i] = i + 1;
     }
-    PCB_free_table[MAX_PROCESSES-1] = -1;
+    PCB_free_table[MAX_PROCESSES - 1] = -1;
 }
 
 /* Checks whether a process is still valid
@@ -75,7 +74,10 @@ int process_new(char *app_name, seL4_CPtr fault_ep, int parent_pid) {
     }
 
     char *elf_base = malloc(PAGE_SIZE_4K);
-    if (elf_base == NULL) return -1;
+    if (elf_base == NULL) {
+        vfs_close(vnode, FM_READ);
+        return -1;
+    }
 
     struct uio uio = {
         .uaddr = NULL,
@@ -87,11 +89,13 @@ int process_new(char *app_name, seL4_CPtr fault_ep, int parent_pid) {
     };
     err = vnode->ops->vop_read(vnode, &uio);
     if (err) {
+        vfs_close(vnode, FM_READ);
         free(elf_base);
         return -1;
     }
 
     int id = create_actual_process(app_name, fault_ep, parent_pid, elf_base, vnode);
+
     free(elf_base);
     vfs_close(vnode, FM_READ);
 
@@ -102,12 +106,10 @@ static int create_actual_process(char *app_name, seL4_CPtr fault_ep, int parent_
     int id = -1;
     unsigned int end_time = UINT_MAX;
 
-    
     /* Max processes reached */
     if (next_free_pid == -1) return -1;
     id = next_free_pid;
     next_free_pid = PCB_free_table[next_free_pid];
-
 
     struct PCB *proc = malloc(sizeof(struct PCB));
     if (proc == NULL) return -1;
@@ -145,31 +147,56 @@ static int create_actual_process(char *app_name, seL4_CPtr fault_ep, int parent_
 
     /* Create a VSpace */
     proc->vroot_addr = ut_alloc(seL4_PageDirBits);
-    conditional_panic(!proc->vroot_addr,
-            "No memory for new Page Directory");
+    if (proc->vroot_addr == NULL) {
+        free(proc->app_name);
+        free(proc);
+        return -1;
+    }
     int err = cspace_ut_retype_addr(proc->vroot_addr,
             seL4_ARM_PageDirectoryObject,
             seL4_PageDirBits,
             cur_cspace,
             &proc->vroot);
-    conditional_panic(err, "Failed to allocate page directory cap for client");
+    if (err) {
+        ut_free(proc->vroot_addr, seL4_PageDirBits);
+        free(proc->app_name);
+        free(proc);
+        return -1;
+    }
 
     /* Create a simple 1 level CSpace */
     proc->croot = cspace_create(1);
-    assert(proc->croot != NULL);
+    if (proc->croot == NULL) {
+        ut_free(proc->vroot_addr, seL4_PageDirBits);
+        free(proc->app_name);
+        free(proc);
+        return -1;
+    }
 
     /* IPC buffer region */
     err = as_define_region(proc->addrspace,
             PROCESS_IPC_BUFFER,
             (1 << seL4_PageBits),
             seL4_AllRights);
-    conditional_panic(err, "Could not define IPC buffer region");
+    if (err) {
+        cspace_destroy(proc->croot);
+        ut_free(proc->vroot_addr, seL4_PageDirBits);
+        free(proc->app_name);
+        free(proc);
+        return -1;
+    }
 
     /* Create an IPC buffer */
     err = sos_map_page(PROCESS_IPC_BUFFER,
             &proc->ipc_buffer_addr, proc);
+    if (err) {
+        cspace_destroy(proc->croot);
+        ut_free(proc->vroot_addr, seL4_PageDirBits);
+        free(proc->app_name);
+        free(proc);
+        return -1;
+    }
     proc->ipc_buffer_cap = get_cap(proc->ipc_buffer_addr);
-    conditional_panic(err, "No memory for ipc buffer\n");
 
     /* Copy the fault endpoint to the user app to enable IPC */
     seL4_CPtr user_ep_cap = cspace_mint_cap(proc->croot,
@@ -179,25 +206,50 @@ static int create_actual_process(char *app_name, seL4_CPtr fault_ep, int parent_
             seL4_CapData_Badge_new(id));
 
     /* should be the first slot in the space, hack I know */
-    assert(user_ep_cap == 1);
-    assert(user_ep_cap == USER_EP_CAP);
+    if (user_ep_cap != 1 || user_ep_cap != USER_EP_CAP) {
+        cspace_destroy(proc->croot);
+        ut_free(proc->vroot_addr, seL4_PageDirBits);
+        free(proc->app_name);
+        free(proc);
+        return -1;
+    }
 
     /* Create a new TCB object */
     proc->tcb_addr = ut_alloc(seL4_TCBBits);
-    conditional_panic(!proc->tcb_addr, "No memory for new TCB");
+    if (proc->tcb_addr == NULL) {
+        cspace_destroy(proc->croot);
+        ut_free(proc->vroot_addr, seL4_PageDirBits);
+        free(proc->app_name);
+        free(proc);
+        return -1;
+    }
     err = cspace_ut_retype_addr(proc->tcb_addr,
             seL4_TCBObject,
             seL4_TCBBits,
             cur_cspace,
             &proc->tcb_cap);
-    conditional_panic(err, "Failed to create TCB");
+    if (err) {
+        ut_free(proc->tcb_addr, seL4_TCBBits);
+        cspace_destroy(proc->croot);
+        ut_free(proc->vroot_addr, seL4_PageDirBits);
+        free(proc->app_name);
+        free(proc);
+        return -1;
+    }
 
     /* Configure the TCB */
     err = seL4_TCB_Configure(proc->tcb_cap, user_ep_cap, APP_PRIORITY,
             proc->croot->root_cnode, seL4_NilData,
             proc->vroot, seL4_NilData, PROCESS_IPC_BUFFER,
             proc->ipc_buffer_cap);
-    conditional_panic(err, "Unable to configure new TCB");
+    if (err) {
+        ut_free(proc->tcb_addr, seL4_TCBBits);
+        cspace_destroy(proc->croot);
+        ut_free(proc->vroot_addr, seL4_PageDirBits);
+        free(proc->app_name);
+        free(proc);
+        return -1;
+    }
 
     dprintf(1, "\nStarting \"%s\"...\n", app_name);
 
@@ -218,14 +270,22 @@ static int create_actual_process(char *app_name, seL4_CPtr fault_ep, int parent_
             PROCESS_HEAP_START,
             0,
             seL4_AllRights);
-    conditional_panic(err, "Could not define heap region");
+    if (err) {
+        proc->parent = -1;
+        process_destroy(id);
+        return -1;
+    }
 
     /* Stack region */
     err = as_define_region(proc->addrspace,
             PROCESS_STACK_BOT,
             PROCESS_STACK_TOP - PROCESS_STACK_BOT,
             seL4_AllRights);
-    conditional_panic(err, "Could not define stack region");
+    if (err) {
+        proc->parent = -1;
+        process_destroy(id);
+        return -1;
+    }
 
     /* Start the new process */
     memset(&context, 0, sizeof(context));
