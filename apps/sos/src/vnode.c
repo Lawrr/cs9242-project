@@ -158,7 +158,7 @@ int vfs_get(char *path, struct vnode **ret_vnode) {
         if (vnode == NULL) return -1;
 
         int err = hashtable_insert(vnode_table, vnode->path, vnode);
-        conditional_panic(err, "Could not insert into hashtable\n");
+        if (err) return -1;
     } else {
         /* Already exists */
         vnode = (struct vnode *) entry->value;
@@ -193,6 +193,9 @@ int vfs_open(char *path, int mode, struct vnode **ret_vnode) {
 }
 
 int vfs_close(struct vnode *vnode, int mode) {
+    int err = vnode->ops->vop_close(vnode);
+    if (err) return -1;
+
     /* Dec ref counts */
     if ((mode & FM_READ) != 0) {
         vnode->read_count--;
@@ -200,9 +203,6 @@ int vfs_close(struct vnode *vnode, int mode) {
     if ((mode & FM_WRITE) != 0) {
         vnode->write_count--;
     }
-
-    int err = vnode->ops->vop_close(vnode);
-    if (err) return -1;
 
     if (vnode->read_count + vnode->write_count == 0) {
         /* No more references left - Remove vnode */
@@ -281,7 +281,8 @@ static int vnode_getdirent(struct vnode *vnode, struct uio *uio) {
         set_routine_arg(curr_coroutine_id, 1, curproc);
 
         seL4_Word *token = malloc(sizeof(seL4_Word) * 3);
-        conditional_panic(token == NULL, "Out of memory\n");
+        if (token == NULL) return -1;
+
         token[0] = curproc->pid;
         token[1] = curproc->stime;
         token[2] = curr_coroutine_id;
@@ -289,14 +290,16 @@ static int vnode_getdirent(struct vnode *vnode, struct uio *uio) {
         nfs_readdir(&mnt_point, cookies, vnode_readdir_cb, token);
         yield();
 
-        int err = get_routine_arg(curr_coroutine_id, 0);
+        int status = get_routine_arg(curr_coroutine_id, 0);
         cookies = get_routine_arg(curr_coroutine_id, 1);
+        int err = get_routine_arg(curr_coroutine_id, 2);
+        if (err) return -1;
 
     } while (uio->offset > 0 && cookies != 0);
 
     /* Error - reached over the end */
     if (uio->offset > 0 && cookies == 0) {
-        return 1;
+        return -1;
     }
 
     return 0;
@@ -307,18 +310,21 @@ static void vnode_readdir_cb(uintptr_t token_ptr, enum nfs_stat status, int num_
     seL4_Word pid = token[0];
     seL4_Word stime = token[1];
     seL4_Word coroutine_id = token[2];
+    free(token);
 
     /* Check if proc was deleted */
     if (!is_still_valid_proc(pid, stime)) {
-        free(token);
         return;
     }
 
     struct uio *uio = get_routine_arg((int) coroutine_id, 0);
     struct PCB *pcb = get_routine_arg((int) coroutine_id, 1);
 
+    set_resume(coroutine_id);
+
     set_routine_arg(coroutine_id, 0, status);
     set_routine_arg(coroutine_id, 1, nfscookie);
+    set_routine_arg(coroutine_id, 2, 0);
 
     if (uio->offset == 0 && num_files == 0) {
         /* Valid next pos NULL */
@@ -338,6 +344,11 @@ static void vnode_readdir_cb(uintptr_t token_ptr, enum nfs_stat status, int num_
         seL4_Word sos_vaddr;
 
         int err = sos_map_page(uaddr, &sos_vaddr, pcb);
+        if (err && err != ERR_ALREADY_MAPPED) {
+            set_routine_arg(coroutine_id, 2, -1);
+            return;
+        }
+
         sos_vaddr = PAGE_ALIGN_4K(sos_vaddr);
         sos_vaddr |= (uaddr & PAGE_MASK_4K);
         if (PAGE_ALIGN_4K(uaddr) != PAGE_ALIGN_4K(uaddr_end)) {
@@ -345,6 +356,10 @@ static void vnode_readdir_cb(uintptr_t token_ptr, enum nfs_stat status, int num_
 
             seL4_Word sos_vaddr_next;
             err = sos_map_page(uaddr_next, &sos_vaddr_next, pcb);
+            if (err && err != ERR_ALREADY_MAPPED) {
+                set_routine_arg(coroutine_id, 2, -1);
+                return;
+            }
 
             sos_vaddr_next = PAGE_ALIGN_4K(sos_vaddr_next);
 
@@ -366,10 +381,6 @@ static void vnode_readdir_cb(uintptr_t token_ptr, enum nfs_stat status, int num_
     } else {
         uio->offset -= num_files;
     }
-
-    set_resume(coroutine_id);
-
-    free(token);
 }
 
 
@@ -380,7 +391,8 @@ static void vnode_readdir_cb(uintptr_t token_ptr, enum nfs_stat status, int num_
  */
 static int vnode_stat(struct vnode *vnode, sos_stat_t *stat) {
     seL4_Word *token = malloc(sizeof(seL4_Word) * 3);
-    conditional_panic(token == NULL, "Out of memory\n");
+    if (token == NULL) return -1;
+
     token[0] = curproc->pid;
     token[1] = curproc->stime;
     token[2] = curr_coroutine_id;
@@ -388,15 +400,24 @@ static int vnode_stat(struct vnode *vnode, sos_stat_t *stat) {
     nfs_lookup(&mnt_point, vnode->path, (nfs_lookup_cb_t) vnode_stat_cb, token);
     yield();
 
-    int err = get_routine_arg(curr_coroutine_id, 0);
-    fattr_t *fattr = (fattr_t *) get_routine_arg(curr_coroutine_id, 1);;
+    int status = get_routine_arg(curr_coroutine_id, 0);
+    fattr_t *fattr = (fattr_t *) get_routine_arg(curr_coroutine_id, 1);
+    int err = get_routine_arg(curr_coroutine_id, 2);
+    if (err) {
+        if (fattr != NULL) free(fattr);
+        return -1;
+    }
 
     int ret = 0;
-
-    if (err == NFS_OK) {
+    if (status == NFS_OK) {
         seL4_Word sos_vaddr;
         seL4_Word uaddr = (seL4_Word) stat;
-        int err = sos_map_page(uaddr, &sos_vaddr, curproc);
+        err = sos_map_page(uaddr, &sos_vaddr, curproc);
+        if (err && err != ERR_ALREADY_MAPPED) {
+            free(fattr);
+            return -1;
+        }
+
         /* Add offset */
         sos_vaddr = PAGE_ALIGN_4K(sos_vaddr);
         sos_vaddr |= (uaddr & PAGE_MASK_4K);
@@ -405,6 +426,10 @@ static int vnode_stat(struct vnode *vnode, sos_stat_t *stat) {
 
         if (PAGE_ALIGN_4K(uaddr + sizeof(stat)) != PAGE_ALIGN_4K(uaddr)) {
             buffer = malloc(sizeof(sos_stat_t));
+            if (buffer == NULL) {
+                free(fattr);
+                return -1;
+            }
         } else {
             buffer = (seL4_Word *) sos_vaddr;
         }
@@ -417,7 +442,12 @@ static int vnode_stat(struct vnode *vnode, sos_stat_t *stat) {
 
         if (PAGE_ALIGN_4K(uaddr + sizeof(stat)) != PAGE_ALIGN_4K(uaddr)) {
             seL4_Word sos_vaddr_next;
-            int err = sos_map_page(PAGE_ALIGN_4K(uaddr + sizeof(stat)), &sos_vaddr_next, curproc);
+            err = sos_map_page(PAGE_ALIGN_4K(uaddr + sizeof(stat)), &sos_vaddr_next, curproc);
+            if (err && err != ERR_ALREADY_MAPPED) {
+                free(buffer);
+                free(fattr);
+                return -1;
+            }
 
             sos_vaddr_next = PAGE_ALIGN_4K(sos_vaddr);
 
@@ -430,11 +460,11 @@ static int vnode_stat(struct vnode *vnode, sos_stat_t *stat) {
             free(buffer);
         }
 
-    } else if (err == NFSERR_NOENT) {
+    } else {
         ret = -1;
     }
 
-    if (fattr != NULL) free(fattr);
+    free(fattr);
 
     return ret;
 }
@@ -445,22 +475,27 @@ static void vnode_stat_cb(uintptr_t token_ptr, nfs_stat_t status, fhandle_t *fh,
     seL4_Word stime = token[1];
     seL4_Word coroutine_id = token[2];
 
+    free(token);
+
     /* Check if proc was deleted */
     if (!is_still_valid_proc(pid, stime)) {
-        free(token);
         return;
     }
+
+    set_resume(coroutine_id);
 
     set_routine_arg(coroutine_id, 0, status);
 
     fattr_t *fattr_ptr = malloc(sizeof(fattr_t));
+    if (fattr_ptr == NULL) {
+        set_routine_arg(coroutine_id, 1, NULL);
+        set_routine_arg(coroutine_id, 2, -1);
+        return;
+    }
     set_routine_arg(coroutine_id, 1, fattr_ptr);
-
     memcpy(fattr_ptr, fattr, sizeof(fattr_t));
 
-    set_resume(coroutine_id);
-
-    free(token);
+    set_routine_arg(coroutine_id, 2, 0);
 }
 
 
@@ -485,7 +520,8 @@ static int file_create(struct vnode *vnode) {
     };
 
     seL4_Word *token = malloc(sizeof(seL4_Word) * 3);
-    conditional_panic(token == NULL, "Out of memory\n");
+    if (token == NULL) return -1;
+
     token[0] = curproc->pid;
     token[1] = curproc->stime;
     token[2] = curr_coroutine_id;
@@ -496,6 +532,8 @@ static int file_create(struct vnode *vnode) {
     set_routine_arg(curr_coroutine_id, 0, 1);
 
     yield();
+
+    return 0;
 }
 
 static void vnode_create_cb(uintptr_t token_ptr, nfs_stat_t status, fhandle_t *fh, fattr_t *fattr) {
@@ -504,11 +542,14 @@ static void vnode_create_cb(uintptr_t token_ptr, nfs_stat_t status, fhandle_t *f
     seL4_Word stime = token[1];
     seL4_Word coroutine_id = token[2];
 
+    free(token);
+
     /* Check if proc was deleted */
     if (!is_still_valid_proc(pid, stime)) {
-        free(token);
         return;
     }
+
+    set_resume(coroutine_id);
 
     /* Mask */
     set_routine_arg(coroutine_id, 0, 0);
@@ -516,17 +557,25 @@ static void vnode_create_cb(uintptr_t token_ptr, nfs_stat_t status, fhandle_t *f
     set_routine_arg(coroutine_id, 1, status);
 
     fhandle_t *fhandle_ptr = malloc(sizeof(fhandle_t));
+    if (fhandle_ptr == NULL) {
+        set_routine_arg(coroutine_id, 2, NULL);
+        set_routine_arg(coroutine_id, 3, NULL);
+        set_routine_arg(coroutine_id, 4, -1);
+        return;
+    }
     set_routine_arg(coroutine_id, 2, fhandle_ptr);
+    memcpy(fhandle_ptr, fh, sizeof(fhandle_t));
 
     fattr_t *fattr_ptr = malloc(sizeof(fattr_t));
+    if (fattr_ptr == NULL) {
+        set_routine_arg(coroutine_id, 3, NULL);
+        set_routine_arg(coroutine_id, 4, -1);
+        return;
+    }
     set_routine_arg(coroutine_id, 3, fattr_ptr);
-
-    memcpy(fhandle_ptr, fh, sizeof(fhandle_t));
     memcpy(fattr_ptr, fattr, sizeof(fattr_t));
 
-    set_resume(coroutine_id);
-
-    free(token);
+    set_routine_arg(coroutine_id, 4, 0);
 }
 
 
@@ -539,7 +588,8 @@ static int vnode_open(struct vnode *vnode, fmode_t mode) {
     if (vnode->fh != NULL) return 0;
 
     seL4_Word *token = malloc(sizeof(seL4_Word) * 3);
-    conditional_panic(token == NULL, "Out of memory\n");
+    if (token == NULL) return -1;
+
     token[0] = curproc->pid;
     token[1] = curproc->stime;
     token[2] = curr_coroutine_id;
@@ -548,12 +598,18 @@ static int vnode_open(struct vnode *vnode, fmode_t mode) {
     set_routine_arg(curr_coroutine_id, 0, 1); /* Mask */
     yield();
 
-    int err = get_routine_arg(curr_coroutine_id, 1);
+    int status = get_routine_arg(curr_coroutine_id, 1);
     fhandle_t *fhandle_ptr = (fhandle_t *) get_routine_arg(curr_coroutine_id, 2);
     fattr_t *fattr_ptr = (fattr_t *) get_routine_arg(curr_coroutine_id, 3);
+    int err = get_routine_arg(curr_coroutine_id, 4);
+    if (err) {
+        set_routine_arg(curr_coroutine_id, 0, -1);
+        if (fhandle_ptr != NULL) free(fhandle_ptr);
+        if (fattr_ptr != NULL) free(fattr_ptr);
+        return -1;
+    }
 
-    if (err == NFS_OK) {
-
+    if (status == NFS_OK) {
         /* Check permissions */
         int valid_mode = 1;
         int fattr_mode = fattr_ptr->mode;
@@ -564,6 +620,7 @@ static int vnode_open(struct vnode *vnode, fmode_t mode) {
             if ((fattr_mode & S_IWOTH) == 0) valid_mode = 0;
         }
         if (!valid_mode) {
+            set_routine_arg(curr_coroutine_id, 0, -1);
             free(fhandle_ptr);
             free(fattr_ptr);
             return -1;
@@ -572,7 +629,7 @@ static int vnode_open(struct vnode *vnode, fmode_t mode) {
         vnode->fh = fhandle_ptr;
         vnode->fattr = fattr_ptr;
 
-    } else if (err == NFSERR_NOENT) {
+    } else if (status == NFSERR_NOENT) {
         free(fhandle_ptr);
         free(fattr_ptr);
 
@@ -581,20 +638,32 @@ static int vnode_open(struct vnode *vnode, fmode_t mode) {
 
         /* Note: Permissions should be fine since we create with RW access */
 
-        err = get_routine_arg(curr_coroutine_id, 1);
+        status = get_routine_arg(curr_coroutine_id, 1);
+        fhandle_ptr = (fhandle_t *) get_routine_arg(curr_coroutine_id, 2);
+        fattr_ptr = (fattr_t *) get_routine_arg(curr_coroutine_id, 3);
+        err = get_routine_arg(curr_coroutine_id, 4);
+        if (err) {
+            set_routine_arg(curr_coroutine_id, 0, -1);
+            if (fhandle_ptr != NULL) free(fhandle_ptr);
+            if (fattr_ptr != NULL) free(fattr_ptr);
+            return -1;
+        }
 
-        if (err == NFS_OK) {
-            vnode->fh = (fhandle_t *) get_routine_arg(curr_coroutine_id, 2);
-            vnode->fattr = (fattr_t *) get_routine_arg(curr_coroutine_id, 3);
+        if (status == NFS_OK) {
+            vnode->fh = fhandle_ptr;
+            vnode->fattr = fattr_ptr;
         } else {
-            conditional_panic(err, "failed create");
+            set_routine_arg(curr_coroutine_id, 0, -1);
+            free(fhandle_ptr);
+            free(fattr_ptr);
+            return -1;
         }
 
     } else {
+        set_routine_arg(curr_coroutine_id, 0, -1);
         free(fhandle_ptr);
         free(fattr_ptr);
-
-        conditional_panic(err, "fail look up");
+        return -1;
     }
 
     return 0;
@@ -606,28 +675,39 @@ static void vnode_open_cb(uintptr_t token_ptr, nfs_stat_t status, fhandle_t *fh,
     seL4_Word stime = token[1];
     seL4_Word coroutine_id = token[2];
 
+    free(token);
+
     /* Check if proc was deleted */
     if (!is_still_valid_proc(pid, stime)) {
-        free(token);
         return;
     }
+
+    set_resume(coroutine_id);
 
     set_routine_arg(coroutine_id, 0, 0);
 
     set_routine_arg(coroutine_id, 1, status);
 
     fhandle_t *fhandle_ptr = malloc(sizeof(fhandle_t));
+    if (fhandle_ptr == NULL) {
+        set_routine_arg(coroutine_id, 2, NULL);
+        set_routine_arg(coroutine_id, 3, NULL);
+        set_routine_arg(coroutine_id, 4, -1);
+        return;
+    }
     set_routine_arg(coroutine_id, 2, fhandle_ptr);
+    memcpy(fhandle_ptr, fh, sizeof(fhandle_t));
 
     fattr_t *fattr_ptr = malloc(sizeof(fattr_t));
+    if (fattr_ptr == NULL) {
+        set_routine_arg(coroutine_id, 3, NULL);
+        set_routine_arg(coroutine_id, 4, -1);
+        return;
+    }
     set_routine_arg(coroutine_id, 3, fattr_ptr);
-
-    memcpy(fhandle_ptr, fh, sizeof(fhandle_t));
     memcpy(fattr_ptr, fattr, sizeof(fattr_t));
 
-    set_resume(coroutine_id);
-
-    free(token);
+    set_routine_arg(coroutine_id, 4, 0);
 }
 
 
@@ -672,7 +752,7 @@ static int vnode_read(struct vnode *vnode, struct uio *uio) {
             /* uaddr */
             err = sos_map_page((seL4_Word) uaddr, &sos_vaddr, proc);
             if (err && err != ERR_ALREADY_MAPPED) {
-                return 1;
+                return -1;
             }
 
             sos_vaddr = PAGE_ALIGN_4K(sos_vaddr);
@@ -683,19 +763,26 @@ static int vnode_read(struct vnode *vnode, struct uio *uio) {
         }
 
         seL4_Word *token = malloc(sizeof(seL4_Word) * 3);
-        conditional_panic(token == NULL, "Out of memory\n");
+        if (token == NULL) return -1;
+
         token[0] = proc->pid;
         token[1] = proc->stime;
         token[2] = curr_coroutine_id;
 
         err = nfs_read(vnode->fh, uio->offset, size, (nfs_read_cb_t) vnode_read_cb, token);
-        conditional_panic(err, "failed read at send phrase");
+        if (err) {
+            free(token);
+            return -1;
+        }
 
         set_routine_arg(curr_coroutine_id, 0, 1);
         set_routine_arg(curr_coroutine_id, 1, sos_vaddr);
 
         yield();
-        seL4_Word count = get_routine_arg(curr_coroutine_id, 1);
+
+        int status = get_routine_arg(curr_coroutine_id, 1);
+        seL4_Word count = get_routine_arg(curr_coroutine_id, 2);
+        if (status != NFS_OK) return -1;
 
         buf_size -= count;
         if (uio->uaddr != NULL) uaddr += count;
@@ -712,32 +799,33 @@ static int vnode_read(struct vnode *vnode, struct uio *uio) {
 }
 
 static void vnode_read_cb(uintptr_t token_ptr, nfs_stat_t status, fattr_t *fattr, int count, void *data) {
-    conditional_panic(status, "failed read in end phrase");
-
     seL4_Word *token = (seL4_Word *) token_ptr;
     seL4_Word pid = token[0];
     seL4_Word stime = token[1];
     seL4_Word coroutine_id = token[2];
 
+    free(token);
+
     /* Check if proc was deleted */
     if (!is_still_valid_proc(pid, stime)) {
-        free(token);
         return;
     }
 
     seL4_Word sos_vaddr = get_routine_arg(coroutine_id, 1);
 
-    if (status == NFS_OK) {
-        memcpy((void *) sos_vaddr, data, count);
-    }
-
     set_routine_arg(coroutine_id, 0, 0);
 
-    set_routine_arg(coroutine_id, 1, count);
+    set_routine_arg(coroutine_id, 1, status);
+
+    set_routine_arg(coroutine_id, 2, count);
 
     set_resume(coroutine_id);
 
-    free(token);
+    if (status == NFS_OK) {
+        memcpy((void *) sos_vaddr, data, count);
+    } else {
+        set_routine_arg(coroutine_id, 0, -1);
+    }
 }
 
 
@@ -758,9 +846,7 @@ static int vnode_write(struct vnode *vnode, struct uio *uio) {
         /* uaddr */
         uaddr = uio->uaddr;
         err = sos_map_page((seL4_Word) uaddr, &sos_vaddr, curproc);
-        if (err && err != ERR_ALREADY_MAPPED) {
-            return err;
-        }
+        if (err && err != ERR_ALREADY_MAPPED) return -1;
     } else {
         /* vaddr */
         sos_vaddr = uio->vaddr;
@@ -790,9 +876,7 @@ static int vnode_write(struct vnode *vnode, struct uio *uio) {
             sos_vaddr_next = uaddr_to_sos_vaddr(uaddr_next);
             if (uaddr_next < end_uaddr) {
                 err = sos_map_page((seL4_Word) uaddr_next, &sos_vaddr_next, curproc);
-                if (err && err != ERR_ALREADY_MAPPED) {
-                    return err;
-                }
+                if (err && err != ERR_ALREADY_MAPPED) return -1;
             }
         } else {
             /* vaddr */
@@ -802,7 +886,8 @@ static int vnode_write(struct vnode *vnode, struct uio *uio) {
         int req_id = 0;
         while (size > 0) {
             seL4_Word *token = malloc(sizeof(seL4_Word) * 4);
-            conditional_panic(token == NULL, "Out of memory\n");
+            if (token == NULL) return -1;
+
             token[0] = curproc->pid;
             token[1] = curproc->stime;
             token[2] = curr_coroutine_id;
@@ -817,7 +902,10 @@ static int vnode_write(struct vnode *vnode, struct uio *uio) {
                                 sos_vaddr + offset,
                                 &vnode_write_cb,
                                 token);
-                conditional_panic(err, "fail write in send phrase");
+                if (err) {
+                    free(token);
+                    return -1;
+                }
 
                 size -= MAX_WRITE_SIZE;
                 req_id++;
@@ -828,12 +916,15 @@ static int vnode_write(struct vnode *vnode, struct uio *uio) {
                                 sos_vaddr + offset,
                                 &vnode_write_cb,
                                 token);
-                conditional_panic(err, "fail write in send phrase");
+                if (err) {
+                    free(token);
+                    return -1;
+                }
 
                 size = 0;
 
-                set_routine_arg(curr_coroutine_id, 0, (1 << (req_id + 1)) - 1);
-                set_routine_arg(curr_coroutine_id, 1, 0);
+                set_routine_arg(curr_coroutine_id, 0, (1 << (req_id + 1)) - 1); /* Mask */
+                set_routine_arg(curr_coroutine_id, 1, 0); /* Count */
             }
         }
 
@@ -842,7 +933,10 @@ static int vnode_write(struct vnode *vnode, struct uio *uio) {
         }
 
         yield();
+
+        int mask = get_routine_arg(curr_coroutine_id, 0);
         seL4_Word count = get_routine_arg(curr_coroutine_id, 1);
+        if (mask) return -1;
 
         buf_size -= count;
         if (uio->uaddr != NULL) uaddr += count;
@@ -855,28 +949,30 @@ static int vnode_write(struct vnode *vnode, struct uio *uio) {
 }
 
 static void vnode_write_cb(uintptr_t token_ptr, enum nfs_stat status, fattr_t *fattr, int count) {
-    conditional_panic(status, "nfs_write fail in end phase");
-
     seL4_Word *token = (seL4_Word *) token_ptr;
     seL4_Word pid = token[0];
     seL4_Word stime = token[1];
     seL4_Word coroutine_id = token[2];
     seL4_Word req_id = token[3];
 
+    free(token);
+
     /* Check if proc was deleted */
     if (!is_still_valid_proc(pid, stime)) {
-        free(token);
         return;
     }
 
-    seL4_Word req_mask = get_routine_arg(coroutine_id, 0) & (~(1 << req_id));
-    set_routine_arg(coroutine_id, 0, req_mask);
-    seL4_Word cumulative_count = count + get_routine_arg(coroutine_id, 1);
+    if (status == NFS_OK) {
+        seL4_Word req_mask = get_routine_arg(coroutine_id, 0) & (~(1 << req_id));
+        set_routine_arg(coroutine_id, 0, req_mask);
+        seL4_Word cumulative_count = count + get_routine_arg(coroutine_id, 1);
 
-    set_routine_arg(coroutine_id, 1, cumulative_count);
-    if (req_mask == 0) {
+        set_routine_arg(coroutine_id, 1, cumulative_count);
+        if (req_mask == 0) {
+            set_resume(coroutine_id);
+        }
+    } else {
+        set_routine_arg(coroutine_id, 0, -1);
         set_resume(coroutine_id);
     }
-
-    free(token);
 }

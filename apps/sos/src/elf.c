@@ -92,7 +92,7 @@ static void first_process_mapping_loop(seL4_CPtr ep) {
         }
 
         seL4_Word req_mask = get_routine_arg(curr_coroutine_id, 0);
-        if (req_mask == 0) {
+        if (req_mask == 0 || req_mask == -1) {
             return;
         }
     }
@@ -154,6 +154,7 @@ static int cpio_elf_load_segment_into_vspace(seL4_ARM_PageDirectory dest_pd,
         } else {
             /* Check the mask to see if we are done with the loop */
             seL4_Word req_mask = get_routine_arg(curr_coroutine_id, 0);
+            if (req_mask == -1) return -1;
             if (req_mask) {
                 first_process_mapping_loop(_sos_ipc_ep_cap);
                 resume();
