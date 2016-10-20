@@ -218,11 +218,18 @@ static void vm_fault_handler(seL4_Word badge, int num_args) {
 }
 
 void syscall_loop(seL4_CPtr ep) {
+    int entry;
     seL4_Word badge;
     seL4_Word label;
     seL4_MessageInfo_t message;
     while (1) {
-        setjmp(syscall_loop_entry); 
+        entry = setjmp(syscall_loop_entry); 
+
+        /* Self destruct if proc was killed during a create/delete syscall */
+        if (entry == COROUTINE_FINISHED && curproc->status == PROCESS_STATUS_SELF_DESTRUCT) {
+            process_destroy(curproc->pid);
+        }
+
         cleanup_coroutine();
         resume();
 
@@ -253,11 +260,6 @@ void syscall_loop(seL4_CPtr ep) {
             start_coroutine(&handle_syscall, badge,
                             seL4_MessageInfo_get_length(message) - 1,
                             NULL);
-
-            /* Self destruct if proc was killed during a create/delete syscall */
-            if (curproc->status == PROCESS_STATUS_SELF_DESTRUCT) {
-                process_destroy(curproc->pid);
-            }
 
         } else {
             printf("Rootserver got an unknown message\n");

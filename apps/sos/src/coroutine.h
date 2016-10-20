@@ -6,6 +6,8 @@
 #include <process.h>
 #include <mapping.h>
 
+#define COROUTINE_FINISHED 2
+
 /* Release the current execution and give it to other task */
 void yield();
 /* Resume a coroutine correspond to the next_resume_id */

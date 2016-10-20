@@ -152,7 +152,7 @@ int start_coroutine(void (*task)(seL4_Word badge, int num_args),
     set_cleanup_coroutine(task_id);
 
     /* Return to main loop */
-    longjmp(syscall_loop_entry, 1);
+    longjmp(syscall_loop_entry, COROUTINE_FINISHED);
 
     /* Never reached */
 }
