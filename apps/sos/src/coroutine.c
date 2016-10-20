@@ -14,12 +14,15 @@ extern struct PCB *curproc;
 
 /* Number of current tasks */
 static int num_tasks = 0;
-/* Next task to resume to */
-static int next_resume_id = -1;
 /* Next task to cleanup */
 static int next_cleanup_id = -1;
 /* Next free coroutine id to use*/
 static int start_index = 0;
+
+/* Resume queue */
+static int resume_queue[NUM_COROUTINES];
+static int resume_head = 0;
+static int resume_tail = 0;
 
 /* Coroutine slots */
 static jmp_buf coroutines[NUM_COROUTINES];
@@ -37,6 +40,7 @@ int curr_coroutine_id = 0;
 void coroutine_init() {
     int err;
     for (int i = 0; i < NUM_COROUTINES; i++) {
+        resume_queue[i] = -1;
         free_list[i] = 1;
         err = unswappable_alloc((seL4_Word *) &routine_frames[i]);
         conditional_panic(err, "Could not initialise coroutines\n");
@@ -59,11 +63,14 @@ void yield() {
 }
 
 void resume() {
-    if (next_resume_id != -1) {
+    if (resume_queue[resume_head] >= 0) {
         /* Resume back to coroutine */
-        int resume_id = next_resume_id;
+        int resume_id = resume_queue[resume_head];
+
+        resume_queue[resume_head] = -1;
+        resume_head = (resume_head + 1) % NUM_COROUTINES;
+
         curr_coroutine_id = resume_id;
-        next_resume_id = -1;
 
         longjmp(coroutines[resume_id], 1);
     }
@@ -73,7 +80,8 @@ void resume() {
 }
 
 void set_resume(int id) {
-    next_resume_id = id;
+    resume_queue[resume_tail] = id;
+    resume_tail = (resume_tail + 1) % NUM_COROUTINES;
 }
 
 void cleanup_coroutine() {
