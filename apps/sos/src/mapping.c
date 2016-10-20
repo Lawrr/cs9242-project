@@ -268,6 +268,8 @@ inline seL4_Word uaddr_to_sos_vaddr(seL4_Word uaddr) {
     int index2 = leaf_index(uaddr);
     struct app_addrspace *as = curproc->addrspace;
 
+    if (as->page_table[index1] == NULL) return 0;
+
     if (as->page_table[index1][index2].sos_vaddr | PTE_VALID) {
         return as->page_table[index1][index2].sos_vaddr;
     } else {
