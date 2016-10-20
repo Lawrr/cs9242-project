@@ -45,7 +45,7 @@ int map_page(seL4_CPtr frame_cap, seL4_ARM_PageDirectory pd, seL4_Word vaddr,
  */
 void* map_device(void* paddr, int size);
 
-int sos_map_page(seL4_Word uaddr, seL4_Word *sos_vaddr_ret,struct PCB *pcb);
+int sos_map_page(seL4_Word uaddr, seL4_Word *sos_vaddr_ret, struct PCB *pcb);
 
 int sos_unmap_page(seL4_Word vaddr, struct app_addrspace *as);
 
