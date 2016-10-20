@@ -149,7 +149,7 @@ static int ps() {
 int main(void) {
     printf("[%d] Hello world!\n", sos_my_id());
 
-    if (sos_my_id() != 5) {
+    if (sos_my_id() % 5 != 0) {
         printf("[%d] Creating child\n", sos_my_id());
         pid_t child = sos_process_create("newapp");
         assert(child >= 0);
