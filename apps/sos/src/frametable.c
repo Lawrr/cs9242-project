@@ -212,7 +212,8 @@ int32_t swap_out() {
 
     if (swap_vnode == NULL) {
         /* First time opening swapfile */
-        vfs_open(swapfile, FM_READ | FM_WRITE, &swap_vnode);
+        int err = vfs_open(swapfile, FM_READ | FM_WRITE, &swap_vnode);
+        conditional_panic(err, "Could not open swap_node\n");
     }
 
     /* Get swap offset */
