@@ -25,6 +25,7 @@
 #define BUF_SIZ    4000
 
 void vm_fault() {
+    pid_t id = sos_my_id();
     int pages = 50;
     int a[pages][4096];
 
@@ -32,21 +33,21 @@ void vm_fault() {
         for (int j = 0; j < 4096; j++) {
             a[i][j]= i * 4096 + j;
         }
-        printf("a[%d][0] = %d\n", i, a[i][0]);
-        printf("a[%d][2048] = %d\n", i, a[i][2048]);
-        printf("a[%d][4095] = %d\n", i, a[i][4095]);
+        printf("[%d] a[%d][0] = %d\n", id, i, a[i][0]);
+        printf("[%d] a[%d][2048] = %d\n", id, i, a[i][2048]);
+        printf("[%d] a[%d][4095] = %d\n", id, i, a[i][4095]);
     }
 
-    printf("#################################\n");
-    printf("Checking values...\n");
-    printf("#################################\n");
+    printf("[%d] #################################\n", id);
+    printf("[%d] Checking values...\n", id);
+    printf("[%d] #################################\n", id);
 
     for (int i = 0; i < pages; i++) {
-        printf("Checking: a[%d][0] = %d - Should be: %d\n", i, a[i][0], i * 4096);
+        printf("[%d] Checking: a[%d][0] = %d - Should be: %d\n", id, i, a[i][0], i * 4096);
         assert(a[i][0] == i * 4096);
-        printf("Checking: a[%d][2048] = %d - Should be: %d\n", i, a[i][2048], i * 4096 + 2048);
+        printf("[%d] Checking: a[%d][2048] = %d - Should be: %d\n", id, i, a[i][2048], i * 4096 + 2048);
         assert(a[i][2048] == i * 4096 + 2048);
-        printf("Checking: a[%d][4095] = %d - Should be: %d\n", i, a[i][4095], i * 4096 + 4095);
+        printf("[%d] Checking: a[%d][4095] = %d - Should be: %d\n", id, i, a[i][4095], i * 4096 + 4095);
         assert(a[i][4095] == i * 4096 + 4095);
     }
 
@@ -57,7 +58,8 @@ static sos_stat_t sbuf;
 
 static void prstat(const char *name) {
     /* print out stat buf */
-    printf("%c%c%c%c 0x%06x 0x%lx 0x%06lx %s\n",
+    printf("[%d] %c%c%c%c 0x%06x 0x%lx 0x%06lx %s\n",
+            sos_my_id(),
             sbuf.st_type == ST_SPECIAL ? 's' : '-',
             sbuf.st_fmode & FM_READ ? 'r' : '-',
             sbuf.st_fmode & FM_WRITE ? 'w' : '-',
@@ -71,14 +73,14 @@ void ls() {
     while (1) {
         r = sos_getdirent(i, buf, BUF_SIZ);
         if (r < 0) {
-            printf("dirent(%d) failed: %d\n", i, r);
+            printf("[%d] dirent(%d) failed: %d\n", sos_my_id(), i, r);
             break;
         } else if (!r) {
             break;
         }
         r = sos_stat(buf, &sbuf);
         if (r < 0) {
-            printf("stat(%s) failed: %d\n", buf, r);
+            printf("[%d] stat(%s) failed: %d\n", sos_my_id(), buf, r);
             break;
         }
         prstat(buf);
@@ -87,30 +89,31 @@ void ls() {
 }
 
 void write_read() {
+    pid_t id = sos_my_id();
     char filename[100];
     int sz;
     sz = snprintf(filename, 100, "%d.test", sos_my_id());
     assert(sz >= 6 && sz < 100);
-    printf("Using file for write: %s\n", &filename);
+    printf("[%d] Using file for write: %s\n", id, &filename);
     int fd_write = open(filename, O_WRONLY);
     assert(fd_write >= 0);
-    printf("Starting write\n");
-    for (int i = 0; i < 1000; i++) {
+    printf("[%d] Starting write\n", id);
+    for (int i = 0; i < 500; i++) {
         char str[4];
         sz = snprintf(str, 4, "%d", i % 10);
         assert(sz >= 1 && sz < 4);
         int res = sos_sys_write(fd_write, str, strlen(str));
         assert(res == strlen(str));
     }
-    printf("Using file for read: %s\n", &filename);
+    printf("[%d] Using file for read: %s\n", id, &filename);
     int fd_read = open(filename, O_RDONLY);
     assert(fd_read >= 0);
-    printf("Starting read\n");
+    printf("[%d] Starting read\n", id);
     char buff[5];
-    for (int i = 0; i < 1000; i++) {
+    for (int i = 0; i < 500; i++) {
         int res = sos_sys_read(fd_read, &buff, 1);
         assert(res == 1);
-        assert(buff[0] == i % 10);
+        assert(buff[0] - 48 == i % 10);
     }
     close(fd_write);
     close(fd_read);
