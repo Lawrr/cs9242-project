@@ -748,7 +748,7 @@ static int vnode_write(struct vnode *vnode, struct uio *uio) {
         uaddr = uio->uaddr;
         err = sos_map_page((seL4_Word) uaddr, &sos_vaddr, curproc);
         if (err && err != ERR_ALREADY_MAPPED) {
-            return 1;
+            return err;
         }
     } else {
         /* vaddr */
@@ -780,7 +780,7 @@ static int vnode_write(struct vnode *vnode, struct uio *uio) {
             if (uaddr_next < end_uaddr) {
                 err = sos_map_page((seL4_Word) uaddr_next, &sos_vaddr_next, curproc);
                 if (err && err != ERR_ALREADY_MAPPED) {
-                    return 1;
+                    return err;
                 }
             }
         } else {
