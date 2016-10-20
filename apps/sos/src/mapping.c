@@ -246,8 +246,10 @@ sos_map_page(seL4_Word vaddr_unaligned, seL4_Word *sos_vaddr_ret, struct PCB *pc
         return ERR_INTERNAL_MAP_ERROR;
     }
 
-    /* Book keeping in our own page table */
+    /* Reassign in case mask changed during alloc (BEINGSWAPPED) */
     curr_sos_vaddr = (*page_table_vaddr)[index1][index2].sos_vaddr;
+
+    /* Book keeping in our own page table */
     int mask = (curr_sos_vaddr << 20) >> 20;
     if (mask == 0) {
         mask = (curr_region->permissions | PTE_VALID);
