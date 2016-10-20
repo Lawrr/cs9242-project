@@ -39,7 +39,6 @@ struct app_addrspace *as_new() {
     /* STDIN and STDERR */
     as->fd_count = 2;
 
-    // TODO is it possible STDOUT is not 0?? (maybe no more references)
     as->fd_table[STDOUT_FD].ofd = STDOUT_OFD; /* STDOUT */
     as->fd_table[STDERR_FD].ofd = STDOUT_OFD; /* STDERR */
 

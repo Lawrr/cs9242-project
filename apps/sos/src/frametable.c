@@ -364,8 +364,7 @@ int32_t frame_alloc(seL4_Word *vaddr) {
                 &frame_cap);
         if (err) {
             ut_free(frame_paddr, seL4_PageBits);
-            // TODO return values
-            return 2;
+            return -1;
         }
 
         /* Map to address space */
@@ -378,7 +377,7 @@ int32_t frame_alloc(seL4_Word *vaddr) {
         if (err) {
             cspace_delete_cap(cur_cspace, frame_cap);
             ut_free(frame_paddr, seL4_PageBits);
-            return 3;
+            return -2;
         }
 
         /* Update frame details */
@@ -447,9 +446,11 @@ void pin_frame_entry(seL4_Word uaddr, seL4_Word size) {
     for (int i = 0; i < end_frame_size; i += PAGE_SIZE_4K) {
         index1 = root_index(uaddr + i);
         index2 = leaf_index(uaddr + i);
-        if (as->page_table[index1] == NULL) continue; // TODO
         sos_vaddr = as->page_table[index1][index2].sos_vaddr;
+
+        if (as->page_table[index1] == NULL) continue;
         if ((sos_vaddr & PTE_SWAP) || (sos_vaddr & PTE_VALID) == 0) continue;
+
         frame_index = frame_vaddr_to_index(sos_vaddr);
         if ((frame_table[frame_index].mask & FRAME_VALID) &&
             (frame_table[frame_index].mask & FRAME_SWAPPABLE)) {
@@ -474,11 +475,12 @@ void unpin_frame_entry(seL4_Word uaddr, seL4_Word size) {
     for (int i = 0; i < end_frame_size; i += PAGE_SIZE_4K) {
         index1 = root_index(uaddr + i);
         index2 = leaf_index(uaddr + i);
-        if (as->page_table[index1] == NULL) continue; //TODO
         sos_vaddr = as->page_table[index1][index2].sos_vaddr;
-        if ((sos_vaddr & PTE_SWAP) || (sos_vaddr & PTE_VALID) == 0) continue;
-        frame_index = frame_vaddr_to_index(sos_vaddr);
 
+        if (as->page_table[index1] == NULL) continue;
+        if ((sos_vaddr & PTE_SWAP) || (sos_vaddr & PTE_VALID) == 0) continue;
+
+        frame_index = frame_vaddr_to_index(sos_vaddr);
         if ((frame_table[frame_index].mask & FRAME_VALID)) {
             frame_table[frame_index].mask |= FRAME_SWAPPABLE;
         }
@@ -487,7 +489,6 @@ void unpin_frame_entry(seL4_Word uaddr, seL4_Word size) {
 
 
 seL4_CPtr get_cap(seL4_Word vaddr) {
-    // TODO check if index is in bounds (other functions too, like frame_free)? Or just trust its in bounds...?
     uint32_t index = frame_vaddr_to_index(PAGE_ALIGN_4K(vaddr));
     return frame_table[index].cap;
 }
