@@ -564,6 +564,9 @@ static int vnode_open(struct vnode *vnode, fmode_t mode) {
         vnode->fattr = (fattr_t *) arg[2];
 
     } else if (err == NFSERR_NOENT) {
+        free(arg[1]);
+        free(arg[2]);
+
         /* Create new file */
         file_create(vnode);
 
@@ -579,6 +582,9 @@ static int vnode_open(struct vnode *vnode, fmode_t mode) {
         }
 
     } else {
+        free(arg[1]);
+        free(arg[2]);
+
         conditional_panic(err, "fail look up");
     }
 
