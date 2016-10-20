@@ -119,8 +119,46 @@ void write_read() {
     close(fd_read);
 }
 
+#define MAX_PROCESSES 32
+
+static int ps() {
+    sos_process_t *process;
+    int i, processes;
+
+    process = malloc(MAX_PROCESSES * sizeof(*process));
+
+    if (process == NULL) {
+        printf("[%d] out of memory\n", sos_my_id());
+        return 1;
+    }
+
+    processes = sos_process_status(process, MAX_PROCESSES);
+
+    printf("TID SIZE   STIME   CTIME COMMAND\n");
+
+    for (i = 0; i < processes; i++) {
+        printf("[%d] %3x %4x %7d %s\n", sos_my_id(), process[i].pid, process[i].size,
+                process[i].stime, process[i].command);
+    }
+
+    free(process);
+
+    return 0;
+}
+
 int main(void) {
     printf("[%d] Hello world!\n", sos_my_id());
+
+    if (sos_my_id() != 5) {
+        printf("[%d] Creating child\n", sos_my_id());
+        pid_t child = sos_process_create("newapp");
+        assert(child >= 0);
+        printf("[%d] Created child %d\n", sos_my_id(), child);
+    }
+
+    printf("[%d] Process list:\n", sos_my_id());
+    ps();
+
     printf("[%d] Time is: %lld\n", sos_my_id(), sos_sys_time_stamp());
     printf("[%d] Trying some vm faults\n", sos_my_id());
     vm_fault();
