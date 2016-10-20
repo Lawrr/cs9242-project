@@ -14,8 +14,6 @@
 
 extern struct PCB *curproc;
 extern struct oft_entry of_table[MAX_OPEN_FILE];
-extern seL4_Word curr_free_ofd;
-extern seL4_Word ofd_count;
 
 struct app_addrspace *as_new() {
     struct app_addrspace *as = malloc(sizeof(struct app_addrspace));
@@ -137,19 +135,8 @@ int as_destroy(struct app_addrspace *as) {
     /* Close files */
     for (int fd = 0; fd < PROCESS_MAX_FILES; fd++) {
         seL4_Word ofd = as->fd_table[fd].ofd;
-
         if (ofd == -1) continue;
-
-        of_table[ofd].ref_count--;
-
-        if (of_table[ofd].ref_count == 0) {
-            vfs_close(of_table[ofd].vnode, of_table[ofd].file_info.st_fmode);
-            of_table[ofd].file_info.st_fmode = 0;
-            of_table[ofd].vnode = NULL;
-            ofd_count--;
-            of_table[ofd].offset = 0;
-            curr_free_ofd = ofd;
-        }
+        of_close(ofd);
     }
     free(as->fd_table);
 

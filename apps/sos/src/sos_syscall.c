@@ -501,16 +501,7 @@ void syscall_close(seL4_CPtr reply_cap) {
 
     curproc->addrspace->fd_table[fd].ofd = -1;
     curproc->addrspace->fd_count--;
-    of_table[ofd].ref_count--;
-
-    if (of_table[ofd].ref_count == 0) {
-        vfs_close(of_table[ofd].vnode, of_table[ofd].file_info.st_fmode);
-        of_table[ofd].file_info.st_fmode = 0;
-        of_table[ofd].vnode = NULL;
-        ofd_count--;
-        of_table[ofd].offset = 0;
-        curr_free_ofd = ofd;
-    }
+    of_close(ofd);
 
     /* Reply */
     seL4_SetMR(0, 0);

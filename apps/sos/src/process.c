@@ -22,7 +22,6 @@
 #include <sys/panic.h>
 
 extern char _cpio_archive[];
-extern struct oft_entry of_table[MAX_OPEN_FILE];
 
 struct PCB *curproc;
 
