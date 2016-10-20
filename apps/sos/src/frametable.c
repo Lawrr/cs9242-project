@@ -257,6 +257,7 @@ int32_t swap_out() {
         as->page_table[index1][index2].sos_vaddr &= (~PTE_BEINGSWAPPED);
 
         seL4_ARM_PageDirectory pd = pcb->vroot;
+        struct app_addrspace *as = pcb->addrspace;
         seL4_CPtr cap = get_cap(frame_vaddr);
         seL4_CPtr copied_cap;
         copied_cap = cspace_copy_cap(cur_cspace,
@@ -264,6 +265,14 @@ int32_t swap_out() {
                 cap,
                 seL4_AllRights);
 
+        struct region *curr_region = as->regions;
+        while (curr_region != NULL) {
+            if (uaddr >= curr_region->baseaddr &&
+                    uaddr < curr_region->baseaddr + curr_region->size) {
+                break;
+            }
+            curr_region = curr_region->next;
+        }
         err = map_page(copied_cap,
                 pd,
                 uaddr,
