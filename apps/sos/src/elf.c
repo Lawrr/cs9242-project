@@ -24,7 +24,7 @@
 #include "mapping.h"
 #include "vmem_layout.h"
 
-#define verbose 0
+#define verbose -1
 #include <sys/debug.h>
 #include <sys/panic.h>
 
@@ -87,8 +87,6 @@ static void first_process_mapping_loop(seL4_CPtr ep) {
                 timer_interrupt();
             }
 
-        } else {
-            printf("Rootserver got an unknown message\n");
         }
 
         seL4_Word req_mask = get_routine_arg(curr_coroutine_id, 0);
@@ -210,7 +208,6 @@ int cpio_elf_load(seL4_ARM_PageDirectory dest_pd, struct PCB *pcb, char *elf_fil
         flags = elf_getProgramHeaderFlags(elf_file, i);
 
         /* Copy it across into the vspace. */
-        dprintf(1, " * Loading segment %08x-->%08x\n", (int)vaddr, (int)(vaddr + segment_size));
 
         /* Define region */
         err = as_define_region(dest_as, vaddr, segment_size, get_sel4_rights_from_elf(flags) & seL4_AllRights);
@@ -338,7 +335,6 @@ int elf_load(seL4_ARM_PageDirectory dest_pd, struct PCB *pcb, char *elf_file, st
         flags = elf_getProgramHeaderFlags(elf_file, i);
 
         /* Copy it across into the vspace. */
-        dprintf(1, " * Loading segment %08x-->%08x\n", (int)vaddr, (int)(vaddr + segment_size));
 
         /* Define region */
         err = as_define_region(dest_as, vaddr, segment_size, get_sel4_rights_from_elf(flags) & seL4_AllRights);

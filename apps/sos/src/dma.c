@@ -26,7 +26,7 @@
 #include <ut_manager/ut.h>
 #include <vmem_layout.h>
 
-#define verbose 5
+#define verbose -1
 #include <sys/debug.h>
 #include <sys/panic.h>
 
@@ -115,7 +115,6 @@ sos_dma_malloc(void* cookie, size_t size, int align, int cached, ps_mem_flags_t 
     }else{
         dma_addr = NULL;
     }
-    dprintf(5, "DMA: 0x%x\n", (uint32_t)dma_addr);
     /* Clean invalidate the range to prevent seL4 cache bombs */
     sos_dma_cache_op(NULL, dma_addr, size, DMA_CACHE_OP_CLEAN_INVALIDATE);
     return dma_addr;

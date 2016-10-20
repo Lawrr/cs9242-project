@@ -20,7 +20,6 @@
 #include "frametable.h"
 #include "process.h"
 
-#define verbose 0
 #include <sys/panic.h>
 #include <sys/debug.h>
 #include <cspace/cspace.h>
@@ -87,8 +86,6 @@ map_device(void *paddr, int size) {
     seL4_Word phys = (seL4_Word)paddr;
     seL4_Word vstart = virt;
 
-    dprintf(1, "Mapping device memory 0x%x -> 0x%x (0x%x bytes)\n",
-            phys, vstart, size);
     while(virt - vstart < size) {
         seL4_Error err;
         seL4_ARM_Page frame_cap;

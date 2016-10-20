@@ -251,8 +251,6 @@ static int create_actual_process(char *app_name, seL4_CPtr fault_ep, int parent_
         return -1;
     }
 
-    dprintf(1, "\nStarting \"%s\"...\n", app_name);
-
     /* load the elf image */
     if (elf_vnode == NULL) {
         err = cpio_elf_load(proc->vroot, proc, elf_base);

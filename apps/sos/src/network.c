@@ -37,7 +37,7 @@
 #include "mapping.h"
 #include "ut_manager/ut.h"
 
-#define verbose 0
+#define verbose -1
 #include <sys/debug.h>
 #include <sys/panic.h>
 
@@ -176,16 +176,16 @@ network_init(seL4_CPtr interrupt_ep) {
     _irq_ep = interrupt_ep;
 
     /* Extract IP from .config */
-    printf("\nInitialising network...\n\n");
+    /* printf("\nInitialising network...\n\n"); */
     err = 0;
     err |= !ipaddr_aton(CONFIG_SOS_GATEWAY,      &gw);
     err |= !ipaddr_aton(CONFIG_SOS_IP     ,  &ipaddr);
     err |= !ipaddr_aton(CONFIG_SOS_NETMASK, &netmask);
     conditional_panic(err, "Failed to parse IP address configuration");
-    printf("  Local IP Address: %s\n", ipaddr_ntoa( &ipaddr));
-    printf("Gateway IP Address: %s\n", ipaddr_ntoa(     &gw));
-    printf("      Network Mask: %s\n", ipaddr_ntoa(&netmask));
-    printf("\n");
+    /* printf("  Local IP Address: %s\n", ipaddr_ntoa( &ipaddr)); */
+    /* printf("Gateway IP Address: %s\n", ipaddr_ntoa(     &gw)); */
+    /* printf("      Network Mask: %s\n", ipaddr_ntoa(&netmask)); */
+    /* printf("\n"); */
 
     /* low level initialisation */
     lwip_iface = ethif_new_lwip_driver(io_ops, NULL, ethif_imx6_init, NULL);
@@ -217,21 +217,15 @@ network_init(seL4_CPtr interrupt_ep) {
     if(strlen(SOS_NFS_DIR)) {
         /* Initialise NFS */
         int err;
-        printf("\nMounting NFS\n");
+        /* printf("\nMounting NFS\n"); */
         if(!(err = nfs_init(&gw))){
             /* Print out the exports on this server */
             nfs_print_exports();
             if ((err = nfs_mount(SOS_NFS_DIR, &mnt_point))){
-                printf("Error mounting path '%s'!\n", SOS_NFS_DIR);
+                /* printf("Error mounting path '%s'!\n", SOS_NFS_DIR); */
             }else{
-                printf("\nSuccessfully mounted '%s'\n", SOS_NFS_DIR);
+                /* printf("\nSuccessfully mounted '%s'\n", SOS_NFS_DIR); */
             }
         }
-        if(err){
-            WARN("Failed to initialise NFS\n");
-        }
-    }else{
-        WARN("Skipping Network initialisation since no mount point was "
-             "specified\n");
     }
 }

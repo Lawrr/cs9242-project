@@ -116,12 +116,9 @@ void frame_init(seL4_Word high, seL4_Word low) {
 
     /* Make sure num_entries >= num_pages (May need one extra frame entry) */
     num_frames = num_entries;
-    printf("Base: %llu, oldbase: %llu\n", base_addr, low64 + frame_table_size);
-    printf("entries: %llu, pages: %llu\n", num_entries, num_pages);
     if (num_entries < num_pages) {
         frame_table_size += entry_size;
     }
-    printf("Base: %llu, newbase: %llu\n", base_addr, low64 + frame_table_size);
     base_addr = low;
 
     /* Allocated each section of the frame table */
@@ -222,8 +219,6 @@ int32_t swap_out() {
     }
 
 	seL4_Word uaddr = frame_table[victim].app_caps.uaddr;
-
-    printf("Swap out - uaddr: %p, vaddr: %p, swap_index: %d\n", uaddr, frame_vaddr, swap_offset);
 
     /* Update details of old addrspace */
     int index1 = root_index(uaddr);
@@ -344,8 +339,6 @@ int32_t swap_in(seL4_Word uaddr, seL4_Word sos_vaddr) {
     if (err) {
         return -1;
     }
-
-    printf("Swap in - uaddr: %p, vaddr: %p, swap_index: %d\n", uaddr, sos_vaddr, swap_index);
 
     /* Mark it unswapped */
 	seL4_Word mask = as->page_table[index1][index2].sos_vaddr & PAGE_MASK_4K;

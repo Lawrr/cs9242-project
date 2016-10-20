@@ -15,7 +15,7 @@
 #include "bitfield.h"
 
 
-#define verbose 1
+#define verbose -1
 #include <sys/debug.h>
 #include <sys/panic.h>
  

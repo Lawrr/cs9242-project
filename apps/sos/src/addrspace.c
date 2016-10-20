@@ -57,8 +57,6 @@ int as_define_region(struct app_addrspace *as,
         return -1;
     }
 
-    printf("Region defined: %x - %x\n", baseaddr, baseaddr + size);
-
     /* Init region variables */
     new_region->baseaddr = baseaddr;
     new_region->size = size;

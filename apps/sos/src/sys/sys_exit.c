@@ -15,7 +15,7 @@
 #include "execinfo.h" /*for backtrace()*/
 
 static void sel4_abort(void) {
-    printf("seL4 root server aborted\n");
+    /* printf("seL4 root server aborted\n"); */
 
     /* Printout backtrace*/
     void *array[10] = {NULL};
@@ -24,12 +24,12 @@ static void sel4_abort(void) {
     size = backtrace(array, 10);
     if (size) {
 
-        printf("Backtracing stack PCs:  ");
+        /* printf("Backtracing stack PCs:  "); */
 
-        for (int i = 0; i < size; i++) {
-            printf("0x%x  ", (unsigned int)array[i]);
-        }
-        printf("\n");
+        /* for (int i = 0; i < size; i++) { */
+        /*     printf("0x%x  ", (unsigned int)array[i]); */
+        /* } */
+        /* printf("\n"); */
     }
 
 #if defined(CONFIG_DEBUG_BUILD)
@@ -49,28 +49,28 @@ sys_exit(va_list ap)
 long
 sys_rt_sigprocmask(va_list ap)
 {
-    printf("Ignoring call to %s\n", __FUNCTION__);
+    /* printf("Ignoring call to %s\n", __FUNCTION__); */
     return 0;
 }
 
 long
 sys_gettid(va_list ap)
 {
-    printf("Ignoring call to %s\n", __FUNCTION__);
+    /* printf("Ignoring call to %s\n", __FUNCTION__); */
     return 0;
 }
 
 long
 sys_getpid(va_list ap)
 {
-    printf("Ignoring call to %s\n", __FUNCTION__);
+    /* printf("Ignoring call to %s\n", __FUNCTION__); */
     return 0;
 }
 
 long
 sys_tgkill(va_list ap)
 {
-    printf("%s assuming self kill\n", __FUNCTION__);
+    /* printf("%s assuming self kill\n", __FUNCTION__); */
     sel4_abort();
     return 0;
 }

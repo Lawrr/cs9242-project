@@ -39,7 +39,7 @@
 #include "console.h"
 #include "coroutine.h"
 
-#define verbose 5
+#define verbose -1
 #include <sys/debug.h>
 #include <sys/panic.h>
 
@@ -87,14 +87,11 @@ static void vm_fault_handler(seL4_Word badge, int num_args) {
 
     int isInstruction = seL4_GetMR(2);
     /* Check whether instruction fault or data fault */
-    printf("[App #%d] ", badge);
     if (isInstruction) {
         /* Instruction fault */
-        printf("Instruction fault - ");
         map_vaddr = seL4_GetMR(0);
     } else {
         /* Data fault */
-        printf("Data fault - ");
         map_vaddr = seL4_GetMR(1); 
         instruction_vaddr = seL4_GetMR(0);
 
@@ -102,11 +99,8 @@ static void vm_fault_handler(seL4_Word badge, int num_args) {
         pin_frame_entry(PAGE_ALIGN_4K(instruction_vaddr), PAGE_SIZE_4K);
     }
 
-    printf("In vm_fault_handler for uaddr: %p, instr: %p\n", map_vaddr, seL4_GetMR(0));
-
     err = sos_map_page(map_vaddr, &sos_vaddr, curproc);
     if (err) {
-        printf("Vm fault error: %d - Destroying process %d\n", err, curproc->pid);
         process_destroy(curproc->pid);
     } else {
         if (!isInstruction) {
@@ -165,8 +159,6 @@ void syscall_loop(seL4_CPtr ep) {
                             seL4_MessageInfo_get_length(message) - 1,
                             NULL);
 
-        } else {
-            printf("Rootserver got an unknown message\n");
         }
     }
 }
@@ -274,9 +266,9 @@ static void _sos_init(seL4_CPtr* ipc_ep, seL4_CPtr* async_ep){
     /* Retrieve boot info from seL4 */
     _boot_info = seL4_GetBootInfo();
     conditional_panic(!_boot_info, "Failed to retrieve boot info\n");
-    if(verbose > 0){
-        print_bootinfo(_boot_info);
-    }
+    /* if(verbose > 0){ */
+    /*     print_bootinfo(_boot_info); */
+    /* } */
 
     /* Initialise the untyped sub system and reserve memory for DMA */
     err = ut_table_init(_boot_info);
@@ -327,8 +319,6 @@ static void nfs_timeout_callback(uint32_t id, void *data) {
  */
 int main(void) {
 
-    dprintf(0, "\nSOS Starting...\n");
-
     _sos_init(&_sos_ipc_ep_cap, &_sos_interrupt_ep_cap);
 
     /* Initialise the network hardware */
@@ -358,7 +348,6 @@ int main(void) {
     register_timer(NFS_TIMEOUT_INTERVAL, nfs_timeout_callback, NULL);
 
     /* Wait on synchronous endpoint for IPC */
-    dprintf(0, "\nSOS entering syscall loop\n");
     syscall_loop(_sos_ipc_ep_cap);
 
     /* Not reached */

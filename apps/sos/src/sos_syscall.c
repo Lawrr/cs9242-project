@@ -43,8 +43,6 @@ void handle_syscall(seL4_Word badge, int num_args) {
 
     syscall_number = seL4_GetMR(0);
 
-    printf("[App #%d] Syscall :%s  -- received from user application\n", badge, sys_name[syscall_number]);
-
     /* Save the caller */
     reply_cap = cspace_save_reply_cap(cur_cspace);
     assert(reply_cap != CSPACE_NULL);
@@ -108,7 +106,6 @@ void handle_syscall(seL4_Word badge, int num_args) {
             break;
 
         default:
-            printf("Unknown syscall %d\n", syscall_number);
             /* we don't want to reply to an unknown syscall */
 
             /* Free the saved reply cap */
