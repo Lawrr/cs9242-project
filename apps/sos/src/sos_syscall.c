@@ -34,7 +34,7 @@ static int legal_uaddr(seL4_Word base, uint32_t size) {
 
     /* User pointers should be below IPC buffer */
     if (curr != NULL && base + size < PROCESS_IPC_BUFFER) {
-        return 1;
+        return -1;
     }
 
     return 0;
@@ -56,7 +56,7 @@ static void send_err(seL4_CPtr reply_cap, int err) {
 static int validate_buffer_size(seL4_CPtr reply_cap, uint32_t size) {
     if (size == 0) {
         send_err(reply_cap, 0);
-        return 1;
+        return -1;
     }
     return 0;
 }
@@ -64,7 +64,7 @@ static int validate_buffer_size(seL4_CPtr reply_cap, uint32_t size) {
 static int validate_uaddr(seL4_CPtr reply_cap, char *uaddr, int32_t size) {
     if (!legal_uaddr(uaddr, size)) {
         send_err(reply_cap, -1);
-        return 1;
+        return -1;
     }
     return 0;
 }
@@ -72,7 +72,7 @@ static int validate_uaddr(seL4_CPtr reply_cap, char *uaddr, int32_t size) {
 static int validate_fd(seL4_CPtr reply_cap, int fd) {
     if (fd < 0 || fd >= PROCESS_MAX_FILES) {
         send_err(reply_cap, -1);
-        return 1;
+        return -1;
     }
     return 0;
 }
@@ -80,7 +80,7 @@ static int validate_fd(seL4_CPtr reply_cap, int fd) {
 static int validate_ofd(seL4_CPtr reply_cap, int ofd) {
     if (ofd == -1) {
         send_err(reply_cap, -1);
-        return 1;
+        return -1;
     }
     return 0;
 }
@@ -88,7 +88,7 @@ static int validate_ofd(seL4_CPtr reply_cap, int ofd) {
 static int validate_ofd_mode(seL4_CPtr reply_cap, int ofd, int mode) {
     if (!(of_table[ofd].file_info.st_fmode & mode)) {
         send_err(reply_cap, -1);
-        return 1;
+        return -1;
     }
     return 0;
 }
@@ -96,7 +96,7 @@ static int validate_ofd_mode(seL4_CPtr reply_cap, int ofd, int mode) {
 static int validate_max_fd(seL4_CPtr reply_cap, int fd_count) {
     if (fd_count == PROCESS_MAX_FILES) {
         send_err(reply_cap, -1);
-        return 1;
+        return -1;
     }
     return 0;
 }
@@ -104,7 +104,7 @@ static int validate_max_fd(seL4_CPtr reply_cap, int fd_count) {
 static int validate_max_ofd(seL4_CPtr reply_cap, int ofd_count) {
     if (ofd_count == MAX_OPEN_FILE) {
         send_err(reply_cap, -1);
-        return 1;
+        return -1;
     }
     return 0;
 }
@@ -112,7 +112,7 @@ static int validate_max_ofd(seL4_CPtr reply_cap, int ofd_count) {
 static int validate_pid(seL4_CPtr reply_cap, pid_t pid) {
     if (process_status(pid) == NULL) {
         send_err(reply_cap, -1);
-        return 1;
+        return -1;
     }
     return 0;
 }
@@ -121,7 +121,7 @@ static int validate_self_destruct(seL4_CPtr reply_cap, pid_t pid) {
     struct PCB *pcb = process_status(pid);
     if (pcb == NULL || pcb->status == PROCESS_STATUS_SELF_DESTRUCT) {
         send_err(reply_cap, -1);
-        return 1;
+        return -1;
     }
     return 0;
 }
@@ -137,12 +137,15 @@ static int get_safe_path(char *dst, seL4_Word uaddr,
             /* Make sure address is mapped */
             seL4_Word sos_vaddr_next;
             int err = sos_map_page(uaddr_next_page, &sos_vaddr_next, curproc);
+            if (err && err != ERR_ALREADY_MAPPED) return -1;
+
             sos_vaddr_next = PAGE_ALIGN_4K(sos_vaddr_next);
             sos_vaddr_next |= (uaddr_next_page & PAGE_MASK_4K);
             len = strnlen(sos_vaddr_next, max_len - safe_len);
+
             if (len == max_len - safe_len) {
                 /* Doesn't have terminator */
-                return 1;
+                return -1;
             } else {
                 memcpy(dst, sos_vaddr, safe_len);
                 strcpy(dst + safe_len, sos_vaddr_next);
@@ -154,7 +157,7 @@ static int get_safe_path(char *dst, seL4_Word uaddr,
         int len = strnlen(sos_vaddr, max_len);
         if (len == max_len) {
             /* Doesn't have terminator */
-            return 1;
+            return -1;
         } else {
             strcpy(dst, sos_vaddr);
         }
@@ -176,7 +179,7 @@ void syscall_brk(seL4_CPtr reply_cap) {
     /* Check that newbrk is within heap (and that we actually have a heap region) */
     if (curr_region == NULL || newbrk >= PROCESS_HEAP_END || newbrk < PROCESS_HEAP_START) {
         /* Set error */
-        send_err(reply_cap, 1);
+        send_err(reply_cap, -1);
         return;
     }
 
@@ -211,8 +214,7 @@ void syscall_usleep(seL4_CPtr reply_cap) {
 
     /* Make sure sec is positive else reply */
     if (msec < 0) {
-        seL4_SetMR(0, -1);
-        send_reply(reply_cap);
+        send_err(reply_cap, -1);
         return;
     } else {
         seL4_Word *data = malloc(sizeof(seL4_Word) * 3);
@@ -235,7 +237,14 @@ void syscall_getdirent(seL4_CPtr reply_cap) {
     size_t nbyte = seL4_GetMR(3);
 
     if (validate_uaddr(reply_cap, uaddr, 0)) return;
-    if (pos < 0) {
+    if (pos < 0 || nbyte == 0) {
+        send_err(reply_cap, -1);
+        return;
+    }
+
+    struct vnode *vnode;
+    int err = vfs_get("", &vnode);
+    if (err) {
         send_err(reply_cap, -1);
         return;
     }
@@ -247,15 +256,9 @@ void syscall_getdirent(seL4_CPtr reply_cap) {
         .remaining = nbyte,
         .offset = pos
     };
-    struct vnode *vnode;
-    int err = vfs_get("", &vnode);
-    if (err) {
-        send_err(reply_cap, -1);
-        return;
-    }
 
     if (vnode->ops->vop_getdirent == NULL) {
-        err = 1;
+        err = -1;
     } else {
         pin_frame_entry(uaddr, nbyte);
         err = vnode->ops->vop_getdirent(vnode, &uio);
@@ -282,6 +285,10 @@ void syscall_stat(seL4_CPtr reply_cap) {
     /* Make sure path address is mapped */
     seL4_Word sos_vaddr;
     int err = sos_map_page(uaddr, &sos_vaddr, curproc);
+    if (err && err != ERR_ALREADY_MAPPED) {
+        send_err(reply_cap, -1);
+        return;
+    }
 
     sos_vaddr = PAGE_ALIGN_4K(sos_vaddr);
     sos_vaddr |= (uaddr & PAGE_MASK_4K);
@@ -306,9 +313,13 @@ void syscall_stat(seL4_CPtr reply_cap) {
         return;
     }
 
-    err = vnode->ops->vop_stat(vnode, ustat_buf);
-    unpin_frame_entry(ustat_buf, sizeof(sos_stat_t));
 
+    if (vnode->ops->vop_stat == NULL) {
+        err = -1;
+    } else {
+        err = vnode->ops->vop_stat(vnode, ustat_buf);
+    }
+    unpin_frame_entry(ustat_buf, sizeof(sos_stat_t));
     if (err) {
         send_err(reply_cap, -1);
         return;
@@ -350,18 +361,21 @@ void syscall_write(seL4_CPtr reply_cap) {
 
     int err;
     if (vnode->ops->vop_write == NULL) {
-        err = 1;
+        send_err(reply_cap, -1);
+        return;
     } else {
         pin_frame_entry(uaddr, ubuf_size);
         err = vnode->ops->vop_write(vnode, &uio);
         unpin_frame_entry(uaddr, ubuf_size);
+        
+        if (err) {
+            send_err(reply_cap, -1);
+            return;
+        }
+
         entry->offset = uio.offset;
     }
 
-    if (err) {
-        send_err(reply_cap, -1);
-        return;
-    }
     /* Reply */
     seL4_SetMR(0, uio.size - uio.remaining);
     send_reply(reply_cap);
@@ -393,17 +407,19 @@ void syscall_read(seL4_CPtr reply_cap) {
 
     int err;
     if (vnode->ops->vop_read == NULL) {
-        err = 1;
+        send_err(reply_cap, -1);
+        return;
     } else {
         pin_frame_entry(uaddr, ubuf_size);
         err = vnode->ops->vop_read(vnode, &uio);
         unpin_frame_entry(uaddr, ubuf_size);
-        entry->offset = uio.offset;
-    }
 
-    if (err) {
-        send_err(reply_cap, -1);
-        return;
+        if (err) {
+            send_err(reply_cap, -1);
+            return;
+        }
+
+        entry->offset = uio.offset;
     }
 
     seL4_SetMR(0, uio.size - uio.remaining);
@@ -424,6 +440,10 @@ void syscall_open(seL4_CPtr reply_cap) {
     /* Make sure address is mapped */
     seL4_Word sos_vaddr;
     int err = sos_map_page(uaddr, &sos_vaddr, curproc);
+    if (err && err != ERR_ALREADY_MAPPED) {
+        send_err(reply_cap, -1);
+        return;
+    }
 
     sos_vaddr = PAGE_ALIGN_4K(sos_vaddr);
     sos_vaddr |= (uaddr & PAGE_MASK_4K);
@@ -456,7 +476,8 @@ void syscall_open(seL4_CPtr reply_cap) {
     err = vfs_open((char *) path_sos_vaddr, sos_access_mode, &ret_vnode);
 
     if (err) {
-        seL4_SetMR(0, -1);
+        send_err(reply_cap, -1);
+        return;
     } else {
         /* FD Table */
         int free_fd = 0;
@@ -519,14 +540,21 @@ void syscall_process_create(seL4_CPtr reply_cap, seL4_Word badge) {
     /* Make sure address is mapped */
     seL4_Word sos_vaddr;
     int err = sos_map_page(path_uaddr, &sos_vaddr, curproc);
+    if (err && err != ERR_ALREADY_MAPPED) {
+        send_err(reply_cap, -1);
+        return;
+    }
 
     sos_vaddr = PAGE_ALIGN_4K(sos_vaddr);
     sos_vaddr |= (path_uaddr & PAGE_MASK_4K);
 
     pin_frame_entry(path_uaddr, MAX_PATH_LEN);
-    /* TODO something needs to be done with this err */
     err = get_safe_path(path_sos_vaddr, path_uaddr, sos_vaddr, MAX_PATH_LEN);
     unpin_frame_entry(path_uaddr, MAX_PATH_LEN);
+    if (err) {
+        send_err(reply_cap, -1);
+        return;
+    }
 
     int new_pid = process_new(path_sos_vaddr, _sos_ipc_ep_cap, badge);
 
@@ -610,6 +638,8 @@ void syscall_process_status(seL4_CPtr reply_cap) {
     pid_t pid = 0;
     int procs = 0;
 
+    if (validate_uaddr(reply_cap, uaddr, size)) return;
+
     pin_frame_entry(uaddr, size);
     for (procs = 0; procs < max_req_procs && pid < MAX_PROCESSES; procs++) {
         struct PCB *pcb;
@@ -628,6 +658,11 @@ void syscall_process_status(seL4_CPtr reply_cap) {
 
         seL4_Word sos_vaddr;
         int err = sos_map_page(&uaddr[procs], &sos_vaddr, curproc);
+        if (err && err != ERR_ALREADY_MAPPED) {
+            unpin_frame_entry(uaddr, size);
+            send_err(reply_cap, procs);
+            return;
+        }
 
         /* Add offset */
         sos_vaddr = PAGE_ALIGN_4K(sos_vaddr);
@@ -637,6 +672,11 @@ void syscall_process_status(seL4_CPtr reply_cap) {
         if (PAGE_ALIGN_4K(cast_uaddr + sizeof(sos_process_t)) != PAGE_ALIGN_4K(cast_uaddr)) {
             seL4_Word sos_vaddr_next;
             int err = sos_map_page(PAGE_ALIGN_4K(cast_uaddr + sizeof(sos_process_t)), &sos_vaddr_next, curproc);
+            if (err && err != ERR_ALREADY_MAPPED) {
+                unpin_frame_entry(uaddr, size);
+                send_err(reply_cap, procs);
+                return;
+            }
 
             sos_vaddr_next = PAGE_ALIGN_4K(sos_vaddr);
 
