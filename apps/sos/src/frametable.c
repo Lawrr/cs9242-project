@@ -443,19 +443,21 @@ void pin_frame_entry(seL4_Word uaddr, seL4_Word size) {
     int internal_offset = uaddr - PAGE_ALIGN_4K(uaddr);
     int end_frame_size = size + internal_offset;
 
+    printf("pin starting\n");
     for (int i = 0; i < end_frame_size; i += PAGE_SIZE_4K) {
         index1 = root_index(uaddr + i);
         index2 = leaf_index(uaddr + i);
+        if (as->page_table[index1] == NULL) continue;
         sos_vaddr = as->page_table[index1][index2].sos_vaddr;
         if ((sos_vaddr & PTE_SWAP) || (sos_vaddr & PTE_VALID) == 0) continue;
         frame_index = frame_vaddr_to_index(sos_vaddr);
-
         if ((frame_table[frame_index].mask & FRAME_VALID) &&
             (frame_table[frame_index].mask & FRAME_SWAPPABLE)) {
             frame_table[frame_index].mask |= FRAME_REFERENCE;
 			frame_table[frame_index].mask &= (~FRAME_SWAPPABLE);
         }
     }
+    printf("pin endinging\n");
 }
 
 void unpin_frame_entry(seL4_Word uaddr, seL4_Word size) {
@@ -473,6 +475,7 @@ void unpin_frame_entry(seL4_Word uaddr, seL4_Word size) {
     for (int i = 0; i < end_frame_size; i += PAGE_SIZE_4K) {
         index1 = root_index(uaddr + i);
         index2 = leaf_index(uaddr + i);
+        if (as->page_table[index1] == NULL) continue;
         sos_vaddr = as->page_table[index1][index2].sos_vaddr;
         if ((sos_vaddr & PTE_SWAP) || (sos_vaddr & PTE_VALID) == 0) continue;
         frame_index = frame_vaddr_to_index(sos_vaddr);
