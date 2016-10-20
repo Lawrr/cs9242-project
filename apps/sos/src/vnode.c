@@ -66,8 +66,6 @@ static const struct vnode_ops default_ops = {
 static struct dev dev_list[MAX_DEV_NUM];
 static struct hashtable *vnode_table;
 
-static seL4_Word arg[NUM_ARG];
-
 /*
  * =======================================================
  * DEVICES
@@ -277,7 +275,6 @@ static int vnode_close(struct vnode *vnode) {
  */
 static int vnode_getdirent(struct vnode *vnode, struct uio *uio) {
     seL4_Word cookies = 0;
-    set_routine_arg(curr_coroutine_id, 0, uio);
 
     do {
         set_routine_arg(curr_coroutine_id, 0, uio);
@@ -292,8 +289,8 @@ static int vnode_getdirent(struct vnode *vnode, struct uio *uio) {
         nfs_readdir(&mnt_point, cookies, vnode_readdir_cb, token);
         yield();
 
-        int err = arg[0];
-        cookies = arg[1];
+        int err = get_routine_arg(curr_coroutine_id, 0);
+        cookies = get_routine_arg(curr_coroutine_id, 1);
 
     } while (uio->offset > 0 && cookies != 0);
 
@@ -317,10 +314,11 @@ static void vnode_readdir_cb(uintptr_t token_ptr, enum nfs_stat status, int num_
         return;
     }
 
-    arg[0] = (seL4_Word) status;
-    arg[1] = nfscookie;
-
     struct uio *uio = get_routine_arg((int) coroutine_id, 0);
+    struct PCB *pcb = get_routine_arg((int) coroutine_id, 1);
+
+    set_routine_arg(coroutine_id, 0, status);
+    set_routine_arg(coroutine_id, 1, nfscookie);
 
     if (uio->offset == 0 && num_files == 0) {
         /* Valid next pos NULL */
@@ -330,14 +328,14 @@ static void vnode_readdir_cb(uintptr_t token_ptr, enum nfs_stat status, int num_
         /* Check if we need to map a second page */
         int len = strlen(file_names[uio->offset]) + 1;
         if (len > uio->size) {
-            arg[1] = 0; /* Hard set to stop it continuing */
+            /* Hard set to stop it continuing */
+            set_routine_arg(coroutine_id, 1, 0);
         }
 
         seL4_Word uaddr = uio->uaddr;
         seL4_Word uaddr_end = uio->uaddr + len;
 
         seL4_Word sos_vaddr;
-        struct PCB *pcb = get_routine_arg((int) coroutine_id, 1);
 
         int err = sos_map_page(uaddr, &sos_vaddr, pcb);
         sos_vaddr = PAGE_ALIGN_4K(sos_vaddr);
@@ -390,8 +388,8 @@ static int vnode_stat(struct vnode *vnode, sos_stat_t *stat) {
     nfs_lookup(&mnt_point, vnode->path, (nfs_lookup_cb_t) vnode_stat_cb, token);
     yield();
 
-    int err = (int) arg[0];
-    fattr_t *fattr = (fattr_t *) arg[1];
+    int err = get_routine_arg(curr_coroutine_id, 0);
+    fattr_t *fattr = (fattr_t *) get_routine_arg(curr_coroutine_id, 1);;
 
     int ret = 0;
 
@@ -453,10 +451,12 @@ static void vnode_stat_cb(uintptr_t token_ptr, nfs_stat_t status, fhandle_t *fh,
         return;
     }
 
-    arg[0] = (seL4_Word) status;
-    arg[1] = (seL4_Word) malloc(sizeof(fattr_t));
+    set_routine_arg(coroutine_id, 0, status);
 
-    memcpy(arg[1], fattr, sizeof(fattr_t));
+    fattr_t *fattr_ptr = malloc(sizeof(fattr_t));
+    set_routine_arg(coroutine_id, 1, fattr_ptr);
+
+    memcpy(fattr_ptr, fattr, sizeof(fattr_t));
 
     set_resume(coroutine_id);
 
@@ -492,6 +492,7 @@ static int file_create(struct vnode *vnode) {
 
     nfs_create(&mnt_point, vnode->path, &sattr, (nfs_create_cb_t) vnode_create_cb, token);
 
+    /* Mask */
     set_routine_arg(curr_coroutine_id, 0, 1);
 
     yield();
@@ -509,14 +510,19 @@ static void vnode_create_cb(uintptr_t token_ptr, nfs_stat_t status, fhandle_t *f
         return;
     }
 
-    arg[0] = (seL4_Word) status;
-    arg[1] = (seL4_Word) malloc(sizeof(fhandle_t));
-    arg[2] = (seL4_Word) malloc(sizeof(fattr_t));
-
-    memcpy(arg[1], fh, sizeof(fhandle_t));
-    memcpy(arg[2], fattr, sizeof(fattr_t));
-
+    /* Mask */
     set_routine_arg(coroutine_id, 0, 0);
+
+    set_routine_arg(coroutine_id, 1, status);
+
+    fhandle_t *fhandle_ptr = malloc(sizeof(fhandle_t));
+    set_routine_arg(coroutine_id, 2, fhandle_ptr);
+
+    fattr_t *fattr_ptr = malloc(sizeof(fattr_t));
+    set_routine_arg(coroutine_id, 3, fattr_ptr);
+
+    memcpy(fhandle_ptr, fh, sizeof(fhandle_t));
+    memcpy(fattr_ptr, fattr, sizeof(fattr_t));
 
     set_resume(coroutine_id);
 
@@ -539,15 +545,18 @@ static int vnode_open(struct vnode *vnode, fmode_t mode) {
     token[2] = curr_coroutine_id;
 
     nfs_lookup(&mnt_point, vnode->path, (nfs_lookup_cb_t) vnode_open_cb, token);
-    set_routine_arg(curr_coroutine_id, 0, 1);
+    set_routine_arg(curr_coroutine_id, 0, 1); /* Mask */
     yield();
-    int err = (int) arg[0];
+
+    int err = get_routine_arg(curr_coroutine_id, 1);
+    fhandle_t *fhandle_ptr = (fhandle_t *) get_routine_arg(curr_coroutine_id, 2);
+    fattr_t *fattr_ptr = (fattr_t *) get_routine_arg(curr_coroutine_id, 3);
 
     if (err == NFS_OK) {
 
         /* Check permissions */
         int valid_mode = 1;
-        int fattr_mode = ((fattr_t *) arg[2])->mode;
+        int fattr_mode = fattr_ptr->mode;
         if (mode & FM_READ) {
             if ((fattr_mode & S_IROTH) == 0) valid_mode = 0;
         }
@@ -555,35 +564,35 @@ static int vnode_open(struct vnode *vnode, fmode_t mode) {
             if ((fattr_mode & S_IWOTH) == 0) valid_mode = 0;
         }
         if (!valid_mode) {
-            free(arg[1]);
-            free(arg[2]);
+            free(fhandle_ptr);
+            free(fattr_ptr);
             return -1;
         }
 
-        vnode->fh = (fhandle_t *) arg[1];
-        vnode->fattr = (fattr_t *) arg[2];
+        vnode->fh = fhandle_ptr;
+        vnode->fattr = fattr_ptr;
 
     } else if (err == NFSERR_NOENT) {
-        free(arg[1]);
-        free(arg[2]);
+        free(fhandle_ptr);
+        free(fattr_ptr);
 
         /* Create new file */
         file_create(vnode);
 
         /* Note: Permissions should be fine since we create with RW access */
 
-        err = (int) arg[0];
+        err = get_routine_arg(curr_coroutine_id, 1);
 
         if (err == NFS_OK) {
-            vnode->fh = (fhandle_t *) arg[1];
-            vnode->fattr = (fattr_t *) arg[2];
+            vnode->fh = (fhandle_t *) get_routine_arg(curr_coroutine_id, 2);
+            vnode->fattr = (fattr_t *) get_routine_arg(curr_coroutine_id, 3);
         } else {
             conditional_panic(err, "failed create");
         }
 
     } else {
-        free(arg[1]);
-        free(arg[2]);
+        free(fhandle_ptr);
+        free(fattr_ptr);
 
         conditional_panic(err, "fail look up");
     }
@@ -603,16 +612,18 @@ static void vnode_open_cb(uintptr_t token_ptr, nfs_stat_t status, fhandle_t *fh,
         return;
     }
 
-    arg[0] = (seL4_Word) status;
-    arg[1] = (seL4_Word) malloc(sizeof(fhandle_t));
-    arg[2] = (seL4_Word) malloc(sizeof(fattr_t));
-
-    memcpy(arg[1], fh, sizeof(fhandle_t));
-    memcpy(arg[2], fattr, sizeof(fattr_t));
-    /* 0 has special meaning for setjmp returns, so map 0 to -1 */
-    if (status == 0) status = -1;
-
     set_routine_arg(coroutine_id, 0, 0);
+
+    set_routine_arg(coroutine_id, 1, status);
+
+    fhandle_t *fhandle_ptr = malloc(sizeof(fhandle_t));
+    set_routine_arg(coroutine_id, 2, fhandle_ptr);
+
+    fattr_t *fattr_ptr = malloc(sizeof(fattr_t));
+    set_routine_arg(coroutine_id, 3, fattr_ptr);
+
+    memcpy(fhandle_ptr, fh, sizeof(fhandle_t));
+    memcpy(fattr_ptr, fattr, sizeof(fattr_t));
 
     set_resume(coroutine_id);
 
@@ -684,7 +695,7 @@ static int vnode_read(struct vnode *vnode, struct uio *uio) {
         set_routine_arg(curr_coroutine_id, 1, sos_vaddr);
 
         yield();
-        seL4_Word count = arg[0];
+        seL4_Word count = get_routine_arg(curr_coroutine_id, 1);
 
         buf_size -= count;
         if (uio->uaddr != NULL) uaddr += count;
@@ -720,9 +731,9 @@ static void vnode_read_cb(uintptr_t token_ptr, nfs_stat_t status, fattr_t *fattr
         memcpy((void *) sos_vaddr, data, count);
     }
 
-    arg[0] = (seL4_Word) count;
-
     set_routine_arg(coroutine_id, 0, 0);
+
+    set_routine_arg(coroutine_id, 1, count);
 
     set_resume(coroutine_id);
 
