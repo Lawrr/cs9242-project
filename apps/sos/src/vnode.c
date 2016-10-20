@@ -516,7 +516,7 @@ static void vnode_create_cb(uintptr_t token_ptr, nfs_stat_t status, fhandle_t *f
     memcpy(arg[1], fh, sizeof(fhandle_t));
     memcpy(arg[2], fattr, sizeof(fattr_t));
 
-    set_routine_arg(curr_coroutine_id, 0, 0);
+    set_routine_arg(coroutine_id, 0, 0);
 
     set_resume(coroutine_id);
 
@@ -612,7 +612,7 @@ static void vnode_open_cb(uintptr_t token_ptr, nfs_stat_t status, fhandle_t *fh,
     /* 0 has special meaning for setjmp returns, so map 0 to -1 */
     if (status == 0) status = -1;
 
-    set_routine_arg(curr_coroutine_id, 0, 0);
+    set_routine_arg(coroutine_id, 0, 0);
 
     set_resume(coroutine_id);
 
@@ -722,7 +722,7 @@ static void vnode_read_cb(uintptr_t token_ptr, nfs_stat_t status, fattr_t *fattr
 
     arg[0] = (seL4_Word) count;
 
-    set_routine_arg(curr_coroutine_id, 0, 0);
+    set_routine_arg(coroutine_id, 0, 0);
 
     set_resume(coroutine_id);
 
