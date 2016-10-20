@@ -93,6 +93,7 @@ void write_read() {
     assert(sz >= 6 && sz < 100);
     printf("Using file for write: %s\n", &filename);
     int fd_write = open(filename, O_WRONLY);
+    assert(fd_write >= 0);
     printf("Starting write\n");
     for (int i = 0; i < 1000; i++) {
         char str[4];
@@ -103,6 +104,7 @@ void write_read() {
     }
     printf("Using file for read: %s\n", &filename);
     int fd_read = open(filename, O_RDONLY);
+    assert(fd_read >= 0);
     printf("Starting read\n");
     char buff[5];
     for (int i = 0; i < 1000; i++) {

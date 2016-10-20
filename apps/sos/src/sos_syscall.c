@@ -432,7 +432,6 @@ void syscall_open(seL4_CPtr reply_cap) {
     err = get_safe_path(path_sos_vaddr, uaddr, sos_vaddr, MAX_PATH_LEN);
     unpin_frame_entry(uaddr, MAX_PATH_LEN);
 
-
     if (err) {
         send_err(reply_cap, -1);
         return;
