@@ -27,5 +27,5 @@ int32_t get_app_cap(seL4_Word vaddr, struct app_addrspace *as, struct app_cap **
 
 int32_t swap_in(seL4_Word uaddr, seL4_Word sos_vaddr);
 int32_t swap_out();
-
+void set_fe_pid(seL4_Word sos_vaddr,seL4_Word pid);
 #endif /* _FRAMETABLE_H_ */

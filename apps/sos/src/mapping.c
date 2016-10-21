@@ -242,7 +242,14 @@ sos_map_page(seL4_Word uaddr_unaligned, seL4_Word *sos_vaddr_ret, struct PCB *pc
             copied_cap,
             pcb,
             uaddr);
-    
+   
+    if ((*page_table)[index1][index2].sos_vaddr & PTE_BEINGSWAPPED) {
+        set_fe_pid(PAGE_ALIGN_4K(curr_sos_vaddr),pcb->pid); 
+        as->page_table[index1][index2].sos_vaddr &= (~PTE_BEINGSWAPPED);
+        yield();
+    }
+
+
     /* Reassign in case mask changed during alloc (BEINGSWAPPED) */
     curr_sos_vaddr = (*page_table)[index1][index2].sos_vaddr;
 

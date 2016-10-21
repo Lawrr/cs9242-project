@@ -18,7 +18,7 @@
 
 
 /* Emulate limited frames */
-//#define LIMIT_FRAMES
+#define LIMIT_FRAMES
 
 #ifdef LIMIT_FRAMES
 #define MAX_FRAMES 500
@@ -327,12 +327,7 @@ int32_t swap_in(seL4_Word uaddr, seL4_Word sos_vaddr) {
         .pcb = curproc
     };
 
-    if (as->page_table[index1][index2].sos_vaddr & PTE_BEINGSWAPPED) {
-        frame_table[frame_index].mask &= (~FRAME_PID_MASK);
-        frame_table[frame_index].mask |= (curproc->pid << PID_SHIFT);
-        as->page_table[index1][index2].sos_vaddr &= (~PTE_BEINGSWAPPED);
-        yield();
-    }
+    
 
     /* Swap in */
     int err = swap_vnode->ops->vop_read(swap_vnode, &uio);
@@ -589,4 +584,11 @@ static inline seL4_Word frame_paddr_to_vaddr(seL4_Word paddr) {
 
 static inline uint32_t frame_paddr_to_index(seL4_Word paddr) {
     return ((paddr - base_addr) >> INDEX_ADDR_OFFSET);
+}
+
+void set_fe_pid(seL4_Word sos_vaddr,seL4_Word pid){
+    seL4_Word frame_index = frame_vaddr_to_index(sos_vaddr);   
+    frame_table[frame_index].mask &= (~FRAME_PID_MASK);
+    frame_table[frame_index].mask |= (pid << PID_SHIFT);
+
 }
